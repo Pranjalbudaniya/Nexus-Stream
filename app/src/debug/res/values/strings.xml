@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dev_tools_label">Nexus Dev</string>
+    <string name="dev_tools_theme_gallery">Theme gallery</string>
+    <string name="gallery_title">Theme gallery</string>
+    <string name="gallery_effective_accent">Effective accent: %1$s</string>
+    <string name="gallery_accent_from_wallpaper">from wallpaper</string>
+    <string name="gallery_mode">Mode</string>
+    <string name="gallery_mode_system">System</string>
+    <string name="gallery_mode_light">Light</string>
+    <string name="gallery_mode_dark">Dark</string>
+    <string name="gallery_dynamic_color">Dynamic color (wallpaper)</string>
+    <string name="gallery_amoled">AMOLED black</string>
+    <string name="gallery_accent_color">Accent color</string>
+    <string name="gallery_color_roles">Color roles</string>
+    <string name="gallery_extended_colors">Extended colors</string>
+    <string name="gallery_typography">Typography</string>
+    <string name="gallery_shapes">Shapes</string>
+    <string name="gallery_components">Components</string>
+    <string name="gallery_posters">Posters</string>
+    <string name="gallery_spacing">Spacing</string>
+</resources>
