@@ -29,8 +29,10 @@ coil = "3.6.3"
 junit = "4.13.2"
 mockk = "1.14.11"
 turbine = "1.2.1"
+materialKolor = "4.1.1"
 
 [libraries]
+material-kolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCoreKtx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
