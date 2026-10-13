@@ -1,2 +1,26 @@
 # Local-only project memory. Never push.
 docs/
+
+# Gradle
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Android build outputs & caches
+captures/
+.cxx/
+*.apk
+*.aab
+
+# Signing
+*.jks
+*.keystore
+
+# OS
+.DS_Store
