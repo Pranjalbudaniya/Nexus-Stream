@@ -1,4 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nexus Stream</string>
+
+    <!-- Accent swatches -->
+    <string name="accent_violet">Violet</string>
+    <string name="accent_indigo">Indigo</string>
+    <string name="accent_blue">Blue</string>
+    <string name="accent_cyan">Cyan</string>
+    <string name="accent_teal">Teal</string>
+    <string name="accent_green">Green</string>
+    <string name="accent_lime">Lime</string>
+    <string name="accent_amber">Amber</string>
+    <string name="accent_orange">Orange</string>
+    <string name="accent_red">Red</string>
+    <string name="accent_pink">Pink</string>
+    <string name="accent_neutral">Neutral</string>
+
+    <!-- Picker & Custom Sheet -->
+    <string name="accent_custom">Custom</string>
+    <string name="accent_dynamic_caption">Accent colors come from the wallpaper while dynamic color is on.</string>
+    <string name="turn_off_dynamic_color">Turn off dynamic color</string>
+    <string name="custom_color_title">Custom accent color</string>
+    <string name="custom_color_hue">Hue</string>
+    <string name="custom_color_saturation">Saturation</string>
+    <string name="custom_color_brightness">Brightness</string>
+    <string name="custom_color_hex">Hex color</string>
+    <string name="custom_color_hex_error">Enter a 6-digit hex color</string>
+    <string name="custom_color_low_chroma_caption">Low-saturation colors give a nearly gray accent.</string>
+    <string name="custom_color_adjusted_caption">Adjusted slightly so text stays readable.</string>
+    <string name="custom_color_use_default">Use default</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_apply">Apply</string>
+    <string name="amoled_only_dark">Only applies in dark mode.</string>
+    <string name="amoled_applies_when_dark">Applies when your phone switches to dark.</string>
+    <string name="appearance_reset">Appearance reset</string>
+    <string name="reset_appearance">Reset appearance</string>
 </resources>
