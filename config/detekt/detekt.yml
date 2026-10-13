@@ -1,0 +1,27 @@
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    active: true
+    excludes: ['**/presentation/theme/**']
+
+complexity:
+  LongMethod:
+    active: true
+    ignoreAnnotated: ['Composable']
+    excludes: ['**/presentation/theme/**']
+  LongParameterList:
+    active: true
+    ignoreAnnotated: ['Composable']
+    excludes: ['**/presentation/theme/**']
+
+style:
+  MagicNumber:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**', '**/presentation/theme/**']
+
+coroutines:
+  InjectDispatcher:
+    active: true
+    excludes: ['**/di/**', '**/test/**', '**/androidTest/**']
