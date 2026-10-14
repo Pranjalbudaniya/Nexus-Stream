@@ -3,5 +3,6 @@
     <style name="Theme.NexusStream" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
     </style>
 </resources>
