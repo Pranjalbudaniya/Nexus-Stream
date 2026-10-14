@@ -1,0 +1,27 @@
+package com.nexus.stream.data.local.db
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import com.nexus.stream.data.local.db.dao.AddonDao
+import com.nexus.stream.data.local.db.entity.AddonEntity
+import com.nexus.stream.data.local.db.entity.LibraryItemEntity
+import com.nexus.stream.data.local.db.entity.MetaCacheEntity
+import com.nexus.stream.data.local.db.entity.SearchHistoryEntity
+import com.nexus.stream.data.local.db.entity.SkipSegmentCacheEntity
+import com.nexus.stream.data.local.db.entity.WatchProgressEntity
+
+@Database(
+    entities = [
+        AddonEntity::class,
+        WatchProgressEntity::class,
+        LibraryItemEntity::class,
+        SearchHistoryEntity::class,
+        SkipSegmentCacheEntity::class,
+        MetaCacheEntity::class,
+    ],
+    version = 1,
+    exportSchema = true,
+)
+abstract class NexusDatabase : RoomDatabase() {
+    abstract fun addonDao(): AddonDao
+}
