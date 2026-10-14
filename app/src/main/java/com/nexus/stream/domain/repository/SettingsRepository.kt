@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 interface SettingsRepository {
     val themeSettings: Flow<ThemeSettings>
 
+    suspend fun update(transform: (ThemeSettings) -> ThemeSettings)
+
     suspend fun setThemeMode(mode: ThemeMode)
 
     suspend fun setDynamicColor(enabled: Boolean)
