@@ -47,3 +47,13 @@ The task is created in prompt P00. Before P00 exists, skip this step.
 ## Report
 End every prompt with the report format in `docs/PROMPT_STRUCTURE.md` section 5.
 Save it to `docs/reports/<prompt-id>_report.md`.
+
+## Code quality
+- Think first: write a short plan (files, functions, reused code) before writing code.
+- Write the least code that meets the spec. No dead code, no unused parameters, imports or resources, no speculative abstractions, no copy-paste (extract on the second use).
+- Prefer platform and library APIs over custom code. Reuse existing components before adding new ones.
+- Keep functions short and single-purpose. Composables take state and lambdas and read state as late as possible (lambda modifiers) to avoid needless recomposition.
+- Memoize expensive work (`remember`, `derivedStateOf`). Keep work that belongs in a ViewModel or a pure function out of composition.
+- Comments explain why, never what.
+- Before reporting, do a cleanup pass: remove anything unused and list what you simplified.
+
