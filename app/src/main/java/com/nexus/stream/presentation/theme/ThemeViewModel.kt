@@ -2,8 +2,14 @@ package com.nexus.stream.presentation.theme
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.domain.model.AppFont
+import com.nexus.stream.domain.model.CardStyle
+import com.nexus.stream.domain.model.ContrastLevel
+import com.nexus.stream.domain.model.Roundness
+import com.nexus.stream.domain.model.TextSize
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
+import com.nexus.stream.domain.model.UiSize
 import com.nexus.stream.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +51,30 @@ sealed interface ThemeEvent {
 
     data class PreviewAccent(
         val argb: Long?,
+    ) : ThemeEvent
+
+    data class SetFont(
+        val font: AppFont,
+    ) : ThemeEvent
+
+    data class SetUiSize(
+        val uiSize: UiSize,
+    ) : ThemeEvent
+
+    data class SetTextSize(
+        val textSize: TextSize,
+    ) : ThemeEvent
+
+    data class SetRoundness(
+        val roundness: Roundness,
+    ) : ThemeEvent
+
+    data class SetCardStyle(
+        val cardStyle: CardStyle,
+    ) : ThemeEvent
+
+    data class SetContrast(
+        val contrast: ContrastLevel,
     ) : ThemeEvent
 
     data object ResetAppearance : ThemeEvent
@@ -101,6 +131,42 @@ class ThemeViewModel
 
                 is ThemeEvent.PreviewAccent -> {
                     previewAccent.value = event.argb
+                }
+
+                is ThemeEvent.SetFont -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(font = event.font) }
+                    }
+                }
+
+                is ThemeEvent.SetUiSize -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(uiSize = event.uiSize) }
+                    }
+                }
+
+                is ThemeEvent.SetTextSize -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(textSize = event.textSize) }
+                    }
+                }
+
+                is ThemeEvent.SetRoundness -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(roundness = event.roundness) }
+                    }
+                }
+
+                is ThemeEvent.SetCardStyle -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(cardStyle = event.cardStyle) }
+                    }
+                }
+
+                is ThemeEvent.SetContrast -> {
+                    viewModelScope.launch {
+                        repo.update { it.copy(contrast = event.contrast) }
+                    }
                 }
 
                 is ThemeEvent.ResetAppearance -> {

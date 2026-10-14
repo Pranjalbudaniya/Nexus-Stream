@@ -6,9 +6,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
+import com.nexus.stream.domain.model.ContrastLevel
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.presentation.theme.tokens.AmoledTokens
@@ -33,12 +35,19 @@ fun accentSeed(accent: Long?): Color {
 fun schemeFromAccent(
     seed: Color,
     dark: Boolean,
+    contrast: ContrastLevel = ContrastLevel.STANDARD,
 ): ColorScheme =
     dynamicColorScheme(
         seedColor = normalizeSeed(seed),
         isDark = dark,
         isAmoled = false,
         style = PaletteStyle.Fidelity,
+        contrastLevel =
+            when (contrast) {
+                ContrastLevel.STANDARD -> 0.0
+                ContrastLevel.MEDIUM -> 0.5
+                ContrastLevel.HIGH -> 1.0
+            },
     )
 
 fun applyAmoled(base: ColorScheme): ColorScheme =
@@ -61,12 +70,13 @@ fun resolveColorScheme(
     dark: Boolean,
 ): ColorScheme {
     val context = LocalContext.current
-    return remember(settings.accentColor, dark, settings.dynamicColor, settings.amoled) {
+    val config = LocalConfiguration.current
+    return remember(settings.accentColor, dark, settings.dynamicColor, settings.amoled, settings.contrast, config) {
         val base =
             if (settings.dynamicColor) {
                 if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
-                schemeFromAccent(accentSeed(settings.accentColor), dark)
+                schemeFromAccent(accentSeed(settings.accentColor), dark, settings.contrast)
             }
         if (dark && settings.amoled) applyAmoled(base) else base
     }
