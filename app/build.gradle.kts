@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.detekt)
@@ -64,6 +65,13 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.material.kolor)
+
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.kotlinx.serialization)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
