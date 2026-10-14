@@ -19,4 +19,46 @@
     <string name="gallery_components">Components</string>
     <string name="gallery_posters">Posters</string>
     <string name="gallery_spacing">Spacing</string>
+
+    <!-- Section titles -->
+    <string name="gallery_section_colors">Colors</string>
+    <string name="gallery_section_text_size">Text and size</string>
+    <string name="gallery_section_shapes">Shapes</string>
+
+    <!-- Controls -->
+    <string name="gallery_contrast">Contrast</string>
+    <string name="gallery_font">Font</string>
+    <string name="gallery_ui_size">UI size</string>
+    <string name="gallery_text_size">Text size</string>
+    <string name="gallery_roundness">Roundness</string>
+    <string name="gallery_card_style">Card style</string>
+    <string name="gallery_cards">Cards</string>
+
+    <!-- Previews -->
+    <string name="gallery_typography_sample">The quick brown fox • 0123456789 • 4K HDR • नमस्ते • 日本語</string>
+    <string name="gallery_card_sample_filled">Filled</string>
+    <string name="gallery_card_sample_outlined">Outlined</string>
+    <string name="gallery_card_sample_elevated">Elevated</string>
+    <string name="gallery_card_sample_nexus">NexusCard (follows setting)</string>
+
+    <!-- Enum values -->
+    <string name="card_style_filled">Filled</string>
+    <string name="card_style_outlined">Outlined</string>
+    <string name="card_style_elevated">Elevated</string>
+
+    <string name="contrast_standard">Standard</string>
+    <string name="contrast_medium">Medium</string>
+    <string name="contrast_high">High</string>
+
+    <string name="size_small">Small</string>
+    <string name="size_normal">Normal</string>
+    <string name="size_large">Large</string>
+    <string name="size_larger">Larger</string>
+    <string name="size_largest">Largest</string>
+
+    <string name="roundness_sharp">Sharp</string>
+    <string name="roundness_soft">Soft</string>
+    <string name="roundness_normal">Normal</string>
+    <string name="roundness_round">Round</string>
+    <string name="roundness_extra_round">Extra round</string>
 </resources>
