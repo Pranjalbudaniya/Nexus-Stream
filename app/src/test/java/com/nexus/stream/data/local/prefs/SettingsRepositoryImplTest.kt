@@ -4,10 +4,18 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import com.nexus.stream.domain.model.AppFont
+import com.nexus.stream.domain.model.CardStyle
+import com.nexus.stream.domain.model.ContrastLevel
+import com.nexus.stream.domain.model.Roundness
+import com.nexus.stream.domain.model.TextSize
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
+import com.nexus.stream.domain.model.UiSize
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -48,6 +56,12 @@ class SettingsRepositoryImplTest {
             assertFalse(settings.amoled)
             assertNull(settings.accentColor)
             assertTrue(settings.recentAccents.isEmpty())
+            assertEquals(AppFont.INTER, settings.font)
+            assertEquals(UiSize.NORMAL, settings.uiSize)
+            assertEquals(TextSize.NORMAL, settings.textSize)
+            assertEquals(Roundness.NORMAL, settings.roundness)
+            assertEquals(CardStyle.FILLED, settings.cardStyle)
+            assertEquals(ContrastLevel.STANDARD, settings.contrast)
         }
 
     @Test
@@ -67,6 +81,50 @@ class SettingsRepositoryImplTest {
             val accentValue = (255L shl 24) or 0x3F51B5L
             repo.setAccentColor(accentValue, remember = false)
             assertEquals(accentValue, repo.themeSettings.first().accentColor)
+        }
+
+    @Test
+    fun update_persistsEachFieldCorrectly() =
+        runTest {
+            val (repo, _) = createRepository(this, "update_fields.preferences_pb")
+
+            repo.update {
+                it.copy(
+                    font = AppFont.OUTFIT,
+                    uiSize = UiSize.LARGE,
+                    textSize = TextSize.SMALL,
+                    roundness = Roundness.EXTRA_ROUND,
+                    cardStyle = CardStyle.ELEVATED,
+                    contrast = ContrastLevel.HIGH,
+                )
+            }
+
+            val settings = repo.themeSettings.first()
+            assertEquals(AppFont.OUTFIT, settings.font)
+            assertEquals(UiSize.LARGE, settings.uiSize)
+            assertEquals(TextSize.SMALL, settings.textSize)
+            assertEquals(Roundness.EXTRA_ROUND, settings.roundness)
+            assertEquals(CardStyle.ELEVATED, settings.cardStyle)
+            assertEquals(ContrastLevel.HIGH, settings.contrast)
+        }
+
+    @Test
+    fun update_isAtomicUnderConcurrentCalls() =
+        runTest {
+            val (repo, _) = createRepository(this, "atomic.preferences_pb")
+
+            coroutineScope {
+                launch {
+                    repo.update { it.copy(font = AppFont.FIGTREE) }
+                }
+                launch {
+                    repo.update { it.copy(cardStyle = CardStyle.OUTLINED) }
+                }
+            }
+
+            val settings = repo.themeSettings.first()
+            assertEquals(AppFont.FIGTREE, settings.font)
+            assertEquals(CardStyle.OUTLINED, settings.cardStyle)
         }
 
     @Test
@@ -116,19 +174,44 @@ class SettingsRepositoryImplTest {
         }
 
     @Test
-    fun togglingDynamicColor_doesNotChangeStoredAccent() =
+    fun togglingDynamicColor_doesNotChangeOtherStoredFields() =
         runTest {
             val (repo, _) = createRepository(this, "dynamic.preferences_pb")
             val accentValue = (255L shl 24) or 0x6D5EF5L
 
-            repo.setAccentColor(accentValue)
+            repo.update {
+                it.copy(
+                    accentColor = accentValue,
+                    font = AppFont.MANROPE,
+                    uiSize = UiSize.LARGEST,
+                    textSize = TextSize.LARGE,
+                    roundness = Roundness.SOFT,
+                    cardStyle = CardStyle.OUTLINED,
+                    contrast = ContrastLevel.MEDIUM,
+                )
+            }
+
             repo.setDynamicColor(true)
-            assertEquals(accentValue, repo.themeSettings.first().accentColor)
-            assertTrue(repo.themeSettings.first().dynamicColor)
+            var current = repo.themeSettings.first()
+            assertTrue(current.dynamicColor)
+            assertEquals(accentValue, current.accentColor)
+            assertEquals(AppFont.MANROPE, current.font)
+            assertEquals(UiSize.LARGEST, current.uiSize)
+            assertEquals(TextSize.LARGE, current.textSize)
+            assertEquals(Roundness.SOFT, current.roundness)
+            assertEquals(CardStyle.OUTLINED, current.cardStyle)
+            assertEquals(ContrastLevel.MEDIUM, current.contrast)
 
             repo.setDynamicColor(false)
-            assertEquals(accentValue, repo.themeSettings.first().accentColor)
-            assertFalse(repo.themeSettings.first().dynamicColor)
+            current = repo.themeSettings.first()
+            assertFalse(current.dynamicColor)
+            assertEquals(accentValue, current.accentColor)
+            assertEquals(AppFont.MANROPE, current.font)
+            assertEquals(UiSize.LARGEST, current.uiSize)
+            assertEquals(TextSize.LARGE, current.textSize)
+            assertEquals(Roundness.SOFT, current.roundness)
+            assertEquals(CardStyle.OUTLINED, current.cardStyle)
+            assertEquals(ContrastLevel.MEDIUM, current.contrast)
         }
 
     @Test
@@ -140,11 +223,23 @@ class SettingsRepositoryImplTest {
             dataStore.edit { prefs ->
                 prefs[SettingsRepositoryImpl.KEY_THEME_MODE] = "BANANA"
                 prefs[SettingsRepositoryImpl.KEY_RECENT_ACCENTS] = "x,,12,abc"
+                prefs[SettingsRepositoryImpl.KEY_FONT] = "BANANA"
+                prefs[SettingsRepositoryImpl.KEY_UI_SIZE] = "BANANA"
+                prefs[SettingsRepositoryImpl.KEY_TEXT_SIZE] = "BANANA"
+                prefs[SettingsRepositoryImpl.KEY_ROUNDNESS] = "BANANA"
+                prefs[SettingsRepositoryImpl.KEY_CARD_STYLE] = "BANANA"
+                prefs[SettingsRepositoryImpl.KEY_CONTRAST] = "BANANA"
             }
 
             val settings = repo.themeSettings.first()
             assertEquals(ThemeMode.SYSTEM, settings.mode)
             assertEquals(listOf(validColor), settings.recentAccents)
+            assertEquals(AppFont.INTER, settings.font)
+            assertEquals(UiSize.NORMAL, settings.uiSize)
+            assertEquals(TextSize.NORMAL, settings.textSize)
+            assertEquals(Roundness.NORMAL, settings.roundness)
+            assertEquals(CardStyle.FILLED, settings.cardStyle)
+            assertEquals(ContrastLevel.STANDARD, settings.contrast)
         }
 
     @Test
@@ -152,10 +247,21 @@ class SettingsRepositoryImplTest {
         runTest {
             val (repo, _) = createRepository(this, "reset.preferences_pb")
 
-            repo.setThemeMode(ThemeMode.DARK)
-            repo.setDynamicColor(true)
-            repo.setAmoled(true)
-            repo.setAccentColor((255L shl 24) or 0x123456L, remember = true)
+            repo.update {
+                it.copy(
+                    mode = ThemeMode.DARK,
+                    dynamicColor = true,
+                    amoled = true,
+                    accentColor = (255L shl 24) or 0x123456L,
+                    recentAccents = listOf((255L shl 24) or 0x123456L),
+                    font = AppFont.SPACE_GROTESK,
+                    uiSize = UiSize.SMALL,
+                    textSize = TextSize.LARGER,
+                    roundness = Roundness.SHARP,
+                    cardStyle = CardStyle.ELEVATED,
+                    contrast = ContrastLevel.HIGH,
+                )
+            }
 
             repo.resetTheme()
 

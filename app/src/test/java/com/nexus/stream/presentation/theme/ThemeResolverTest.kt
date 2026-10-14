@@ -4,6 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import com.nexus.stream.domain.model.ContrastLevel
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.presentation.theme.tokens.AccentSwatches
 import com.nexus.stream.presentation.theme.tokens.AmoledTokens
@@ -66,6 +67,59 @@ class ThemeResolverTest {
                 assertContrast(scheme.onTertiary, scheme.tertiary, "onTertiary/tertiary", isDark, seed)
                 assertContrast(scheme.onSurface, scheme.surface, "onSurface/surface", isDark, seed)
                 assertContrast(scheme.onError, scheme.error, "onError/error", isDark, seed)
+            }
+        }
+    }
+
+    @Test
+    fun schemeFromAccent_contrastLevelsMeetRequirements() {
+        val testSeeds =
+            AccentSwatches.map { it.color } +
+                listOf(
+                    Color.Black,
+                    Color.White,
+                    Color.Gray,
+                    Color.Red,
+                    Color.Green,
+                    Color.Blue,
+                    Color.Yellow,
+                    Color.hsv(60f, 1f, 1f),
+                    Color.hsv(240f, 0.05f, 0.5f),
+                )
+
+        listOf(false, true).forEach { isDark ->
+            testSeeds.forEach { seed ->
+                val standardScheme = schemeFromAccent(seed, isDark, ContrastLevel.STANDARD)
+                val mediumScheme = schemeFromAccent(seed, isDark, ContrastLevel.MEDIUM)
+                val highScheme = schemeFromAccent(seed, isDark, ContrastLevel.HIGH)
+
+                val pairs =
+                    listOf(
+                        "onPrimary/primary" to { s: ColorScheme -> s.onPrimary to s.primary },
+                        "onPrimaryContainer/primaryContainer" to
+                            { s: ColorScheme -> s.onPrimaryContainer to s.primaryContainer },
+                        "onSecondary/secondary" to { s: ColorScheme -> s.onSecondary to s.secondary },
+                        "onTertiary/tertiary" to { s: ColorScheme -> s.onTertiary to s.tertiary },
+                        "onSurface/surface" to { s: ColorScheme -> s.onSurface to s.surface },
+                        "onError/error" to { s: ColorScheme -> s.onError to s.error },
+                    )
+
+                pairs.forEach { (name, selector) ->
+                    val (fgStd, bgStd) = selector(standardScheme)
+                    val (fgMed, bgMed) = selector(mediumScheme)
+                    val (fgHigh, bgHigh) = selector(highScheme)
+
+                    val ratioStd = contrastRatio(fgStd, bgStd)
+                    val ratioMed = contrastRatio(fgMed, bgMed)
+                    val ratioHigh = contrastRatio(fgHigh, bgHigh)
+
+                    assertTrue("Expected ratioMed >= 4.5 for $name, got $ratioMed", ratioMed >= 4.5f)
+                    assertTrue("Expected ratioHigh >= 4.5 for $name, got $ratioHigh", ratioHigh >= 4.5f)
+                    val msgMed = "ratioMed ($ratioMed) >= ratioStd ($ratioStd) for $name"
+                    assertTrue(msgMed, ratioMed >= ratioStd - 0.01f)
+                    val msgHigh = "ratioHigh ($ratioHigh) >= ratioMed ($ratioMed) for $name"
+                    assertTrue(msgHigh, ratioHigh >= ratioMed - 0.01f)
+                }
             }
         }
     }
@@ -140,6 +194,15 @@ class ThemeResolverTest {
         assertEquals(expected.scrim, actual.scrim)
     }
 
+    private fun contrastRatio(
+        fg: Color,
+        bg: Color,
+    ): Float {
+        val l1 = maxOf(fg.luminance(), bg.luminance())
+        val l2 = minOf(fg.luminance(), bg.luminance())
+        return (l1 + 0.05f) / (l2 + 0.05f)
+    }
+
     private fun assertContrast(
         fg: Color,
         bg: Color,
@@ -147,9 +210,7 @@ class ThemeResolverTest {
         isDark: Boolean,
         seed: Color,
     ) {
-        val l1 = maxOf(fg.luminance(), bg.luminance())
-        val l2 = minOf(fg.luminance(), bg.luminance())
-        val ratio = (l1 + 0.05f) / (l2 + 0.05f)
+        val ratio = contrastRatio(fg, bg)
         assertTrue(
             "Expected contrast >= 4.5 for $pairName with isDark=$isDark, seed=$seed, got $ratio",
             ratio >= 4.5f,
