@@ -1,7 +1,6 @@
 package com.nexus.stream.presentation.common
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,19 +20,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,19 +37,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
 import com.nexus.stream.presentation.theme.isLowChroma
 import com.nexus.stream.presentation.theme.normalizeSeed
-import com.nexus.stream.presentation.theme.schemeFromAccent
 import com.nexus.stream.presentation.theme.tokens.AccentSwatches
 import com.nexus.stream.presentation.theme.tokens.BrandAccent
 import com.nexus.stream.presentation.theme.wasAdjusted
@@ -66,7 +58,7 @@ import kotlin.math.roundToInt
 fun CustomColorSheet(
     initialColor: Color,
     onDismiss: () -> Unit,
-    onPreview: (argb: Long?) -> Unit,
+    onPreview: (argb: Long?, immediate: Boolean) -> Unit,
     onApply: (argb: Long, remember: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -78,27 +70,14 @@ fun CustomColorSheet(
     var saturation by rememberSaveable { mutableFloatStateOf(initialHsv.second) }
     var value by rememberSaveable { mutableFloatStateOf(initialHsv.third) }
 
-    val currentColor =
-        remember(hue, saturation, value) {
-            Color.hsv(hue, saturation, value)
-        }
-
+    val currentColor = remember(hue, saturation, value) { Color.hsv(hue, saturation, value) }
     var hexText by rememberSaveable { mutableStateOf(currentColor.toHexString()) }
     var isHexValid by rememberSaveable { mutableStateOf(true) }
     var isUserEditingHex by remember { mutableStateOf(false) }
 
-    LaunchedEffect(currentColor) {
-        if (!isUserEditingHex) {
-            hexText = currentColor.toHexString()
-            isHexValid = true
-        }
-        val currentArgb = (255L shl 24) or (currentColor.toArgb().toLong() and 0x00FFFFFFL)
-        onPreview(currentArgb)
-    }
-
     ModalBottomSheet(
         onDismissRequest = {
-            onPreview(null)
+            onPreview(null, true)
             onDismiss()
         },
         sheetState = sheetState,
@@ -112,56 +91,28 @@ fun CustomColorSheet(
                     .padding(bottom = 24.dp)
                     .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = stringResource(R.string.custom_color_title),
-                style = MaterialTheme.typography.titleLarge,
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Preview Strip under dynamic scheme from draft color
-            val dark = isSystemInDarkTheme()
-            val draftScheme =
-                remember(currentColor, dark) {
-                    schemeFromAccent(currentColor, dark)
-                }
-            MaterialTheme(colorScheme = draftScheme) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceAround,
-                    ) {
-                        Button(onClick = {}) {
-                            Text("Button")
-                        }
-                        FilterChip(
-                            selected = true,
-                            onClick = {},
-                            label = { Text("Chip") },
-                        )
-                        Switch(
-                            checked = true,
-                            onCheckedChange = {},
-                        )
-                        LinearProgressIndicator(
-                            progress = { 0.7f },
-                            modifier = Modifier.width(60.dp),
-                        )
-                    }
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.custom_color_title),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .drawBehind {
+                                drawCircle(color = Color.hsv(hue, saturation, value))
+                            },
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Hue Slider
             val hueLabel = stringResource(R.string.custom_color_hue)
             val satLabel = stringResource(R.string.custom_color_saturation)
             val valLabel = stringResource(R.string.custom_color_brightness)
@@ -194,28 +145,50 @@ fun CustomColorSheet(
                 onValueChange = {
                     isUserEditingHex = false
                     hue = it
+                    val color = Color.hsv(it, saturation, value)
+                    hexText = color.toHexString()
+                    isHexValid = true
+                    onPreview(toNormalizedArgb(color), false)
+                },
+                onValueChangeFinished = {
+                    val color = Color.hsv(hue, saturation, value)
+                    onPreview(toNormalizedArgb(color), true)
                 },
                 valueRange = 0f..360f,
                 label = { "$hueLabel: ${it.roundToInt()}°" },
             )
 
-            // Saturation Slider
             NexusSlider(
                 value = saturation,
                 onValueChange = {
                     isUserEditingHex = false
                     saturation = it
+                    val color = Color.hsv(hue, it, value)
+                    hexText = color.toHexString()
+                    isHexValid = true
+                    onPreview(toNormalizedArgb(color), false)
+                },
+                onValueChangeFinished = {
+                    val color = Color.hsv(hue, saturation, value)
+                    onPreview(toNormalizedArgb(color), true)
                 },
                 valueRange = 0f..1f,
                 label = { "$satLabel: ${(it * 100).roundToInt()}%" },
             )
 
-            // Brightness Slider
             NexusSlider(
                 value = value,
                 onValueChange = {
                     isUserEditingHex = false
                     value = it
+                    val color = Color.hsv(hue, saturation, it)
+                    hexText = color.toHexString()
+                    isHexValid = true
+                    onPreview(toNormalizedArgb(color), false)
+                },
+                onValueChangeFinished = {
+                    val color = Color.hsv(hue, saturation, value)
+                    onPreview(toNormalizedArgb(color), true)
                 },
                 valueRange = 0f..1f,
                 label = { "$valLabel: ${(it * 100).roundToInt()}%" },
@@ -223,7 +196,6 @@ fun CustomColorSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Hex Text Field
             OutlinedTextField(
                 value = hexText,
                 onValueChange = { input ->
@@ -236,6 +208,7 @@ fun CustomColorSheet(
                         hue = hsv.first
                         saturation = hsv.second
                         value = hsv.third
+                        onPreview(toNormalizedArgb(parsed), false)
                     } else {
                         isHexValid = false
                     }
@@ -261,7 +234,9 @@ fun CustomColorSheet(
                             Modifier
                                 .size(20.dp)
                                 .clip(CircleShape)
-                                .background(currentColor),
+                                .drawBehind {
+                                    drawCircle(color = Color.hsv(hue, saturation, value))
+                                },
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -269,7 +244,6 @@ fun CustomColorSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Captions U8, U9
             if (isLowChroma(currentColor)) {
                 Text(
                     text = stringResource(R.string.custom_color_low_chroma_caption),
@@ -287,7 +261,6 @@ fun CustomColorSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,6 +273,9 @@ fun CustomColorSheet(
                         saturation = defaultHsv.second
                         value = defaultHsv.third
                         isUserEditingHex = false
+                        hexText = BrandAccent.toHexString()
+                        isHexValid = true
+                        onPreview(toNormalizedArgb(BrandAccent), false)
                     },
                 ) {
                     Text(stringResource(R.string.custom_color_use_default))
@@ -308,7 +284,7 @@ fun CustomColorSheet(
                 Row {
                     OutlinedButton(
                         onClick = {
-                            onPreview(null)
+                            onPreview(null, true)
                             onDismiss()
                         },
                     ) {
@@ -318,13 +294,12 @@ fun CustomColorSheet(
                     Button(
                         onClick = {
                             if (isHexValid) {
-                                val currentArgb = (255L shl 24) or (currentColor.toArgb().toLong() and 0x00FFFFFFL)
+                                val currentArgb = toNormalizedArgb(Color.hsv(hue, saturation, value))
                                 val matchesSwatch =
                                     AccentSwatches.any {
                                         (it.color.toArgb().toLong() and 0x00FFFFFFL) == (currentArgb and 0x00FFFFFFL)
                                     }
                                 onApply(currentArgb, !matchesSwatch)
-                                onPreview(null)
                                 onDismiss()
                             }
                         },
@@ -337,6 +312,13 @@ fun CustomColorSheet(
         }
     }
 }
+
+private const val FULL_ALPHA = 255L
+private const val ALPHA_SHIFT = 24
+private const val RGB_MASK = 0x00FFFFFFL
+
+private fun toNormalizedArgb(color: Color): Long =
+    (FULL_ALPHA shl ALPHA_SHIFT) or (color.toArgb().toLong() and RGB_MASK)
 
 private fun colorToHsv(color: Color): Triple<Float, Float, Float> {
     val r = color.red

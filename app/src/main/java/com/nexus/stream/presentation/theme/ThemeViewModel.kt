@@ -12,6 +12,8 @@ import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.domain.model.UiSize
 import com.nexus.stream.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+internal const val PREVIEW_SETTLE_MS = 150L
 
 sealed interface ThemeUiState {
     data object Loading : ThemeUiState
@@ -51,6 +55,7 @@ sealed interface ThemeEvent {
 
     data class PreviewAccent(
         val argb: Long?,
+        val immediate: Boolean = false,
     ) : ThemeEvent
 
     data class SetFont(
@@ -87,6 +92,19 @@ class ThemeViewModel
         private val repo: SettingsRepository,
     ) : ViewModel() {
         private val previewAccent = MutableStateFlow<Long?>(null)
+        private var previewJob: Job? = null
+
+        private fun preview(
+            argb: Long?,
+            immediate: Boolean,
+        ) {
+            previewJob?.cancel()
+            previewJob =
+                viewModelScope.launch {
+                    if (argb != null && !immediate) delay(PREVIEW_SETTLE_MS)
+                    previewAccent.value = argb
+                }
+        }
 
         val uiState: StateFlow<ThemeUiState> =
             combine(
@@ -123,14 +141,14 @@ class ThemeViewModel
                 }
 
                 is ThemeEvent.SetAccent -> {
+                    preview(null, immediate = true)
                     viewModelScope.launch {
-                        previewAccent.value = null
                         repo.setAccentColor(event.argb, remember = event.remember)
                     }
                 }
 
                 is ThemeEvent.PreviewAccent -> {
-                    previewAccent.value = event.argb
+                    preview(event.argb, event.immediate)
                 }
 
                 is ThemeEvent.SetFont -> {
@@ -170,8 +188,8 @@ class ThemeViewModel
                 }
 
                 is ThemeEvent.ResetAppearance -> {
+                    preview(null, immediate = true)
                     viewModelScope.launch {
-                        previewAccent.value = null
                         repo.resetTheme()
                     }
                 }

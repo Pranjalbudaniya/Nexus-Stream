@@ -483,7 +483,9 @@ fun ThemeGalleryScreen(
         CustomColorSheet(
             initialColor = accentSeed(settings.accentColor),
             onDismiss = { showCustomSheet = false },
-            onPreview = { onEvent(ThemeEvent.PreviewAccent(it)) },
+            onPreview = { argb, immediate ->
+                onEvent(ThemeEvent.PreviewAccent(argb, immediate))
+            },
             onApply = { argb, remember ->
                 onEvent(ThemeEvent.SetAccent(argb, remember))
                 showCustomSheet = false
