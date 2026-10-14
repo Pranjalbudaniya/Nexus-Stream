@@ -3,6 +3,7 @@ package com.nexus.stream.dev
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.stream.data.remote.addon.AddonRemoteDataSource
+import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.CatalogSpec
@@ -10,6 +11,7 @@ import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.Stream
+import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.usecase.mergeCatalogPage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,6 +29,10 @@ data class AddonTesterUiState(
     val manifestLoading: Boolean = false,
     val manifestStatus: String? = null,
     val manifest: AddonManifest? = null,
+    val saveLoading: Boolean = false,
+    val saveStatus: String? = null,
+    val savedAddons: List<Addon> = emptyList(),
+    val addonActionStatus: String? = null,
     val selectedCatalog: CatalogSpec? = null,
     val selectedGenre: String? = null,
     val searchQuery: String = "",
@@ -54,6 +60,26 @@ sealed interface AddonTesterEvent {
     ) : AddonTesterEvent
 
     data object FetchManifest : AddonTesterEvent
+
+    data object SaveManifestToDatabase : AddonTesterEvent
+
+    data class ToggleAddonEnabled(
+        val url: String,
+        val enabled: Boolean,
+    ) : AddonTesterEvent
+
+    data class MoveAddon(
+        val url: String,
+        val toPosition: Int,
+    ) : AddonTesterEvent
+
+    data class RefreshAddon(
+        val url: String,
+    ) : AddonTesterEvent
+
+    data class DeleteAddon(
+        val url: String,
+    ) : AddonTesterEvent
 
     data class SelectCatalog(
         val catalog: CatalogSpec,
@@ -99,6 +125,7 @@ class AddonTesterViewModel
     @Inject
     constructor(
         private val remoteDataSource: AddonRemoteDataSource,
+        private val addonRepository: AddonRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(AddonTesterUiState())
         val uiState: StateFlow<AddonTesterUiState> = _uiState.asStateFlow()
@@ -106,7 +133,43 @@ class AddonTesterViewModel
         private val _effects = MutableSharedFlow<AddonTesterEffect>()
         val effects: SharedFlow<AddonTesterEffect> = _effects.asSharedFlow()
 
+        init {
+            viewModelScope.launch {
+                addonRepository.observeAll().collect { addons ->
+                    _uiState.update { it.copy(savedAddons = addons) }
+                }
+            }
+        }
+
         fun onEvent(event: AddonTesterEvent) {
+            when (event) {
+                is AddonTesterEvent.UpdateTransportUrl,
+                AddonTesterEvent.FetchManifest,
+                AddonTesterEvent.SaveManifestToDatabase,
+                is AddonTesterEvent.ToggleAddonEnabled,
+                is AddonTesterEvent.MoveAddon,
+                is AddonTesterEvent.RefreshAddon,
+                is AddonTesterEvent.DeleteAddon,
+                -> handleManifestAndDbEvent(event)
+
+                is AddonTesterEvent.SelectCatalog,
+                is AddonTesterEvent.SelectGenre,
+                is AddonTesterEvent.UpdateSearchQuery,
+                AddonTesterEvent.LoadCatalogFirstPage,
+                AddonTesterEvent.LoadCatalogMore,
+                -> handleCatalogEvent(event)
+
+                is AddonTesterEvent.UpdateMetaType,
+                is AddonTesterEvent.UpdateMetaId,
+                AddonTesterEvent.FetchMeta,
+                is AddonTesterEvent.UpdateStreamType,
+                is AddonTesterEvent.UpdateStreamId,
+                AddonTesterEvent.FetchStreams,
+                -> handleMetaAndStreamEvent(event)
+            }
+        }
+
+        private fun handleManifestAndDbEvent(event: AddonTesterEvent) {
             when (event) {
                 is AddonTesterEvent.UpdateTransportUrl -> {
                     _uiState.update { it.copy(transportUrl = event.url) }
@@ -116,6 +179,45 @@ class AddonTesterViewModel
                     fetchManifest()
                 }
 
+                AddonTesterEvent.SaveManifestToDatabase -> {
+                    saveManifestToDatabase()
+                }
+
+                is AddonTesterEvent.ToggleAddonEnabled -> {
+                    viewModelScope.launch { addonRepository.setEnabled(event.url, event.enabled) }
+                }
+
+                is AddonTesterEvent.MoveAddon -> {
+                    viewModelScope.launch { addonRepository.move(event.url, event.toPosition) }
+                }
+
+                is AddonTesterEvent.RefreshAddon -> {
+                    viewModelScope.launch {
+                        val outcome = addonRepository.refresh(event.url)
+                        _uiState.update { current ->
+                            val status =
+                                when (outcome) {
+                                    is Outcome.Success -> "Refreshed ${outcome.value.manifest.name}"
+                                    is Outcome.Failure -> "Refresh failed: ${outcome.error.toDisplayName()}"
+                                }
+                            current.copy(addonActionStatus = status)
+                        }
+                    }
+                }
+
+                is AddonTesterEvent.DeleteAddon -> {
+                    viewModelScope.launch {
+                        addonRepository.remove(event.url)
+                        _uiState.update { it.copy(addonActionStatus = "Deleted ${event.url}") }
+                    }
+                }
+
+                else -> {}
+            }
+        }
+
+        private fun handleCatalogEvent(event: AddonTesterEvent) {
+            when (event) {
                 is AddonTesterEvent.SelectCatalog -> {
                     _uiState.update {
                         it.copy(
@@ -147,6 +249,12 @@ class AddonTesterViewModel
                     loadCatalogMore()
                 }
 
+                else -> {}
+            }
+        }
+
+        private fun handleMetaAndStreamEvent(event: AddonTesterEvent) {
+            when (event) {
                 is AddonTesterEvent.UpdateMetaType -> {
                     _uiState.update { it.copy(metaType = event.type) }
                 }
@@ -170,6 +278,8 @@ class AddonTesterViewModel
                 AddonTesterEvent.FetchStreams -> {
                     fetchStreams()
                 }
+
+                else -> {}
             }
         }
 
@@ -353,14 +463,39 @@ class AddonTesterViewModel
             }
         }
 
-        private fun AppError.toDisplayName(): String =
-            when (this) {
-                AppError.InvalidUrl -> "InvalidUrl"
-                AppError.Network -> "Network"
-                AppError.NotFound -> "NotFound"
-                AppError.Parse -> "Parse"
-                AppError.Timeout -> "Timeout"
-                is AppError.Http -> "Http($code)"
-                is AppError.Unknown -> "Unknown(${message.orEmpty()})"
+        private fun saveManifestToDatabase() {
+            val url = _uiState.value.transportUrl
+            _uiState.update { it.copy(saveLoading = true, saveStatus = null) }
+            viewModelScope.launch {
+                val outcome = addonRepository.install(url)
+                _uiState.update { current ->
+                    when (outcome) {
+                        is Outcome.Success -> {
+                            current.copy(
+                                saveLoading = false,
+                                saveStatus = "Saved: ${outcome.value.manifest.name}",
+                            )
+                        }
+
+                        is Outcome.Failure -> {
+                            current.copy(
+                                saveLoading = false,
+                                saveStatus = "Failure: ${outcome.error.toDisplayName()}",
+                            )
+                        }
+                    }
+                }
             }
+        }
+    }
+
+private fun AppError.toDisplayName(): String =
+    when (this) {
+        AppError.InvalidUrl -> "InvalidUrl"
+        AppError.Network -> "Network"
+        AppError.NotFound -> "NotFound"
+        AppError.Parse -> "Parse"
+        AppError.Timeout -> "Timeout"
+        is AppError.Http -> "Http($code)"
+        is AppError.Unknown -> "Unknown(${message.orEmpty()})"
     }

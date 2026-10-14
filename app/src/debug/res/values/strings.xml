@@ -116,4 +116,11 @@
     <string name="addon_tester_none">None</string>
     <string name="addon_tester_rating">Rating: %1$s</string>
     <string name="addon_tester_released">Released: %1$s</string>
+    <string name="addon_tester_save_to_database">Save to database</string>
+    <string name="addon_tester_saved_addons_header">Saved addons (%1$d)</string>
+    <string name="addon_tester_saved_addons_empty">No saved addons in database</string>
+    <string name="addon_tester_refresh">Refresh</string>
+    <string name="addon_tester_delete">Delete</string>
+    <string name="addon_tester_move_up">Move up</string>
+    <string name="addon_tester_move_down">Move down</string>
 </resources>

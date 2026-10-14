@@ -54,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import coil3.compose.AsyncImage
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.CatalogSpec
 import com.nexus.stream.domain.model.MetaDetail
@@ -106,6 +107,25 @@ fun AddonTesterScreen(
             item {
                 ManifestSection(
                     state = state,
+                    onEvent = onEvent,
+                )
+            }
+
+            // Saved addons section
+            item {
+                SavedAddonsHeader(
+                    count = state.savedAddons.size,
+                    actionStatus = state.addonActionStatus,
+                    isEmpty = state.savedAddons.isEmpty(),
+                )
+            }
+
+            items(state.savedAddons, key = { "saved_${it.transportUrl}" }) { addon ->
+                val index = state.savedAddons.indexOf(addon)
+                SavedAddonCard(
+                    addon = addon,
+                    index = index,
+                    totalCount = state.savedAddons.size,
                     onEvent = onEvent,
                 )
             }
@@ -197,6 +217,33 @@ private fun ManifestSection(
 
         if (state.manifestLoading) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+
+        if (state.manifest != null || state.saveStatus != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { onEvent(AddonTesterEvent.SaveManifestToDatabase) },
+                    enabled = !state.saveLoading,
+                ) {
+                    Text(stringResource(R.string.addon_tester_save_to_database))
+                }
+
+                state.saveStatus?.let { status ->
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (state.saveLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
         }
     }
 }
