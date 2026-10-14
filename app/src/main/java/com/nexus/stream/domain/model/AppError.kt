@@ -29,3 +29,9 @@ sealed interface Outcome<out T> {
         val error: AppError,
     ) : Outcome<Nothing>
 }
+
+inline fun <T, R> Outcome<T>.map(transform: (T) -> R): Outcome<R> =
+    when (this) {
+        is Outcome.Success -> Outcome.Success(transform(value))
+        is Outcome.Failure -> this
+    }

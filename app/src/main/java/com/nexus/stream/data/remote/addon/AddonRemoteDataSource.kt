@@ -8,6 +8,7 @@ import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.Subtitle
+import com.nexus.stream.domain.model.map
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -23,6 +24,11 @@ import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import javax.inject.Inject
 
+data class FetchedManifest(
+    val manifest: AddonManifest,
+    val rawJson: String,
+)
+
 data class CatalogPage(
     val items: List<MetaPreview>,
     val skipped: Int,
@@ -35,16 +41,23 @@ class AddonRemoteDataSource
         private val json: Json,
         @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
     ) {
-        suspend fun manifest(transportUrl: String): Outcome<AddonManifest> {
+        suspend fun manifestWithRaw(transportUrl: String): Outcome<FetchedManifest> {
             val url = AddonUrlBuilder.manifestUrl(transportUrl)
             return safeCall(url) { targetUrl ->
                 val jsonObject = api.get(targetUrl)
                 withContext(dispatcher) {
                     val dto = json.decodeFromJsonElement<ManifestDto>(jsonObject)
-                    AddonMappers.mapManifest(dto, json)
+                    val manifest = AddonMappers.mapManifest(dto, json)
+                    FetchedManifest(
+                        manifest = manifest,
+                        rawJson = jsonObject.toString(),
+                    )
                 }
             }
         }
+
+        suspend fun manifest(transportUrl: String): Outcome<AddonManifest> =
+            manifestWithRaw(transportUrl).map { it.manifest }
 
         suspend fun catalog(
             transportUrl: String,
