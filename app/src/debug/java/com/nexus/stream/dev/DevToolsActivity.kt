@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,66 +35,115 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class DevToolsActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
+    private val addonTesterViewModel: AddonTesterViewModel by viewModels()
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val uiState by themeViewModel.uiState.collectAsState()
-            when (val state = uiState) {
-                is ThemeUiState.Loading -> {}
+            DevToolsContent(
+                themeViewModel = themeViewModel,
+                addonTesterViewModel = addonTesterViewModel,
+            )
+        }
+    }
+}
 
-                is ThemeUiState.Ready -> {
-                    val effectiveSettings =
-                        state.settings.copy(
-                            accentColor = state.previewAccent ?: state.settings.accentColor,
-                        )
-                    NexusTheme(settings = effectiveSettings) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background,
-                        ) {
-                            var showGallery by rememberSaveable { mutableStateOf(false) }
+@Composable
+private fun DevToolsContent(
+    themeViewModel: ThemeViewModel,
+    addonTesterViewModel: AddonTesterViewModel,
+) {
+    val uiState by themeViewModel.uiState.collectAsState()
+    val state = uiState as? ThemeUiState.Ready ?: return
+    val effectiveSettings =
+        state.settings.copy(
+            accentColor = state.previewAccent ?: state.settings.accentColor,
+        )
+    NexusTheme(settings = effectiveSettings) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            var currentScreen by rememberSaveable { mutableStateOf(DevScreen.MENU) }
 
-                            if (showGallery) {
-                                BackHandler { showGallery = false }
-                                ThemeGalleryScreen(
-                                    settings = effectiveSettings,
-                                    onEvent = themeViewModel::onEvent,
-                                )
-                            } else {
-                                Scaffold(
-                                    topBar = {
-                                        TopAppBar(
-                                            title = { Text(stringResource(R.string.dev_tools_label)) },
-                                        )
-                                    },
-                                ) { innerPadding ->
-                                    LazyColumn(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxSize()
-                                                .padding(innerPadding),
-                                    ) {
-                                        item {
-                                            ListItem(
-                                                headlineContent = {
-                                                    Text(stringResource(R.string.dev_tools_theme_gallery))
-                                                },
-                                                modifier =
-                                                    Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable { showGallery = true },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            when (currentScreen) {
+                DevScreen.THEME_GALLERY -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    ThemeGalleryScreen(
+                        settings = effectiveSettings,
+                        onEvent = themeViewModel::onEvent,
+                    )
+                }
+
+                DevScreen.ADDON_TESTER -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    val testerState by addonTesterViewModel.uiState.collectAsState()
+                    AddonTesterScreen(
+                        state = testerState,
+                        onEvent = addonTesterViewModel::onEvent,
+                        onBack = { currentScreen = DevScreen.MENU },
+                    )
+                }
+
+                DevScreen.MENU -> {
+                    DevToolsMenu(
+                        onNavigateGallery = { currentScreen = DevScreen.THEME_GALLERY },
+                        onNavigateTester = { currentScreen = DevScreen.ADDON_TESTER },
+                    )
                 }
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DevToolsMenu(
+    onNavigateGallery: () -> Unit,
+    onNavigateTester: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.dev_tools_label)) },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+        ) {
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.dev_tools_theme_gallery))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateGallery),
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.dev_tools_addon_tester))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateTester),
+                )
+            }
+        }
+    }
+}
+
+private enum class DevScreen {
+    MENU,
+    THEME_GALLERY,
+    ADDON_TESTER,
 }
