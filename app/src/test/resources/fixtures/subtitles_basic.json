@@ -1,0 +1,14 @@
+{
+  "subtitles": [
+    {
+      "id": "sub_en_1",
+      "url": "https://example.com/sub_en.srt",
+      "lang": "en",
+      "label": "English SDH"
+    },
+    {
+      "url": "https://example.com/sub_es.srt",
+      "lang": "es"
+    }
+  ]
+}

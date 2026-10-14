@@ -1,0 +1,211 @@
+{
+  "meta": {
+    "awards": "Won 59 Primetime Emmys. 396 wins & 656 nominations total",
+    "cast": [
+      "Emilia Clarke",
+      "Peter Dinklage",
+      "Kit Harington"
+    ],
+    "country": "United States, United Kingdom",
+    "description": "Nine noble families vie for control of Westeros and the Iron Throne, while an ancient threat beyond The Wall begins to stir.",
+    "director": null,
+    "dvdRelease": null,
+    "genre": [
+      "Drama",
+      "Fantasy"
+    ],
+    "imdbRating": "9.2",
+    "imdb_id": "tt0944947",
+    "name": "Game of Thrones",
+    "popularity": 6.58885,
+    "poster": "https://images.metahub.space/poster/small/tt0944947/img",
+    "released": "2011-04-17T00:00:00.000Z",
+    "runtime": "57 min",
+    "status": "Ended",
+    "tvdb_id": 121361,
+    "type": "series",
+    "writer": [
+      "David Benioff",
+      "D.B. Weiss"
+    ],
+    "year": "2011\u20132019",
+    "background": "https://images.metahub.space/background/medium/tt0944947/img",
+    "logo": "https://images.metahub.space/logo/medium/tt0944947/img",
+    "popularities": {
+      "PXS_TEST": 0,
+      "PXS": 4,
+      "SCM": 88,
+      "EXMD": 1,
+      "ALLIANCE": 88,
+      "EJD": 49,
+      "moviedb": 197.5155,
+      "trakt": 842,
+      "stremio": 6.58885,
+      "stremio_lib": 0.005
+    },
+    "moviedb_id": 1399,
+    "slug": "series/game-of-thrones-0944947",
+    "trailers": [
+      {
+        "source": "KPLWWIOCOOQ",
+        "type": "Trailer"
+      },
+      {
+        "source": "BpJYNVhGf1s",
+        "type": "Trailer"
+      }
+    ],
+    "id": "tt0944947",
+    "genres": [
+      "Drama",
+      "Fantasy"
+    ],
+    "releaseInfo": "2011\u20132019",
+    "videos": [
+      {
+        "name": "Inside Game of Thrones",
+        "season": 0,
+        "number": 1,
+        "firstAired": "2010-12-06T05:00:00.000Z",
+        "tvdb_id": 3226241,
+        "rating": "0",
+        "overview": "A short look into the film-making process for the production Game of Thrones",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/1/w780.jpg",
+        "id": "tt0944947:0:1",
+        "released": "2010-12-06T05:00:00.000Z",
+        "episode": 1,
+        "description": "A short look into the film-making process for the production Game of Thrones"
+      },
+      {
+        "name": "15-Minute Preview",
+        "season": 0,
+        "number": 2,
+        "firstAired": "2011-04-04T05:00:00.000Z",
+        "tvdb_id": 4045941,
+        "rating": "0",
+        "overview": "An approximately 15-minute preview of the first episode of Game of Thrones.",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/2/w780.jpg",
+        "id": "tt0944947:0:2",
+        "released": "2011-04-04T05:00:00.000Z",
+        "episode": 2,
+        "description": "An approximately 15-minute preview of the first episode of Game of Thrones."
+      },
+      {
+        "name": "Making Game of Thrones",
+        "season": 0,
+        "number": 3,
+        "firstAired": "2011-04-08T05:00:00.000Z",
+        "tvdb_id": 4073401,
+        "rating": "0",
+        "overview": "An exclusive 30-minute feature including never-before-seen footage from the set and interviews from the cast and crew",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/3/w780.jpg",
+        "id": "tt0944947:0:3",
+        "released": "2011-04-08T05:00:00.000Z",
+        "episode": 3,
+        "description": "An exclusive 30-minute feature including never-before-seen footage from the set and interviews from the cast and crew"
+      },
+      {
+        "name": "El Juego Comienza",
+        "season": 0,
+        "number": 4,
+        "firstAired": "2011-04-11T05:00:00.000Z",
+        "tvdb_id": 4082317,
+        "rating": "0",
+        "overview": "A spanish \"Canal +`\" production with interviews to some famous spanish movie directors like Alex de La Iglesia and extracts from last special \"Making Game Of Thrones\"",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/4/w780.jpg",
+        "id": "tt0944947:0:4",
+        "released": "2011-04-11T05:00:00.000Z",
+        "episode": 4,
+        "description": "A spanish \"Canal +`\" production with interviews to some famous spanish movie directors like Alex de La Iglesia and extracts from last special \"Making Game Of Thrones\""
+      },
+      {
+        "name": "2011 Comic Con Panel",
+        "season": 0,
+        "number": 5,
+        "firstAired": "2011-07-22T05:00:00.000Z",
+        "tvdb_id": 4138149,
+        "rating": "0",
+        "overview": "",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/5/w780.jpg",
+        "id": "tt0944947:0:5",
+        "released": "2011-07-22T05:00:00.000Z",
+        "episode": 5
+      },
+      {
+        "name": "You Win or You Die",
+        "season": 0,
+        "number": 6,
+        "firstAired": "2012-03-25T05:00:00.000Z",
+        "tvdb_id": 4292422,
+        "rating": "0",
+        "overview": "A prequel to Game of Thrones Season 2 which recaps on the first season and gives insight into what's to come.",
+        "thumbnail": "https://episodes.metahub.space/tt0944947/0/6/w780.jpg",
+        "id": "tt0944947:0:6",
+        "released": "2012-03-25T05:00:00.000Z",
+        "episode": 6,
+        "description": "A prequel to Game of Thrones Season 2 which recaps on the first season and gives insight into what's to come."
+      }
+    ],
+    "trailerStreams": [
+      {
+        "title": "Game of Thrones",
+        "ytId": "KPLWWIOCOOQ"
+      },
+      {
+        "title": "Game of Thrones",
+        "ytId": "BpJYNVhGf1s"
+      }
+    ],
+    "links": [
+      {
+        "name": "9.2",
+        "category": "imdb",
+        "url": "https://imdb.com/title/tt0944947"
+      },
+      {
+        "name": "Game of Thrones",
+        "category": "share",
+        "url": "https://www.strem.io/s/series/game-of-thrones-0944947"
+      },
+      {
+        "name": "Drama",
+        "category": "Genres",
+        "url": "stremio:///discover/https%3A%2F%2Fv3-cinemeta.strem.io%2Fmanifest.json/series/top?genre=Drama"
+      },
+      {
+        "name": "Fantasy",
+        "category": "Genres",
+        "url": "stremio:///discover/https%3A%2F%2Fv3-cinemeta.strem.io%2Fmanifest.json/series/top?genre=Fantasy"
+      },
+      {
+        "name": "Emilia Clarke",
+        "category": "Cast",
+        "url": "stremio:///search?search=Emilia%20Clarke"
+      },
+      {
+        "name": "Peter Dinklage",
+        "category": "Cast",
+        "url": "stremio:///search?search=Peter%20Dinklage"
+      },
+      {
+        "name": "Kit Harington",
+        "category": "Cast",
+        "url": "stremio:///search?search=Kit%20Harington"
+      },
+      {
+        "name": "David Benioff",
+        "category": "Writers",
+        "url": "stremio:///search?search=David%20Benioff"
+      },
+      {
+        "name": "D.B. Weiss",
+        "category": "Writers",
+        "url": "stremio:///search?search=D.B.%20Weiss"
+      }
+    ],
+    "behaviorHints": {
+      "defaultVideoId": null,
+      "hasScheduledVideos": true
+    }
+  }
+}

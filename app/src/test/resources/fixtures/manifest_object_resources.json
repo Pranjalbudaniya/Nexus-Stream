@@ -1,0 +1,37 @@
+{
+  "id": "org.example.objects",
+  "version": "1.0.0",
+  "name": "Object Resources Addon",
+  "description": "Addon using object resources",
+  "types": ["movie", "series"],
+  "idPrefixes": ["tt"],
+  "resources": [
+    {
+      "name": "catalog",
+      "types": ["movie"]
+    },
+    {
+      "name": "meta",
+      "types": ["movie", "series"],
+      "idPrefixes": ["custom:"]
+    },
+    {
+      "name": "stream",
+      "types": ["movie"]
+    }
+  ],
+  "catalogs": [
+    {
+      "type": "movie",
+      "id": "featured",
+      "name": "Featured",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": false,
+          "options": []
+        }
+      ]
+    }
+  ]
+}

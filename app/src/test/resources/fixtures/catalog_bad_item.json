@@ -1,0 +1,18 @@
+{
+  "metas": [
+    {
+      "id": "tt0000001",
+      "type": "movie"
+    },
+    {
+      "id": "tt0000002",
+      "type": "movie",
+      "name": "Valid Movie",
+      "poster": "https://example.com/poster.jpg",
+      "imdbRating": 8.7,
+      "genres": [
+        "Action"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "org.example.legacy",
+  "version": "1.0.0",
+  "name": "Legacy Addon",
+  "description": "An addon with legacy manifest format",
+  "types": ["movie", "series"],
+  "idPrefixes": ["tt"],
+  "resources": ["catalog", "meta", "stream"],
+  "catalogs": [
+    {
+      "type": "movie",
+      "id": "top",
+      "name": "Top Movies",
+      "extraSupported": ["search", "genre", "skip"],
+      "extraRequired": ["genre"]
+    }
+  ]
+}

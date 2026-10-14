@@ -1,0 +1,52 @@
+{
+  "streams": [
+    {
+      "url": "https://example.com/stream.mp4",
+      "name": "Direct Stream",
+      "description": "1080p Web-DL",
+      "behaviorHints": {
+        "notWebReady": true,
+        "bingeGroup": "web-1080p",
+        "proxyHeaders": {
+          "request": {
+            "User-Agent": "CustomAgent/1.0",
+            "Referer": "https://example.com"
+          }
+        },
+        "videoSize": 1073741824,
+        "filename": "movie.1080p.mp4"
+      }
+    },
+    {
+      "infoHash": "0123456789abcdef0123456789abcdef01234567",
+      "fileIdx": 2,
+      "name": "Torrent Stream",
+      "description": "720p Torrent",
+      "sources": [
+        "tracker:udp://tracker.openbittorrent.com:80/announce",
+        "tracker:udp://tracker.opentrackr.org:1337/announce",
+        "dht:0123456789abcdef0123456789abcdef01234567"
+      ],
+      "behaviorHints": {
+        "bingeGroup": "torrent-720p"
+      }
+    },
+    {
+      "ytId": "dQw4w9WgXcQ",
+      "name": "YouTube Trailer"
+    },
+    {
+      "externalUrl": "https://vlc.app/open?url=...",
+      "name": "External Player"
+    },
+    {
+      "nzbUrl": "https://example.com/item.nzb",
+      "name": "Usenet NZB"
+    },
+    {
+      "title": "Title Only Stream",
+      "url": "https://example.com/fallback.mp4"
+    },
+    "corrupt string item instead of object"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "meta": [
+    {
+      "id": "tt0111161",
+      "type": "movie",
+      "name": "The Shawshank Redemption",
+      "genres": [
+        "Drama"
+      ],
+      "runtime": "142 min",
+      "imdbRating": "9.3",
+      "description": "Over the course of several years, two convicts form a friendship.",
+      "trailers": [
+        {
+          "source": "NmzuHjWmXOc",
+          "type": "Trailer"
+        }
+      ]
+    },
+    {
+      "id": "tt0000000",
+      "type": "movie",
+      "name": "Ignored Second Item"
+    }
+  ]
+}
