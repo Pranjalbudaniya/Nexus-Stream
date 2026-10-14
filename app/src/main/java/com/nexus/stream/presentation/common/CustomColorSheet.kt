@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -163,11 +162,10 @@ fun CustomColorSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Hue Slider
-            val hueDegrees = hue.roundToInt()
-            Text(
-                text = stringResource(R.string.custom_color_hue) + ": $hueDegrees°",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            val hueLabel = stringResource(R.string.custom_color_hue)
+            val satLabel = stringResource(R.string.custom_color_saturation)
+            val valLabel = stringResource(R.string.custom_color_brightness)
+
             val hueGradient =
                 remember {
                     Brush.horizontalGradient(
@@ -190,55 +188,37 @@ fun CustomColorSheet(
                         .clip(RoundedCornerShape(6.dp))
                         .background(hueGradient),
             )
-            Slider(
+            Spacer(modifier = Modifier.height(4.dp))
+            NexusSlider(
                 value = hue,
                 onValueChange = {
                     isUserEditingHex = false
                     hue = it
                 },
                 valueRange = 0f..360f,
-                modifier =
-                    Modifier.semantics {
-                        stateDescription = "Hue $hueDegrees degrees"
-                    },
+                label = { "$hueLabel: ${it.roundToInt()}°" },
             )
 
             // Saturation Slider
-            val satPercent = (saturation * 100).roundToInt()
-            Text(
-                text = stringResource(R.string.custom_color_saturation) + ": $satPercent%",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
+            NexusSlider(
                 value = saturation,
                 onValueChange = {
                     isUserEditingHex = false
                     saturation = it
                 },
                 valueRange = 0f..1f,
-                modifier =
-                    Modifier.semantics {
-                        stateDescription = "Saturation $satPercent percent"
-                    },
+                label = { "$satLabel: ${(it * 100).roundToInt()}%" },
             )
 
             // Brightness Slider
-            val valPercent = (value * 100).roundToInt()
-            Text(
-                text = stringResource(R.string.custom_color_brightness) + ": $valPercent%",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
+            NexusSlider(
                 value = value,
                 onValueChange = {
                     isUserEditingHex = false
                     value = it
                 },
                 valueRange = 0f..1f,
-                modifier =
-                    Modifier.semantics {
-                        stateDescription = "Brightness $valPercent percent"
-                    },
+                label = { "$valLabel: ${(it * 100).roundToInt()}%" },
             )
 
             Spacer(modifier = Modifier.height(8.dp))

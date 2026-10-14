@@ -35,4 +35,29 @@
     <string name="amoled_applies_when_dark">Applies when your phone switches to dark.</string>
     <string name="appearance_reset">Appearance reset</string>
     <string name="reset_appearance">Reset appearance</string>
+
+    <!-- Appearance settings & Font picker -->
+    <string name="font_picker_title">Choose font</string>
+    <string name="font_sample_line">The quick brown fox jumps over the lazy dog</string>
+    <string name="font_name_system">System</string>
+    <string name="font_name_inter">Inter</string>
+    <string name="font_name_manrope">Manrope</string>
+    <string name="font_name_dm_sans">DM Sans</string>
+    <string name="font_name_outfit">Outfit</string>
+    <string name="font_name_plus_jakarta_sans">Plus Jakarta Sans</string>
+    <string name="font_name_lexend">Lexend</string>
+    <string name="font_name_nunito">Nunito</string>
+    <string name="font_name_space_grotesk">Space Grotesk</string>
+    <string name="font_name_poppins">Poppins</string>
+    <string name="font_name_figtree">Figtree</string>
+
+    <!-- Reset appearance dialog -->
+    <string name="reset_appearance_title">Reset appearance?</string>
+    <string name="reset_appearance_body">This will reset all appearance settings including colors, font, UI and text sizes, corner roundness, card style, and contrast to their defaults.</string>
+    <string name="btn_reset">Reset</string>
+
+    <!-- Appearance captions -->
+    <string name="caption_ui_size_small">Smaller sizes make buttons smaller to tap.</string>
+    <string name="caption_text_size">Applied on top of UI size and the phone\'s font size.</string>
+    <string name="caption_contrast_dynamic">Dynamic color follows your phone\'s contrast setting.</string>
 </resources>
