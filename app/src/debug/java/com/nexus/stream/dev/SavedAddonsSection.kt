@@ -132,6 +132,12 @@ fun SavedAddonCard(
                 }
 
                 TextButton(
+                    onClick = { onEvent(AddonTesterEvent.UseAddon(addon.transportUrl)) },
+                ) {
+                    Text(stringResource(R.string.addon_tester_use))
+                }
+
+                TextButton(
                     onClick = { onEvent(AddonTesterEvent.RefreshAddon(addon.transportUrl)) },
                 ) {
                     Text(stringResource(R.string.addon_tester_refresh))

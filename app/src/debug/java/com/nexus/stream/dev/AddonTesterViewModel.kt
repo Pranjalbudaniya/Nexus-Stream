@@ -81,6 +81,10 @@ sealed interface AddonTesterEvent {
         val url: String,
     ) : AddonTesterEvent
 
+    data class UseAddon(
+        val url: String,
+    ) : AddonTesterEvent
+
     data class SelectCatalog(
         val catalog: CatalogSpec,
     ) : AddonTesterEvent
@@ -150,6 +154,7 @@ class AddonTesterViewModel
                 is AddonTesterEvent.MoveAddon,
                 is AddonTesterEvent.RefreshAddon,
                 is AddonTesterEvent.DeleteAddon,
+                is AddonTesterEvent.UseAddon,
                 -> handleManifestAndDbEvent(event)
 
                 is AddonTesterEvent.SelectCatalog,
@@ -210,6 +215,11 @@ class AddonTesterViewModel
                         addonRepository.remove(event.url)
                         _uiState.update { it.copy(addonActionStatus = "Deleted ${event.url}") }
                     }
+                }
+
+                is AddonTesterEvent.UseAddon -> {
+                    _uiState.update { it.copy(transportUrl = event.url) }
+                    fetchManifest()
                 }
 
                 else -> {}

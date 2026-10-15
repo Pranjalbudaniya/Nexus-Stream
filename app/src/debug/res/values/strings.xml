@@ -123,4 +123,5 @@
     <string name="addon_tester_delete">Delete</string>
     <string name="addon_tester_move_up">Move up</string>
     <string name="addon_tester_move_down">Move down</string>
+    <string name="addon_tester_use">Use</string>
 </resources>

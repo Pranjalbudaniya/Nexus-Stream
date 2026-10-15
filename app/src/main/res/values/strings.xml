@@ -124,4 +124,7 @@
     <string name="addon_remove_dialog_title">Remove %1$s?</string>
     <string name="addon_remove_dialog_body">Are you sure you want to remove this addon?</string>
     <string name="addon_remove_dialog_body_last_catalog">Removing this addon leaves no catalog-capable addon enabled. Home will be empty.</string>
+    <string name="addon_dialog_remove">Remove</string>
+    <string name="addon_dialog_cancel">Cancel</string>
+    <string name="addon_logo_description">%1$s logo</string>
 </resources>

@@ -39,7 +39,7 @@ val LocalCardStyle = staticCompositionLocalOf { CardStyle.FILLED }
 
 @Composable
 fun NexusTheme(
-    settings: ThemeSettings,
+    settings: ThemeSettings = ThemeSettings(),
     content: @Composable () -> Unit,
 ) {
     val dark = isDarkTheme(settings.mode, isSystemInDarkTheme())
