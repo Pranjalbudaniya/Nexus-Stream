@@ -27,6 +27,7 @@ presentation -> domain <- data. Single Gradle module, packages by layer. Layout 
 - Add `@Preview` for each screen-level composable (light and dark).
 - Keep diffs small. Don't refactor unrelated files. List unrelated issues in the report instead.
 - Don't add features, settings or screens the prompt doesn't list.
+- Window insets are applied exactly once. The top-level Scaffold uses WindowInsets(0) and consumes its padding; each screen owns its insets.
 
 ## Stop and ask when
 - an ambiguity changes the architecture

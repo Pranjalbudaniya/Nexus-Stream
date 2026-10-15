@@ -129,7 +129,11 @@ internal fun HomeScreenContent(
                     LazyColumn(
                         state = lazyListState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = NexusTheme.spacing.sm),
+                        contentPadding =
+                            PaddingValues(
+                                top = NexusTheme.spacing.sm,
+                                bottom = NexusTheme.spacing.lg,
+                            ),
                     ) {
                         if (uiState.offline) {
                             item(key = "offline_banner") {
