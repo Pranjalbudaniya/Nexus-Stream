@@ -21,3 +21,9 @@ data object Settings
 data class Addons(
     val prefillUrl: String? = null,
 )
+
+@Serializable
+data class Detail(
+    val type: String,
+    val id: String,
+)

@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.nexus.stream.presentation.feature.addons.AddonManagerScreen
+import com.nexus.stream.presentation.feature.detail.DetailScreen
 import com.nexus.stream.presentation.feature.discover.DiscoverScreen
 import com.nexus.stream.presentation.feature.home.HomeScreen
 import com.nexus.stream.presentation.feature.library.LibraryScreen
@@ -26,6 +27,10 @@ fun NexusNavHost(
         composable<Home> {
             HomeScreen(
                 onNavigateToSettings = { navController.navigate(Settings) },
+                onNavigateToAddons = { navController.navigate(Addons()) },
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
             )
         }
         composable<Discover> {
@@ -48,6 +53,14 @@ fun NexusNavHost(
             AddonManagerScreen(
                 onNavigateUp = { navController.navigateUp() },
                 prefillUrl = args.prefillUrl,
+            )
+        }
+        composable<Detail> { backStackEntry ->
+            val args = backStackEntry.toRoute<Detail>()
+            DetailScreen(
+                type = args.type,
+                id = args.id,
+                onNavigateUp = { navController.navigateUp() },
             )
         }
     }

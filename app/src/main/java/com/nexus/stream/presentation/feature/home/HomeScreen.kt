@@ -1,10 +1,20 @@
 package com.nexus.stream.presentation.feature.home
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -12,21 +22,55 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.HomeRowSpec
+import com.nexus.stream.presentation.common.ContentRow
+import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.theme.NexusTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToSettings: () -> Unit,
+    onNavigateToAddons: () -> Unit,
+    onItemClick: (type: String, id: String) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+    HomeScreenContent(
+        uiState = uiState,
+        onEvent = viewModel::onEvent,
+        onNavigateToSettings = onNavigateToSettings,
+        onNavigateToAddons = onNavigateToAddons,
+        onItemClick = onItemClick,
+        modifier = modifier,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun HomeScreenContent(
+    uiState: HomeUiState,
+    onEvent: (HomeEvent) -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToAddons: () -> Unit,
+    onItemClick: (type: String, id: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lazyListState = rememberLazyListState()
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -48,26 +92,220 @@ fun HomeScreen(
             )
         },
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { onEvent(HomeEvent.Refresh) },
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
-            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = stringResource(R.string.home_placeholder),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            when {
+                !uiState.hasAddons -> {
+                    if (uiState.seedFailed) {
+                        EmptyStateView(
+                            message = stringResource(R.string.home_seed_failed),
+                            buttonText = stringResource(R.string.retry),
+                            onButtonClick = { onEvent(HomeEvent.RetrySeed) },
+                        )
+                    } else {
+                        EmptyStateView(
+                            message = stringResource(R.string.home_no_addons),
+                            buttonText = stringResource(R.string.home_btn_add_addon),
+                            onButtonClick = onNavigateToAddons,
+                        )
+                    }
+                }
+
+                !uiState.hasCatalogRows -> {
+                    EmptyStateView(
+                        message = stringResource(R.string.home_no_catalog_addons),
+                        buttonText = stringResource(R.string.home_btn_addons),
+                        onButtonClick = onNavigateToAddons,
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        state = lazyListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = NexusTheme.spacing.sm),
+                    ) {
+                        if (uiState.offline) {
+                            item(key = "offline_banner") {
+                                OfflineBanner(
+                                    onRetryAll = { onEvent(HomeEvent.Refresh) },
+                                )
+                            }
+                        }
+                        items(
+                            items = uiState.rows,
+                            key = { it.spec.key },
+                        ) { row ->
+                            ContentRow(
+                                title = row.spec.title,
+                                status = row.status,
+                                onRetry = { onEvent(HomeEvent.Retry(row.spec.key)) },
+                                onItemClick = onItemClick,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-@Preview(name = "HomeScreen - Light")
 @Composable
-internal fun HomeScreenLightPreview() {
+private fun OfflineBanner(
+    onRetryAll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NexusCard(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = NexusTheme.spacing.lg, vertical = NexusTheme.spacing.sm),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(NexusTheme.spacing.md),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.home_offline_banner),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = NexusTheme.spacing.sm),
+            )
+            Button(onClick = onRetryAll) {
+                Text(stringResource(R.string.home_retry_all))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyStateView(
+    message: String,
+    buttonText: String,
+    onButtonClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(NexusTheme.spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
+        Button(onClick = onButtonClick) {
+            Text(buttonText)
+        }
+    }
+}
+
+@Preview(name = "HomeScreen - Populated")
+@Composable
+internal fun HomeScreenPopulatedPreview() {
     NexusTheme {
-        HomeScreen(onNavigateToSettings = {})
+        HomeScreenContent(
+            uiState =
+                HomeUiState(
+                    rows =
+                        listOf(
+                            HomeRow(
+                                spec =
+                                    HomeRowSpec(
+                                        key = "cinemeta|movie|top",
+                                        title = "Popular - Movies",
+                                        transportUrl = "https://v3-cinemeta.strem.io",
+                                        type = "movie",
+                                        catalogId = "top",
+                                    ),
+                                status = RowStatus.Loading,
+                            ),
+                        ),
+                    hasAddons = true,
+                    hasCatalogRows = true,
+                ),
+            onEvent = {},
+            onNavigateToSettings = {},
+            onNavigateToAddons = {},
+            onItemClick = { _, _ -> },
+        )
+    }
+}
+
+@Preview(name = "HomeScreen - Empty No Addons")
+@Composable
+internal fun HomeScreenEmptyNoAddonsPreview() {
+    NexusTheme {
+        HomeScreenContent(
+            uiState =
+                HomeUiState(
+                    hasAddons = false,
+                    hasCatalogRows = false,
+                ),
+            onEvent = {},
+            onNavigateToSettings = {},
+            onNavigateToAddons = {},
+            onItemClick = { _, _ -> },
+        )
+    }
+}
+
+@Preview(name = "HomeScreen - Offline")
+@Composable
+internal fun HomeScreenOfflinePreview() {
+    NexusTheme {
+        HomeScreenContent(
+            uiState =
+                HomeUiState(
+                    rows =
+                        listOf(
+                            HomeRow(
+                                spec =
+                                    HomeRowSpec(
+                                        key = "cinemeta|movie|top",
+                                        title = "Popular - Movies",
+                                        transportUrl = "https://v3-cinemeta.strem.io",
+                                        type = "movie",
+                                        catalogId = "top",
+                                    ),
+                                status = RowStatus.Failed(AppError.Network),
+                            ),
+                            HomeRow(
+                                spec =
+                                    HomeRowSpec(
+                                        key = "cinemeta|series|top",
+                                        title = "Popular - Series",
+                                        transportUrl = "https://v3-cinemeta.strem.io",
+                                        type = "series",
+                                        catalogId = "top",
+                                    ),
+                                status = RowStatus.Failed(AppError.Network),
+                            ),
+                        ),
+                    hasAddons = true,
+                    hasCatalogRows = true,
+                    offline = true,
+                ),
+            onEvent = {},
+            onNavigateToSettings = {},
+            onNavigateToAddons = {},
+            onItemClick = { _, _ -> },
+        )
     }
 }

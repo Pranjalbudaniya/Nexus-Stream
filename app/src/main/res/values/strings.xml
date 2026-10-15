@@ -151,4 +151,18 @@
     <string name="settings_addons_title">Addons</string>
     <string name="settings_appearance_title">Appearance</string>
     <string name="settings_appearance_coming_soon">Coming soon. In debug builds use Nexus Dev > Theme gallery.</string>
+
+    <!-- Home screen states -->
+    <string name="home_no_addons">Add your first addon to start discovering content.</string>
+    <string name="home_btn_add_addon">Add addon</string>
+    <string name="home_seed_failed">Couldn\'t set up your catalogs. Check your connection.</string>
+    <string name="home_no_catalog_addons">None of your addons provides catalogs.</string>
+    <string name="home_btn_addons">Addons</string>
+    <string name="home_offline_banner">Couldn\'t reach your addons. Check your connection.</string>
+    <string name="home_retry_all">Retry all</string>
+    <string name="retry">Retry</string>
+
+    <!-- Detail screen -->
+    <string name="detail_title">Detail</string>
+    <string name="detail_coming_soon">Detail screen is coming soon</string>
 </resources>
