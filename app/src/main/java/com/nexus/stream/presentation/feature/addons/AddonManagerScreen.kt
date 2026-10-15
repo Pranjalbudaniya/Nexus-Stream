@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -35,7 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -44,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonCapabilities
@@ -58,13 +64,23 @@ import com.nexus.stream.presentation.theme.NexusTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddonManagerScreen(
-    viewModel: AddonManagerViewModel,
+    onNavigateUp: () -> Unit,
+    prefillUrl: String? = null,
+    viewModel: AddonManagerViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var handledPrefill by rememberSaveable(prefillUrl) { mutableStateOf(false) }
+    LaunchedEffect(prefillUrl) {
+        if (!prefillUrl.isNullOrBlank() && !handledPrefill) {
+            handledPrefill = true
+            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = prefillUrl, autoCheck = true))
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -93,6 +109,7 @@ fun AddonManagerScreen(
     AddonManagerContent(
         uiState = uiState,
         onEvent = viewModel::onEvent,
+        onNavigateUp = onNavigateUp,
         snackbarHostState = snackbarHostState,
         onOpenUrl = { url ->
             try {
@@ -110,6 +127,7 @@ fun AddonManagerScreen(
 fun AddonManagerContent(
     uiState: AddonManagerUiState,
     onEvent: (AddonManagerEvent) -> Unit,
+    onNavigateUp: () -> Unit,
     snackbarHostState: SnackbarHostState,
     onOpenUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -125,6 +143,14 @@ fun AddonManagerContent(
                         text = stringResource(R.string.addon_manager_title),
                         fontWeight = FontWeight.Bold,
                     )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_up),
+                        )
+                    }
                 },
             )
         },
@@ -387,6 +413,7 @@ internal fun AddonManagerScreenPopulatedPreview() {
             onEvent = {},
             snackbarHostState = remember { SnackbarHostState() },
             onOpenUrl = {},
+            onNavigateUp = {},
         )
     }
 }
@@ -404,6 +431,7 @@ internal fun AddonManagerScreenEmptyPreview() {
             onEvent = {},
             snackbarHostState = remember { SnackbarHostState() },
             onOpenUrl = {},
+            onNavigateUp = {},
         )
     }
 }
@@ -422,6 +450,7 @@ internal fun AddonManagerScreenSeedFailedPreview() {
             onEvent = {},
             snackbarHostState = remember { SnackbarHostState() },
             onOpenUrl = {},
+            onNavigateUp = {},
         )
     }
 }
