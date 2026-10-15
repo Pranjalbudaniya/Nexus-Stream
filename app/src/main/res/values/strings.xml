@@ -127,4 +127,28 @@
     <string name="addon_dialog_remove">Remove</string>
     <string name="addon_dialog_cancel">Cancel</string>
     <string name="addon_logo_description">%1$s logo</string>
+
+    <!-- Navigation & Bottom bar -->
+    <string name="nav_home">Home</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_library">Library</string>
+    <string name="navigate_up">Back</string>
+
+    <!-- Placeholders -->
+    <string name="home_title">Nexus Stream</string>
+    <string name="home_placeholder">Home</string>
+    <string name="discover_title">Discover</string>
+    <string name="discover_placeholder">Discover</string>
+    <string name="search_title">Search</string>
+    <string name="search_placeholder">Search</string>
+    <string name="library_title">Library</string>
+    <string name="library_placeholder">Library</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_gear_description">Settings</string>
+    <string name="settings_addons_title">Addons</string>
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_appearance_coming_soon">Coming soon. In debug builds use Nexus Dev > Theme gallery.</string>
 </resources>
