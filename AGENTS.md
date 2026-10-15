@@ -23,7 +23,7 @@ presentation -> domain <- data. Single Gradle module, packages by layer. Layout 
 - All user-visible text goes in `strings.xml`.
 - Inject dispatchers. No `GlobalScope`. No blocking calls on Main.
 - Every ViewModel exposes `uiState` (StateFlow), `effects` (Flow) and `onEvent()`.
-- Every list or network screen implements loading (shimmer), error (retry) and empty states.
+- Every list or network screen implements loading (static skeleton, no animation), error (retry) and empty states.
 - Add `@Preview` for each screen-level composable (light and dark).
 - Keep diffs small. Don't refactor unrelated files. List unrelated issues in the report instead.
 - Don't add features, settings or screens the prompt doesn't list.
