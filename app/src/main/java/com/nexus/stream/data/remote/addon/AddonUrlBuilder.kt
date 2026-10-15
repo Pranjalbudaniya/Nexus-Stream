@@ -7,39 +7,34 @@ import java.nio.charset.StandardCharsets
 
 object AddonUrlBuilder {
     fun normalize(transportUrl: String): HttpUrl? {
+        val httpUrl = toHttpsUrl(transportUrl) ?: return null
+        val cleaned = cleanSegments(httpUrl.pathSegments)
+        val builder = httpUrl.newBuilder().encodedPath("/")
+        for (segment in cleaned) {
+            builder.addPathSegment(segment)
+        }
+        return builder.build()
+    }
+
+    private fun toHttpsUrl(transportUrl: String): HttpUrl? {
         val trimmed = transportUrl.trim()
-        val converted =
+        val after =
             if (trimmed.startsWith("stremio://", ignoreCase = true)) {
-                "https://${trimmed.substring(STREMIO_SCHEME_LENGTH)}"
+                val sub = trimmed.substring(STREMIO_SCHEME_LENGTH)
+                if (sub.isEmpty() || sub.startsWith('/')) null else "https://$sub"
             } else {
                 trimmed
             }
+        val httpUrl = after?.toHttpUrlOrNull()
+        return httpUrl?.takeIf { it.scheme == "http" || it.scheme == "https" }
+    }
 
-        val httpUrl = converted.toHttpUrlOrNull()
-        if (httpUrl == null || (httpUrl.scheme != "http" && httpUrl.scheme != "https")) {
-            return null
+    private fun cleanSegments(segments: List<String>): List<String> {
+        val cleaned = segments.filter { it.isNotEmpty() }.toMutableList()
+        if (cleaned.isNotEmpty() && cleaned.last().equals("manifest.json", ignoreCase = true)) {
+            cleaned.removeAt(cleaned.size - 1)
         }
-
-        val cleanedSegments = httpUrl.pathSegments.toMutableList()
-        if (cleanedSegments.isNotEmpty() && cleanedSegments.last().isEmpty()) {
-            cleanedSegments.removeAt(cleanedSegments.size - 1)
-        }
-        if (cleanedSegments.isNotEmpty() && cleanedSegments.last().equals("manifest.json", ignoreCase = true)) {
-            cleanedSegments.removeAt(cleanedSegments.size - 1)
-        }
-        if (cleanedSegments.isNotEmpty() && cleanedSegments.last().isEmpty()) {
-            cleanedSegments.removeAt(cleanedSegments.size - 1)
-        }
-
-        val builder = httpUrl.newBuilder()
-        builder.encodedPath("/")
-        for (segment in cleanedSegments) {
-            if (segment.isNotEmpty()) {
-                builder.addPathSegment(segment)
-            }
-        }
-
-        return builder.build()
+        return cleaned
     }
 
     fun manifestUrl(transportUrl: String): String? {
@@ -49,6 +44,30 @@ object AddonUrlBuilder {
             .addPathSegment("manifest.json")
             .build()
             .toString()
+    }
+
+    fun configureUrl(transportUrl: String): String? {
+        val base = normalize(transportUrl) ?: return null
+        return base
+            .newBuilder()
+            .addPathSegment("configure")
+            .build()
+            .toString()
+    }
+
+    fun fromDeepLink(uri: String?): String? {
+        val trimmed = uri?.trim() ?: return null
+        val isValid =
+            trimmed.startsWith("stremio://", ignoreCase = true) &&
+                trimmed.length > STREMIO_SCHEME_LENGTH &&
+                !trimmed.substring(STREMIO_SCHEME_LENGTH).startsWith('/')
+        val url =
+            if (isValid) {
+                "https://${trimmed.substring(STREMIO_SCHEME_LENGTH)}".toHttpUrlOrNull()
+            } else {
+                null
+            }
+        return url?.takeIf { it.host.isNotEmpty() }?.toString()
     }
 
     fun resourceUrl(

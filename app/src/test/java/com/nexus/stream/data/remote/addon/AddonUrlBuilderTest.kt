@@ -116,4 +116,40 @@ class AddonUrlBuilderTest {
         assertEquals(listOf("stream", "movie", "custom%2Fid.json"), parsed.encodedPathSegments)
         assertEquals(listOf("stream", "movie", "custom/id.json"), parsed.pathSegments)
     }
+
+    @Test
+    fun configureUrl_manifestSuffixStrippedAndConfigureAppended() {
+        val url = AddonUrlBuilder.configureUrl("https://v3-cinemeta.strem.io/manifest.json")
+        assertEquals("https://v3-cinemeta.strem.io/configure", url)
+
+        val urlBare = AddonUrlBuilder.configureUrl("https://v3-cinemeta.strem.io")
+        assertEquals("https://v3-cinemeta.strem.io/configure", urlBare)
+
+        val invalid = AddonUrlBuilder.configureUrl("not a url")
+        assertNull(invalid)
+    }
+
+    @Test
+    fun fromDeepLink_validStremioSchemeConvertedToHttps() {
+        val result = AddonUrlBuilder.fromDeepLink("stremio://v3-cinemeta.strem.io/manifest.json")
+        assertEquals("https://v3-cinemeta.strem.io/manifest.json", result)
+    }
+
+    @Test
+    fun fromDeepLink_configSegmentPreserved() {
+        val result = AddonUrlBuilder.fromDeepLink("stremio://example.com/user_123/manifest.json")
+        assertEquals("https://example.com/user_123/manifest.json", result)
+    }
+
+    @Test
+    fun fromDeepLink_invalidInputsReturnNull() {
+        assertNull(AddonUrlBuilder.fromDeepLink(null))
+        assertNull(AddonUrlBuilder.fromDeepLink(""))
+        assertNull(AddonUrlBuilder.fromDeepLink("   "))
+        assertNull(AddonUrlBuilder.fromDeepLink("https://v3-cinemeta.strem.io/manifest.json"))
+        assertNull(AddonUrlBuilder.fromDeepLink("http://v3-cinemeta.strem.io/manifest.json"))
+        assertNull(AddonUrlBuilder.fromDeepLink("ftp://v3-cinemeta.strem.io/manifest.json"))
+        assertNull(AddonUrlBuilder.fromDeepLink("stremio:///manifest.json"))
+        assertNull(AddonUrlBuilder.fromDeepLink("stremio://"))
+    }
 }

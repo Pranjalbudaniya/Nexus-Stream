@@ -1,6 +1,7 @@
 package com.nexus.stream.domain.repository
 
 import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.Outcome
 import kotlinx.coroutines.flow.Flow
 
@@ -12,6 +13,8 @@ interface AddonRepository {
     suspend fun install(transportUrl: String): Outcome<Addon>
 
     suspend fun refresh(transportUrl: String): Outcome<Addon>
+
+    suspend fun fetchManifest(transportUrl: String): Outcome<AddonManifest>
 
     suspend fun remove(transportUrl: String)
 

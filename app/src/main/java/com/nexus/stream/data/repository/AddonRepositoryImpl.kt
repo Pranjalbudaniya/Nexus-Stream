@@ -9,6 +9,7 @@ import com.nexus.stream.data.remote.addon.AddonUrlBuilder
 import com.nexus.stream.data.remote.addon.ManifestDto
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.Outcome
@@ -161,6 +162,13 @@ class AddonRepositoryImpl(
                 }
             }
         }
+    }
+
+    override suspend fun fetchManifest(transportUrl: String): Outcome<AddonManifest> {
+        val normalizedBaseUrl =
+            AddonUrlBuilder.normalize(transportUrl)?.toString()
+                ?: return Outcome.Failure(AppError.InvalidUrl)
+        return remoteDataSource.manifest(normalizedBaseUrl)
     }
 
     override suspend fun remove(transportUrl: String) {

@@ -60,4 +60,68 @@
     <string name="caption_ui_size_small">Smaller sizes make buttons smaller to tap.</string>
     <string name="caption_text_size">Applied on top of UI size and the phone\'s font size.</string>
     <string name="caption_contrast_dynamic">Dynamic color follows your phone\'s contrast setting.</string>
+
+    <!-- Addon errors (friendly texts) -->
+    <string name="error_addon_network">No connection. Check your internet and try again.</string>
+    <string name="error_addon_timeout">The addon took too long to answer.</string>
+    <string name="error_addon_not_found">No addon found at this address.</string>
+    <string name="error_addon_parse">This isn\'t a valid Stremio addon.</string>
+    <string name="error_addon_invalid_url">That doesn\'t look like an addon address.</string>
+    <string name="error_addon_http">The server answered with error %1$d.</string>
+    <string name="error_addon_unknown">An unexpected error occurred.</string>
+
+    <!-- Addon manager screen -->
+    <string name="addon_manager_title">Addons</string>
+    <string name="addon_banner_no_stream">No stream addon: you can browse but not play. Add one to watch.</string>
+    <string name="addon_banner_no_catalog">No catalog addon: Home will be empty.</string>
+    <string name="addon_manager_add_fab">Add addon</string>
+    <string name="addon_manager_empty_title">No addons installed</string>
+    <string name="addon_manager_empty_desc">Install addons to browse catalogs and watch streams.</string>
+    <string name="addon_manager_add_cinemeta">Add Cinemeta</string>
+    <string name="addon_manager_seed_failed_title">Couldn\'t add Cinemeta. Check your connection.</string>
+    <string name="addon_manager_retry">Retry</string>
+
+    <!-- Addon card & menu -->
+    <string name="addon_enabled_label">%1$s enabled</string>
+    <string name="addon_move_up">Move up</string>
+    <string name="addon_move_down">Move down</string>
+    <string name="addon_refresh">Refresh</string>
+    <string name="addon_configure">Configure</string>
+    <string name="addon_copy_url">Copy URL</string>
+    <string name="addon_remove">Remove</string>
+    <string name="addon_updated_success">Updated</string>
+    <string name="addon_copied_clipboard">URL copied to clipboard</string>
+    <string name="addon_installed_success">Installed %1$s</string>
+    <string name="addon_updated_name_success">Updated %1$s</string>
+    <string name="addon_removed_success">Removed %1$s</string>
+    <string name="addon_catalogs_chip">Catalogs</string>
+    <string name="addon_meta_chip">Meta</string>
+    <string name="addon_streams_chip">Streams</string>
+    <string name="addon_subtitles_chip">Subtitles</string>
+    <string name="addon_overflow_description">More options for %1$s</string>
+
+    <!-- Add sheet -->
+    <string name="addon_add_sheet_title">Add addon</string>
+    <string name="addon_url_label">Addon URL</string>
+    <string name="addon_url_placeholder">https://... or stremio://...</string>
+    <string name="addon_btn_paste">Paste</string>
+    <string name="addon_btn_check">Check</string>
+    <string name="addon_btn_install">Install</string>
+    <string name="addon_btn_update">Update</string>
+    <string name="addon_already_installed_banner">This addon is already installed. Tapping Update will refresh its details.</string>
+    <string name="addon_http_warning">This addon uses an unencrypted HTTP connection. Install only if you trust the source.</string>
+    <string name="addon_config_required_warning">Configuration is required before this addon can be used.</string>
+    <string name="addon_open_config">Open configure page</string>
+    <string name="addon_unusable_warning">This addon provides no catalogs, metadata, streams, or subtitles the app can use.</string>
+    <string name="addon_badge_18_plus">18+</string>
+    <string name="addon_badge_p2p">P2P</string>
+    <string name="addon_badge_config_required">Config required</string>
+    <string name="addon_catalogs_count">%1$d catalogs</string>
+    <string name="addon_checking_loading">Checking addon…</string>
+    <string name="addon_installing_loading">Installing addon…</string>
+
+    <!-- Remove confirmation dialog -->
+    <string name="addon_remove_dialog_title">Remove %1$s?</string>
+    <string name="addon_remove_dialog_body">Are you sure you want to remove this addon?</string>
+    <string name="addon_remove_dialog_body_last_catalog">Removing this addon leaves no catalog-capable addon enabled. Home will be empty.</string>
 </resources>
