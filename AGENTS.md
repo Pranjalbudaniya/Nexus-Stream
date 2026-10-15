@@ -47,6 +47,7 @@ The task is created in prompt P00. Before P00 exists, skip this step.
 ## Report
 End every prompt with the report format in `docs/PROMPT_STRUCTURE.md` section 5.
 Save it to `docs/reports/<prompt-id>_report.md`.
+Use exactly the report headings given in the prompt. A report in any other format counts as incomplete.
 
 ## Code quality
 - Think first: write a short plan (files, functions, reused code) before writing code.
