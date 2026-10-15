@@ -11,9 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.nexus.stream.data.remote.addon.AddonUrlBuilder
-import com.nexus.stream.presentation.feature.addons.AddonManagerEvent
-import com.nexus.stream.presentation.feature.addons.AddonManagerScreen
-import com.nexus.stream.presentation.feature.addons.AddonManagerViewModel
+import com.nexus.stream.presentation.common.OneShot
+import com.nexus.stream.presentation.navigation.NexusApp
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.ThemeUiState
 import com.nexus.stream.presentation.theme.ThemeViewModel
@@ -22,7 +21,7 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
-    private val addonManagerViewModel: AddonManagerViewModel by viewModels()
+    private val deepLinkHolder = OneShot<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +39,7 @@ class MainActivity : ComponentActivity() {
                         )
                     NexusTheme(settings = effectiveSettings) {
                         Surface(color = MaterialTheme.colorScheme.background) {
-                            AddonManagerScreen(viewModel = addonManagerViewModel)
+                            NexusApp(deepLinkHolder = deepLinkHolder)
                         }
                     }
                 }
@@ -58,9 +57,7 @@ class MainActivity : ComponentActivity() {
         val uri = intent?.data?.toString() ?: return
         val url = AddonUrlBuilder.fromDeepLink(uri)
         if (url != null) {
-            addonManagerViewModel.onEvent(
-                AddonManagerEvent.OpenAdd(prefill = url, autoCheck = true),
-            )
+            deepLinkHolder.set(url)
             intent.data = null
         }
     }
