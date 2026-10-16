@@ -124,4 +124,21 @@
     <string name="addon_tester_move_up">Move up</string>
     <string name="addon_tester_move_down">Move down</string>
     <string name="addon_tester_use">Use</string>
+
+    <!-- Home test data tool -->
+    <string name="dev_tools_home_test_data">Home test data</string>
+    <string name="home_test_data_title">Home test data</string>
+    <string name="home_test_data_add_cinemeta">Add 3 test items from Cinemeta</string>
+    <string name="home_test_data_add_no_poster">Add an item without poster</string>
+    <string name="home_test_data_add_finished_movie">Add a finished movie</string>
+    <string name="home_test_data_add_short_movie">Add a movie under 60 s</string>
+    <string name="home_test_data_add_series_episode">Add a series episode</string>
+    <string name="home_test_data_clear_test_data">Clear test data</string>
+    <string name="home_test_data_status_cinemeta_added">Added 3 Cinemeta items (%1$s)</string>
+    <string name="home_test_data_status_cinemeta_failed">Failed to fetch Cinemeta: %1$s</string>
+    <string name="home_test_data_status_no_poster_added">Added item without poster (40%%)</string>
+    <string name="home_test_data_status_finished_added">Added finished movie (watched = true)</string>
+    <string name="home_test_data_status_short_added">Added movie under 60 s (position 30 s)</string>
+    <string name="home_test_data_status_series_added">Added series episode (S1 E3, 60%%)</string>
+    <string name="home_test_data_status_cleared">Cleared %1$d test items</string>
 </resources>

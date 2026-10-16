@@ -36,6 +36,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class DevToolsActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
     private val addonTesterViewModel: AddonTesterViewModel by viewModels()
+    private val homeTestDataViewModel: HomeTestDataViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +45,7 @@ class DevToolsActivity : ComponentActivity() {
             DevToolsContent(
                 themeViewModel = themeViewModel,
                 addonTesterViewModel = addonTesterViewModel,
+                homeTestDataViewModel = homeTestDataViewModel,
             )
         }
     }
@@ -53,6 +55,7 @@ class DevToolsActivity : ComponentActivity() {
 private fun DevToolsContent(
     themeViewModel: ThemeViewModel,
     addonTesterViewModel: AddonTesterViewModel,
+    homeTestDataViewModel: HomeTestDataViewModel,
 ) {
     val uiState by themeViewModel.uiState.collectAsState()
     val state = uiState as? ThemeUiState.Ready ?: return
@@ -86,10 +89,26 @@ private fun DevToolsContent(
                     )
                 }
 
+                DevScreen.HOME_TEST_DATA -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    val homeTestDataState by homeTestDataViewModel.uiState.collectAsState()
+                    HomeTestDataScreen(
+                        state = homeTestDataState,
+                        onAddCinemeta = homeTestDataViewModel::addCinemetaItems,
+                        onAddNoPoster = homeTestDataViewModel::addNoPosterItem,
+                        onAddFinishedMovie = homeTestDataViewModel::addFinishedMovie,
+                        onAddShortMovie = homeTestDataViewModel::addShortMovie,
+                        onAddSeriesEpisode = homeTestDataViewModel::addSeriesEpisode,
+                        onClearTestData = homeTestDataViewModel::clearTestData,
+                        onBack = { currentScreen = DevScreen.MENU },
+                    )
+                }
+
                 DevScreen.MENU -> {
                     DevToolsMenu(
                         onNavigateGallery = { currentScreen = DevScreen.THEME_GALLERY },
                         onNavigateTester = { currentScreen = DevScreen.ADDON_TESTER },
+                        onNavigateHomeTestData = { currentScreen = DevScreen.HOME_TEST_DATA },
                     )
                 }
             }
@@ -102,6 +121,7 @@ private fun DevToolsContent(
 private fun DevToolsMenu(
     onNavigateGallery: () -> Unit,
     onNavigateTester: () -> Unit,
+    onNavigateHomeTestData: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -138,6 +158,17 @@ private fun DevToolsMenu(
                             .clickable(onClick = onNavigateTester),
                 )
             }
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.dev_tools_home_test_data))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateHomeTestData),
+                )
+            }
         }
     }
 }
@@ -146,4 +177,5 @@ private enum class DevScreen {
     MENU,
     THEME_GALLERY,
     ADDON_TESTER,
+    HOME_TEST_DATA,
 }

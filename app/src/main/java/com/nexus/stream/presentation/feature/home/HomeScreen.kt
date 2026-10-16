@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +38,7 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.HomeRowSpec
 import com.nexus.stream.presentation.common.ContentRow
 import com.nexus.stream.presentation.common.NexusCard
+import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.theme.NexusTheme
 
 @Composable
@@ -93,7 +93,7 @@ internal fun HomeScreenContent(
             )
         },
     ) { padding ->
-        PullToRefreshBox(
+        NexusRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { onEvent(HomeEvent.Refresh) },
             modifier =
@@ -155,6 +155,19 @@ internal fun HomeScreenContent(
                                     inWatchlist = { id -> id in uiState.watchlistIds },
                                     onDetails = onItemClick,
                                     onToggleWatchlist = { onEvent(HomeEvent.ToggleWatchlist(it)) },
+                                )
+                                Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
+                            }
+                        }
+
+                        if (uiState.continueWatching.isNotEmpty()) {
+                            item(key = "continue_watching") {
+                                ContinueWatchingRow(
+                                    items = uiState.continueWatching,
+                                    onItemClick = onItemClick,
+                                    onRemoveItem = { metaId ->
+                                        onEvent(HomeEvent.RemoveContinue(metaId))
+                                    },
                                 )
                                 Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
                             }

@@ -58,4 +58,5 @@ Use exactly the report headings given in the prompt. A report in any other forma
 - Memoize expensive work (`remember`, `derivedStateOf`). Keep work that belongs in a ViewModel or a pure function out of composition.
 - Comments explain why, never what.
 - Before reporting, do a cleanup pass: remove anything unused and list what you simplified.
+- Animations: only stock Compose, Material, Navigation and Coil animations with default specs. No custom animation frameworks, motion tokens, per-frame color interpolation or animation settings.
 

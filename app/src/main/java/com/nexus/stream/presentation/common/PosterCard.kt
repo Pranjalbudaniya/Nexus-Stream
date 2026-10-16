@@ -1,15 +1,19 @@
 package com.nexus.stream.presentation.common
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,12 +25,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.presentation.theme.NexusTheme
@@ -37,11 +47,16 @@ private val SQUARE_SIZE: Dp = 120.dp
 private val LANDSCAPE_WIDTH: Dp = 200.dp
 private val LANDSCAPE_HEIGHT: Dp = 112.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(
     item: MetaPreview,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    progress: Float? = null,
+    subtitle: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
 ) {
     val (width: Dp, height: Dp) =
         when (item.posterShape) {
@@ -50,13 +65,41 @@ fun PosterCard(
             PosterShape.LANDSCAPE -> LANDSCAPE_WIDTH to LANDSCAPE_HEIGHT
         }
 
+    val platformContext = LocalPlatformContext.current
     var isError by remember(item.poster) { mutableStateOf(false) }
+
+    val clickModifier =
+        if (onLongClick != null) {
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = onLongClickLabel,
+            )
+        } else {
+            Modifier.clickable(onClick = onClick)
+        }
+
+    val semanticsModifier =
+        if (onLongClick != null && !onLongClickLabel.isNullOrBlank()) {
+            Modifier.semantics {
+                customActions =
+                    listOf(
+                        CustomAccessibilityAction(label = onLongClickLabel) {
+                            onLongClick()
+                            true
+                        },
+                    )
+            }
+        } else {
+            Modifier
+        }
 
     Column(
         modifier =
             modifier
                 .width(width)
-                .clickable(onClick = onClick),
+                .then(clickModifier)
+                .then(semanticsModifier),
     ) {
         Box(
             modifier =
@@ -68,7 +111,12 @@ fun PosterCard(
         ) {
             if (!item.poster.isNullOrBlank() && !isError) {
                 AsyncImage(
-                    model = item.poster,
+                    model =
+                        ImageRequest
+                            .Builder(platformContext)
+                            .data(item.poster)
+                            .crossfade(true)
+                            .build(),
                     contentDescription = item.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -85,6 +133,20 @@ fun PosterCard(
                     modifier = Modifier.padding(NexusTheme.spacing.xs),
                 )
             }
+
+            if (progress != null) {
+                val clampedProgress = progress.coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { clampedProgress },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(NexusTheme.spacing.xs),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
         }
         Spacer(modifier = Modifier.height(NexusTheme.spacing.xs))
         Text(
@@ -94,6 +156,16 @@ fun PosterCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        if (!subtitle.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(NexusTheme.spacing.xxs))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -116,6 +188,32 @@ internal fun PosterCardPosterPreview() {
                     imdbRating = "9.3",
                     genres = listOf("Drama"),
                 ),
+            onClick = {},
+        )
+    }
+}
+
+@Preview(name = "PosterCard - With Progress and Subtitle")
+@Composable
+internal fun PosterCardWithProgressPreview() {
+    NexusTheme {
+        PosterCard(
+            item =
+                MetaPreview(
+                    id = "tt0903747",
+                    type = "series",
+                    name = "Breaking Bad",
+                    poster = "https://example.com/poster.jpg",
+                    posterShape = PosterShape.POSTER,
+                    background = null,
+                    logo = null,
+                    description = null,
+                    releaseInfo = "2008",
+                    imdbRating = "9.5",
+                    genres = listOf("Crime", "Drama"),
+                ),
+            progress = 0.65f,
+            subtitle = "S1 E3",
             onClick = {},
         )
     }
