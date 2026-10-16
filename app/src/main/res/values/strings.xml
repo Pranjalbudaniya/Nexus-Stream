@@ -202,4 +202,37 @@
     <string name="detail_directors">Directors: %1$s</string>
     <string name="detail_trailer_app_not_found">No app found to open the trailer.</string>
     <string name="detail_episode_title">E%1$d • %2$s</string>
+
+    <!-- Detail polish & Watch options sheet -->
+    <string name="detail_watchlist">Watchlist</string>
+    <string name="detail_download">Download</string>
+    <string name="detail_download_desc">Download %1$s</string>
+    <string name="detail_download_not_available">Downloads aren\'t available yet.</string>
+    <string name="detail_genres">Genres</string>
+    <string name="detail_cast">Cast</string>
+    <string name="detail_directors_heading">Directors</string>
+    <string name="detail_btn_all">All</string>
+    <string name="detail_show_all_desc">Show all %1$s</string>
+
+    <string name="watch_options_add_watchlist">Add to watchlist</string>
+    <string name="watch_options_remove_watchlist">Remove from watchlist</string>
+    <string name="watch_options_mark_watched">Mark as watched</string>
+    <string name="watch_options_mark_unwatched">Mark as unwatched</string>
+    <string name="watch_options_mark_season_watched">Mark %1$s as watched</string>
+    <string name="watch_options_mark_season_unwatched">Mark %1$s as unwatched</string>
+    <string name="watch_options_mark_all_watched">Mark all episodes as watched</string>
+    <string name="watch_options_mark_all_unwatched">Mark all episodes as unwatched</string>
+    <string name="watch_options_remove_continue">Remove from Continue watching</string>
+
+    <string name="watch_options_unwatch_dialog_body">Mark %1$d episodes as unwatched? This clears your progress for them.</string>
+    <string name="watch_options_unwatch_confirm">Confirm</string>
+    <string name="watch_options_unwatch_cancel">Cancel</string>
+
+    <string name="watch_options_added_watchlist">Added to watchlist</string>
+    <string name="watch_options_removed_watchlist">Removed from watchlist</string>
+    <string name="watch_options_marked_watched">Marked as watched</string>
+    <string name="watch_options_marked_unwatched">Marked as unwatched</string>
+    <string name="watch_options_marked_episodes_watched">Marked %1$d episodes as watched</string>
+    <string name="watch_options_marked_episodes_unwatched">Marked %1$d episodes as unwatched</string>
+    <string name="watch_options_removed_continue">Removed from Continue watching</string>
 </resources>

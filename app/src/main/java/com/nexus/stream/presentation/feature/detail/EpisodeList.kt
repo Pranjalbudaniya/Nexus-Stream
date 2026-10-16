@@ -38,7 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -55,6 +57,7 @@ import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.SeasonGroup
 import com.nexus.stream.domain.model.Video
 import com.nexus.stream.domain.usecase.isReleased
+import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -74,6 +77,7 @@ fun EpisodeList(
     onSelectSeason: (Int?) -> Unit,
     onPlayEpisode: (String) -> Unit,
     onToggleWatched: (String) -> Unit,
+    onDownload: (String) -> Unit,
     modifier: Modifier = Modifier,
     now: Long = System.currentTimeMillis(),
 ) {
@@ -123,6 +127,7 @@ fun EpisodeList(
                     isReleased = video.isReleased(now),
                     onPlay = { onPlayEpisode(video.id) },
                     onToggleWatched = { onToggleWatched(video.id) },
+                    onDownload = { onDownload(video.id) },
                 )
             }
         }
@@ -151,6 +156,7 @@ private fun SeasonChipsRow(
                 selected = selectedSeason == group.season,
                 onClick = { onSelectSeason(group.season) },
                 label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                shape = NexusTheme.shapes.chip,
             )
         }
     }
@@ -164,6 +170,7 @@ private fun EpisodeItem(
     isReleased: Boolean,
     onPlay: () -> Unit,
     onToggleWatched: () -> Unit,
+    onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -176,6 +183,7 @@ private fun EpisodeItem(
     val itemAlpha = if (isReleased) 1f else 0.5f
 
     Card(
+        shape = NexusTheme.shapes.card,
         colors =
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -252,6 +260,18 @@ private fun EpisodeItem(
                 }
             }
 
+            NexusIconButton(
+                onClick = onDownload,
+                enabled = isReleased,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = stringResource(R.string.detail_download_desc, video.title),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             Box {
                 DropdownMenu(
                     expanded = menuExpanded,
@@ -280,10 +300,8 @@ private fun ThumbnailBox(
     Box(
         modifier =
             modifier
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = MaterialTheme.shapes.small,
-                ),
+                .clip(NexusTheme.shapes.poster)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
         if (!video.thumbnail.isNullOrBlank()) {
             AsyncImage(
@@ -298,25 +316,27 @@ private fun ThumbnailBox(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .size(24.dp)
-                        .align(Alignment.Center),
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
 
         if (isWatched) {
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f),
-                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(NexusTheme.spacing.xs),
+                shape = NexusTheme.shapes.chip,
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -325,31 +345,42 @@ private fun ThumbnailBox(
                     modifier = Modifier.size(16.dp),
                 )
             }
-        } else if (progress != null && progress.durationMs > 0L && progress.positionMs > 0L) {
-            val ratio = (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
-            LinearProgressIndicator(
-                progress = { ratio },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .align(Alignment.BottomCenter),
-            )
+        }
+
+        if (progress != null && !isWatched) {
+            val position = progress.positionMs
+            val duration = progress.durationMs
+            if (position > 0L && duration > 0L) {
+                val fraction = (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .height(3.dp),
+                )
+            }
         }
     }
 }
 
-fun formatReleaseDate(releasedStr: String?): String? {
-    if (releasedStr.isNullOrBlank()) return null
-    val localDate =
-        runCatching { LocalDate.parse(releasedStr) }
-            .recoverCatching { OffsetDateTime.parse(releasedStr).toLocalDate() }
-            .recoverCatching {
-                Instant.parse(releasedStr).atZone(ZoneId.systemDefault()).toLocalDate()
-            }.getOrNull()
-    return localDate?.let { date ->
-        runCatching {
-            date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
-        }.getOrNull()
+private fun formatReleaseDate(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    return try {
+        val instant =
+            try {
+                Instant.parse(raw)
+            } catch (_: Exception) {
+                try {
+                    OffsetDateTime.parse(raw).toInstant()
+                } catch (_: Exception) {
+                    LocalDate.parse(raw).atStartOfDay(ZoneId.of("UTC")).toInstant()
+                }
+            }
+        val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault())
+        formatter.format(instant)
+    } catch (_: Exception) {
+        null
     }
 }

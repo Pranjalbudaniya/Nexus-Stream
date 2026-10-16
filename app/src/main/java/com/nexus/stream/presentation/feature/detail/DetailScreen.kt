@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,14 +25,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -44,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,11 +53,14 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.MetaSource
+import com.nexus.stream.domain.usecase.WatchAction
+import com.nexus.stream.presentation.common.NexusButton
+import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
+import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.common.toUserMessage
 import com.nexus.stream.presentation.theme.NexusTheme
 
-private const val ASPECT_RATIO_16_9: Float = 16f / 9f
 private const val SKELETON_LINE_COUNT: Int = 4
 
 @Composable
@@ -152,9 +153,13 @@ fun DetailScreenContent(
                                 playActionTitle = state.playActionTitle,
                                 isPlayEnabled = state.isPlayEnabled,
                                 onPlayMain = { onEvent(DetailEvent.PlayMain) },
-                                onToggleWatchlist = { onEvent(DetailEvent.ToggleWatchlist) },
+                                onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
                                 onOpenTrailer = { onEvent(DetailEvent.OpenTrailer) },
+                                onDownload = { onEvent(DetailEvent.Download()) },
                                 onToggleSynopsis = { onEvent(DetailEvent.ToggleSynopsis) },
+                                onOpenAllGenres = { onEvent(DetailEvent.OpenAll(AllItemsKind.GENRES)) },
+                                onOpenAllCast = { onEvent(DetailEvent.OpenAll(AllItemsKind.CAST)) },
+                                onOpenAllDirectors = { onEvent(DetailEvent.OpenAll(AllItemsKind.DIRECTORS)) },
                             )
                         }
 
@@ -179,6 +184,7 @@ fun DetailScreenContent(
                                     onSelectSeason = { onEvent(DetailEvent.SelectSeason(it)) },
                                     onPlayEpisode = { onEvent(DetailEvent.PlayEpisode(it)) },
                                     onToggleWatched = { onEvent(DetailEvent.ToggleWatched(it)) },
+                                    onDownload = { onEvent(DetailEvent.Download(it)) },
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
@@ -189,13 +195,7 @@ fun DetailScreenContent(
                     }
                 }
 
-                if (state.showStreamsSheet && state.streamsSheetVideoId != null) {
-                    StreamsSheetPlaceholder(
-                        title = state.streamsSheetTitle ?: state.meta.name,
-                        videoId = state.streamsSheetVideoId,
-                        onDismissRequest = { onEvent(DetailEvent.DismissStreamsSheet) },
-                    )
-                }
+                DetailDialogsAndSheets(state = state, onEvent = onEvent)
             }
         }
 
@@ -208,7 +208,7 @@ fun DetailScreenContent(
                     .statusBarsPadding()
                     .padding(start = NexusTheme.spacing.sm, top = NexusTheme.spacing.xs),
         ) {
-            IconButton(onClick = onNavigateUp) {
+            NexusIconButton(onClick = onNavigateUp) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.navigate_up),
@@ -230,6 +230,7 @@ fun DetailScreenContent(
 @Composable
 private fun StaleBanner(modifier: Modifier = Modifier) {
     Card(
+        shape = NexusTheme.shapes.card,
         colors =
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -271,6 +272,7 @@ private fun DetailErrorContent(
         contentAlignment = Alignment.Center,
     ) {
         Card(
+            shape = NexusTheme.shapes.card,
             colors =
                 CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -288,19 +290,24 @@ private fun DetailErrorContent(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
-                    Button(onClick = onOpenAddons) {
+                    NexusButton(onClick = onOpenAddons) {
                         Text(stringResource(R.string.detail_btn_addons))
                     }
-                } else {
                     val message = error.toUserMessage()
-                    val errorText = formatErrorMessage(LocalContext.current, message.resId, message.formatArgs)
+                    val context = LocalContext.current
+                    val errorText =
+                        when (message.formatArgs.size) {
+                            0 -> context.getString(message.resId)
+                            1 -> context.getString(message.resId, message.formatArgs[0])
+                            else -> context.getString(message.resId, message.formatArgs[0], message.formatArgs[1])
+                        }
                     Text(
                         text = errorText,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
-                    Button(onClick = onRetry) {
+                    NexusButton(onClick = onRetry) {
                         Text(stringResource(R.string.retry))
                     }
                 }
@@ -309,21 +316,11 @@ private fun DetailErrorContent(
     }
 }
 
-private fun formatErrorMessage(
-    context: android.content.Context,
-    resId: Int,
-    formatArgs: List<Any>,
-): String =
-    if (formatArgs.isEmpty()) {
-        context.getString(resId)
-    } else if (formatArgs.size == 1) {
-        context.getString(resId, formatArgs[0])
-    } else {
-        context.getString(resId, formatArgs[0], formatArgs[1])
-    }
-
 @Composable
 private fun DetailSkeleton(modifier: Modifier = Modifier) {
+    val configuration = LocalConfiguration.current
+    val headerHeight = headerHeightDp(configuration.screenHeightDp.toFloat()).dp
+
     Column(
         modifier = modifier.fillMaxSize(),
     ) {
@@ -331,7 +328,7 @@ private fun DetailSkeleton(modifier: Modifier = Modifier) {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .aspectRatio(ASPECT_RATIO_16_9)
+                    .height(headerHeight)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         )
         Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
@@ -344,7 +341,7 @@ private fun DetailSkeleton(modifier: Modifier = Modifier) {
                         .size(width = 220.dp, height = 28.dp)
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = MaterialTheme.shapes.small,
+                            shape = NexusTheme.shapes.button,
                         ),
             )
             Spacer(modifier = Modifier.height(NexusTheme.spacing.xs))
@@ -354,7 +351,7 @@ private fun DetailSkeleton(modifier: Modifier = Modifier) {
                         .size(width = 160.dp, height = 16.dp)
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = MaterialTheme.shapes.small,
+                            shape = NexusTheme.shapes.button,
                         ),
             )
             Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
@@ -365,16 +362,16 @@ private fun DetailSkeleton(modifier: Modifier = Modifier) {
                             .size(width = 100.dp, height = 40.dp)
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = MaterialTheme.shapes.small,
+                                shape = NexusTheme.shapes.button,
                             ),
                 )
                 Box(
                     modifier =
                         Modifier
-                            .size(width = 120.dp, height = 40.dp)
+                            .size(width = 100.dp, height = 40.dp)
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = MaterialTheme.shapes.small,
+                                shape = NexusTheme.shapes.button,
                             ),
                 )
             }
@@ -387,7 +384,7 @@ private fun DetailSkeleton(modifier: Modifier = Modifier) {
                             .height(14.dp)
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = MaterialTheme.shapes.extraSmall,
+                                shape = NexusTheme.shapes.button,
                             ),
                 )
                 Spacer(modifier = Modifier.height(NexusTheme.spacing.xs))
@@ -402,6 +399,7 @@ internal fun SeriesEpisodesSection(
     onSelectSeason: (Int?) -> Unit,
     onPlayEpisode: (String) -> Unit,
     onToggleWatched: (String) -> Unit,
+    onDownload: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     EpisodeList(
@@ -412,6 +410,7 @@ internal fun SeriesEpisodesSection(
         onSelectSeason = onSelectSeason,
         onPlayEpisode = onPlayEpisode,
         onToggleWatched = onToggleWatched,
+        onDownload = onDownload,
         modifier = modifier,
     )
 }
@@ -467,21 +466,21 @@ internal fun DetailScreenLightPreview() {
                 DetailUiState.Content(
                     meta =
                         MetaDetail(
-                            id = "tt0903747",
-                            type = "series",
-                            name = "Breaking Bad",
+                            id = "tt0111161",
+                            type = "movie",
+                            name = "The Shawshank Redemption",
                             poster = null,
                             posterShape = PosterShape.POSTER,
                             background = null,
                             logo = null,
-                            description = "A chemistry teacher diagnosed with cancer turns to manufacturing meth.",
-                            releaseInfo = "2008-2013",
-                            released = "2008-01-20",
-                            runtime = "49 min",
-                            imdbRating = "9.5",
-                            genres = listOf("Crime", "Drama", "Thriller"),
-                            cast = listOf("Bryan Cranston", "Aaron Paul"),
-                            directors = listOf("Vince Gilligan"),
+                            description = "Over the course of several years, two convicts form a friendship.",
+                            releaseInfo = "1994",
+                            released = "1994-10-14",
+                            runtime = "142 min",
+                            imdbRating = "9.3",
+                            genres = listOf("Drama", "Crime"),
+                            cast = listOf("Tim Robbins", "Morgan Freeman"),
+                            directors = listOf("Frank Darabont"),
                             country = null,
                             language = null,
                             website = null,
@@ -490,7 +489,7 @@ internal fun DetailScreenLightPreview() {
                             videos = emptyList(),
                             defaultVideoId = null,
                         ),
-                    source = MetaSource.STALE,
+                    source = MetaSource.FRESH,
                 ),
             onEvent = {},
             onNavigateUp = {},
@@ -498,4 +497,86 @@ internal fun DetailScreenLightPreview() {
             snackbarHostState = remember { SnackbarHostState() },
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailDialogsAndSheets(
+    state: DetailUiState.Content,
+    onEvent: (DetailEvent) -> Unit,
+) {
+    if (state.showStreamsSheet && state.streamsSheetVideoId != null) {
+        StreamsSheetPlaceholder(
+            title = state.streamsSheetTitle ?: state.meta.name,
+            videoId = state.streamsSheetVideoId,
+            onDismissRequest = { onEvent(DetailEvent.DismissStreamsSheet) },
+        )
+    }
+
+    if (state.showWatchOptionsSheet) {
+        WatchOptionsSheet(
+            title = state.meta.name,
+            actions = state.watchActions,
+            onAction = { onEvent(DetailEvent.ApplyWatchAction(it)) },
+            onDismissRequest = { onEvent(DetailEvent.DismissWatchOptions) },
+        )
+    }
+
+    state.allSheetKind?.let { kind ->
+        val (title, items, isFlow) = resolveAllSheetData(kind, state.meta)
+        AllItemsSheet(
+            title = title,
+            items = items,
+            isFlow = isFlow,
+            onDismissRequest = { onEvent(DetailEvent.DismissAllSheet) },
+        )
+    }
+
+    state.pendingConfirmationAction?.let { action ->
+        UnwatchConfirmDialog(
+            action = action,
+            onConfirm = { onEvent(DetailEvent.ConfirmPending) },
+            onDismiss = { onEvent(DetailEvent.CancelPending) },
+        )
+    }
+}
+
+@Composable
+private fun resolveAllSheetData(
+    kind: AllItemsKind,
+    meta: MetaDetail,
+): Triple<String, List<String>, Boolean> =
+    when (kind) {
+        AllItemsKind.GENRES -> Triple(stringResource(R.string.detail_genres), meta.genres, true)
+        AllItemsKind.CAST -> Triple(stringResource(R.string.detail_cast), meta.cast, false)
+        AllItemsKind.DIRECTORS -> Triple(stringResource(R.string.detail_directors_heading), meta.directors, false)
+    }
+
+@Composable
+private fun UnwatchConfirmDialog(
+    action: WatchAction,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val count =
+        when (action) {
+            is WatchAction.SetSeasonWatched -> action.count
+            is WatchAction.SetAllWatched -> action.count
+            else -> 0
+        }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.detail_title)) },
+        text = { Text(text = stringResource(R.string.watch_options_unwatch_dialog_body, count)) },
+        confirmButton = {
+            NexusTextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.watch_options_unwatch_confirm))
+            }
+        },
+        dismissButton = {
+            NexusTextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.watch_options_unwatch_cancel))
+            }
+        },
+    )
 }

@@ -14,6 +14,7 @@ import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.MetaResult
 import com.nexus.stream.domain.repository.MetaSource
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.WatchAction
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -246,5 +247,130 @@ class DetailViewModelTest {
                     watched = true,
                 )
             }
+        }
+
+    @Test
+    fun `OpenWatchOptions lists the actions in state`() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("s1e1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null),
+                    Video("s1e2", "Ep 2", "1960-01-01", season = 1, episode = 2, null, null),
+                )
+            val meta = testMeta("s1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("series", "s1")
+            viewModel.onEvent(DetailEvent.OpenWatchOptions)
+
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.showWatchOptionsSheet)
+            assertFalse(content.watchActions.isEmpty())
+            assertTrue(content.watchActions.any { it is WatchAction.ToggleWatchlist })
+            assertTrue(content.watchActions.any { it is WatchAction.SetSeasonWatched })
+        }
+
+    @Test
+    fun `a multi-episode unwatch needs confirmation and CancelPending changes nothing`() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("s1e1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null),
+                    Video("s1e2", "Ep 2", "1960-01-01", season = 1, episode = 2, null, null),
+                )
+            val meta = testMeta("s1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("series", "s1")
+            val action = WatchAction.SetAllWatched(watched = false, count = 2)
+
+            viewModel.onEvent(DetailEvent.ApplyWatchAction(action))
+
+            var content = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(action, content.pendingConfirmationAction)
+            coVerify(exactly = 0) { progressRepository.setWatchedMany(any(), any(), any()) }
+
+            viewModel.onEvent(DetailEvent.CancelPending)
+
+            content = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(null, content.pendingConfirmationAction)
+            coVerify(exactly = 0) { progressRepository.setWatchedMany(any(), any(), any()) }
+        }
+
+    @Test
+    fun `a multi-episode unwatch confirmed runs and snackbar carries count`() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("s1e1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null),
+                    Video("s1e2", "Ep 2", "1960-01-01", season = 1, episode = 2, null, null),
+                    Video("s1e3", "Ep 3", "1960-01-01", season = 1, episode = 3, null, null),
+                )
+            val meta = testMeta("s1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("series", "s1")
+            val effects = mutableListOf<DetailEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            val action = WatchAction.SetSeasonWatched(season = 1, watched = false, count = 3)
+            viewModel.onEvent(DetailEvent.ApplyWatchAction(action))
+            viewModel.onEvent(DetailEvent.ConfirmPending)
+
+            coVerify(exactly = 1) { progressRepository.setWatchedMany(any(), any(), false) }
+            assertEquals(1, effects.size)
+            assertEquals("Marked 3 episodes as unwatched", (effects.first() as DetailEffect.ShowMessage).message)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `a single-item action runs without confirmation`() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("movie", "m1")
+            val effects = mutableListOf<DetailEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            val action = WatchAction.SetMovieWatched(watched = true)
+            viewModel.onEvent(DetailEvent.ApplyWatchAction(action))
+
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(null, content.pendingConfirmationAction)
+            coVerify(exactly = 1) { progressRepository.setWatched(meta.toPreview(), any(), true) }
+            assertEquals(1, effects.size)
+            assertEquals("Marked as watched", (effects.first() as DetailEffect.ShowMessage).message)
+
+            job.cancel()
+        }
+
+    @Test
+    fun `download action emits not available message and nothing else`() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("movie", "m1")
+            val effects = mutableListOf<DetailEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(DetailEvent.Download("v1"))
+
+            assertEquals(1, effects.size)
+            assertEquals(
+                "Downloads aren't available yet.",
+                (effects.first() as DetailEffect.ShowMessage).message,
+            )
+
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertFalse(content.showStreamsSheet)
+            job.cancel()
         }
 }

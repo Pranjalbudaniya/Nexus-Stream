@@ -10,16 +10,19 @@ import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.SeasonGroup
+import com.nexus.stream.domain.model.Video
 import com.nexus.stream.domain.model.toPreview
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.MetaResult
 import com.nexus.stream.domain.repository.MetaSource
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.defaultSeason
 import com.nexus.stream.domain.usecase.groupEpisodes
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.domain.usecase.resumeVideoId
+import com.nexus.stream.domain.usecase.watchActions
 import com.nexus.stream.presentation.navigation.Detail
 import com.nexus.stream.util.youtubeWatchUrlOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +36,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+enum class AllItemsKind {
+    GENRES,
+    CAST,
+    DIRECTORS,
+}
 
 sealed interface DetailUiState {
     data object Loading : DetailUiState
@@ -53,6 +62,10 @@ sealed interface DetailUiState {
         val showStreamsSheet: Boolean = false,
         val streamsSheetVideoId: String? = null,
         val streamsSheetTitle: String? = null,
+        val showWatchOptionsSheet: Boolean = false,
+        val watchActions: List<WatchAction> = emptyList(),
+        val pendingConfirmationAction: WatchAction? = null,
+        val allSheetKind: AllItemsKind? = null,
     ) : DetailUiState
 
     data class Error(
@@ -86,6 +99,28 @@ sealed interface DetailEvent {
     ) : DetailEvent
 
     data object DismissStreamsSheet : DetailEvent
+
+    data object OpenWatchOptions : DetailEvent
+
+    data object DismissWatchOptions : DetailEvent
+
+    data class ApplyWatchAction(
+        val action: WatchAction,
+    ) : DetailEvent
+
+    data object ConfirmPending : DetailEvent
+
+    data object CancelPending : DetailEvent
+
+    data class OpenAll(
+        val kind: AllItemsKind,
+    ) : DetailEvent
+
+    data object DismissAllSheet : DetailEvent
+
+    data class Download(
+        val videoId: String? = null,
+    ) : DetailEvent
 }
 
 sealed interface DetailEffect {
@@ -106,6 +141,21 @@ class DetailViewModel(
     private val progressRepository: ProgressRepository,
     private val clock: () -> Long,
 ) : ViewModel() {
+    val type: String =
+        savedStateHandle.get<String>("type")
+            ?: runCatching { savedStateHandle.toRoute<Detail>().type }.getOrDefault("")
+    val id: String =
+        savedStateHandle.get<String>("id")
+            ?: runCatching { savedStateHandle.toRoute<Detail>().id }.getOrDefault("")
+
+    private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
+    val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+
+    private val _effects = MutableSharedFlow<DetailEffect>()
+    val effects: SharedFlow<DetailEffect> = _effects.asSharedFlow()
+
+    private var userSelectedSeason: Int? = null
+
     @Inject
     constructor(
         savedStateHandle: SavedStateHandle,
@@ -120,71 +170,279 @@ class DetailViewModel(
         clock = { System.currentTimeMillis() },
     )
 
-    private val routeArgs: Detail? = runCatching { savedStateHandle.toRoute<Detail>() }.getOrNull()
-    val type: String = routeArgs?.type ?: checkNotNull(savedStateHandle["type"])
-    val id: String = routeArgs?.id ?: checkNotNull(savedStateHandle["id"])
-
-    private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
-    val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
-
-    private val _effects = MutableSharedFlow<DetailEffect>()
-    val effects: SharedFlow<DetailEffect> = _effects.asSharedFlow()
-
-    private var userSelectedSeason: Int? = null
-
     init {
         loadMeta(forceRefresh = false)
         observeUserData()
     }
 
     fun onEvent(event: DetailEvent) {
+        if (event is DetailEvent.Retry) {
+            loadMeta(forceRefresh = false)
+            return
+        }
+        val current = _uiState.value as? DetailUiState.Content ?: return
+        handleContentEvent(event, current)
+    }
+
+    private fun handlePlaybackEvent(
+        event: DetailEvent,
+        content: DetailUiState.Content,
+    ): Boolean =
         when (event) {
-            DetailEvent.Retry -> {
-                loadMeta(forceRefresh = false)
-            }
-
-            DetailEvent.Refresh -> {
-                refresh()
-            }
-
-            DetailEvent.ToggleWatchlist -> {
-                toggleWatchlist()
-            }
-
             DetailEvent.PlayMain -> {
-                playMain()
+                content.activeVideoId?.let { targetId ->
+                    _uiState.update {
+                        content.copy(
+                            showStreamsSheet = true,
+                            streamsSheetVideoId = targetId,
+                            streamsSheetTitle = content.meta.name,
+                        )
+                    }
+                }
+                true
             }
 
             is DetailEvent.PlayEpisode -> {
-                playEpisode(event.videoId)
+                val video = content.meta.videos.find { it.id == event.videoId }
+                if (video != null && !video.isReleased(clock())) {
+                    viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Not released yet")) }
+                } else if (video != null) {
+                    _uiState.update {
+                        content.copy(
+                            showStreamsSheet = true,
+                            streamsSheetVideoId = event.videoId,
+                            streamsSheetTitle = "${content.meta.name} - ${video.title}",
+                        )
+                    }
+                }
+                true
             }
 
             DetailEvent.OpenTrailer -> {
-                openTrailer()
+                content.trailerUrl?.let { url ->
+                    viewModelScope.launch { _effects.emit(DetailEffect.OpenUrl(url)) }
+                }
+                true
+            }
+
+            is DetailEvent.Download -> {
+                viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Downloads aren't available yet.")) }
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
+
+    private fun handleSheetEvent(event: DetailEvent): Boolean =
+        when (event) {
+            DetailEvent.DismissStreamsSheet -> {
+                _uiState.update { if (it is DetailUiState.Content) it.copy(showStreamsSheet = false) else it }
+                true
+            }
+
+            DetailEvent.DismissWatchOptions -> {
+                _uiState.update { if (it is DetailUiState.Content) it.copy(showWatchOptionsSheet = false) else it }
+                true
+            }
+
+            is DetailEvent.OpenAll -> {
+                _uiState.update { if (it is DetailUiState.Content) it.copy(allSheetKind = event.kind) else it }
+                true
+            }
+
+            DetailEvent.DismissAllSheet -> {
+                _uiState.update { if (it is DetailUiState.Content) it.copy(allSheetKind = null) else it }
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
+
+    private fun handleContentEvent(
+        event: DetailEvent,
+        content: DetailUiState.Content,
+    ) {
+        if (handlePlaybackEvent(event, content) || handleSheetEvent(event)) {
+            return
+        }
+        when (event) {
+            DetailEvent.Refresh -> {
+                _uiState.value = content.copy(isRefreshing = true)
+                loadMeta(forceRefresh = true)
+            }
+
+            DetailEvent.ToggleWatchlist -> {
+                viewModelScope.launch { libraryRepository.toggleWatchlist(content.meta.toPreview()) }
             }
 
             DetailEvent.ToggleSynopsis -> {
-                _uiState.update { cur ->
-                    if (cur is DetailUiState.Content) cur.copy(isSynopsisExpanded = !cur.isSynopsisExpanded) else cur
+                _uiState.update {
+                    if (it is DetailUiState.Content) {
+                        it.copy(isSynopsisExpanded = !it.isSynopsisExpanded)
+                    } else {
+                        it
+                    }
                 }
             }
 
             is DetailEvent.SelectSeason -> {
                 userSelectedSeason = event.season
-                _uiState.update { cur ->
-                    if (cur is DetailUiState.Content) cur.copy(selectedSeason = event.season) else cur
-                }
+                _uiState.update { if (it is DetailUiState.Content) it.copy(selectedSeason = event.season) else it }
             }
 
             is DetailEvent.ToggleWatched -> {
-                toggleWatched(event.videoId)
-            }
-
-            DetailEvent.DismissStreamsSheet -> {
-                _uiState.update { cur ->
-                    if (cur is DetailUiState.Content) cur.copy(showStreamsSheet = false) else cur
+                val video = content.meta.videos.find { it.id == event.videoId }
+                val isWatched = content.episodeProgress[event.videoId]?.watched == true
+                viewModelScope.launch {
+                    progressRepository.setWatched(
+                        meta = content.meta.toPreview(),
+                        episode =
+                            EpisodeRef(
+                                videoId = event.videoId,
+                                type = content.meta.type,
+                                season = video?.season,
+                                episode = video?.episode,
+                            ),
+                        watched = !isWatched,
+                    )
                 }
             }
+
+            else -> {
+                handleWatchEvent(event, content)
+            }
+        }
+    }
+
+    private fun handleWatchEvent(
+        event: DetailEvent,
+        content: DetailUiState.Content,
+    ) {
+        when (event) {
+            DetailEvent.OpenWatchOptions -> {
+                val actions =
+                    watchActions(
+                        type = content.meta.type,
+                        videos = content.meta.videos,
+                        progress = content.episodeProgress,
+                        metaId = content.meta.id,
+                        inWatchlist = content.inWatchlist,
+                        selectedSeason = content.selectedSeason,
+                        now = clock(),
+                    )
+                _uiState.update {
+                    if (it is DetailUiState.Content) {
+                        it.copy(showWatchOptionsSheet = true, watchActions = actions)
+                    } else {
+                        it
+                    }
+                }
+            }
+
+            is DetailEvent.ApplyWatchAction -> {
+                handleApplyWatchAction(content, event.action)
+            }
+
+            DetailEvent.ConfirmPending -> {
+                content.pendingConfirmationAction?.let { action ->
+                    _uiState.update {
+                        if (it is DetailUiState.Content) {
+                            it.copy(pendingConfirmationAction = null)
+                        } else {
+                            it
+                        }
+                    }
+                    executeAction(content, action)
+                }
+            }
+
+            DetailEvent.CancelPending -> {
+                _uiState.update { if (it is DetailUiState.Content) it.copy(pendingConfirmationAction = null) else it }
+            }
+
+            else -> {}
+        }
+    }
+
+    private fun handleApplyWatchAction(
+        content: DetailUiState.Content,
+        action: WatchAction,
+    ) {
+        _uiState.update { if (it is DetailUiState.Content) it.copy(showWatchOptionsSheet = false) else it }
+        val needsConfirmation =
+            when (action) {
+                is WatchAction.SetSeasonWatched -> !action.watched && action.count > 1
+                is WatchAction.SetAllWatched -> !action.watched && action.count > 1
+                else -> false
+            }
+        if (needsConfirmation) {
+            _uiState.update { if (it is DetailUiState.Content) it.copy(pendingConfirmationAction = action) else it }
+        } else {
+            executeAction(content, action)
+        }
+    }
+
+    private fun executeAction(
+        content: DetailUiState.Content,
+        action: WatchAction,
+    ) {
+        viewModelScope.launch {
+            val msg =
+                when (action) {
+                    is WatchAction.ToggleWatchlist -> {
+                        libraryRepository.toggleWatchlist(content.meta.toPreview())
+                        if (action.add) "Added to watchlist" else "Removed from watchlist"
+                    }
+
+                    is WatchAction.SetMovieWatched -> {
+                        progressRepository.setWatched(
+                            meta = content.meta.toPreview(),
+                            episode = EpisodeRef(videoId = content.meta.id, type = "movie"),
+                            watched = action.watched,
+                        )
+                        if (action.watched) "Marked as watched" else "Marked as unwatched"
+                    }
+
+                    is WatchAction.SetSeasonWatched -> {
+                        val targets =
+                            content.meta.videos
+                                .filter { it.season == action.season && it.isReleased(clock()) }
+                                .map {
+                                    EpisodeRef(
+                                        videoId = it.id,
+                                        type = content.meta.type,
+                                        season = it.season,
+                                        episode = it.episode,
+                                    )
+                                }
+                        progressRepository.bulkMark(content, targets, action.watched, action.count)
+                    }
+
+                    is WatchAction.SetAllWatched -> {
+                        val targets =
+                            content.meta.videos
+                                .filter { it.isReleased(clock()) }
+                                .map {
+                                    EpisodeRef(
+                                        videoId = it.id,
+                                        type = content.meta.type,
+                                        season = it.season,
+                                        episode = it.episode,
+                                    )
+                                }
+                        progressRepository.bulkMark(content, targets, action.watched, action.count)
+                    }
+
+                    is WatchAction.RemoveFromContinue -> {
+                        progressRepository.clearInProgress(content.meta.id)
+                        "Removed from Continue watching"
+                    }
+                }
+            _effects.emit(DetailEffect.ShowMessage(msg))
         }
     }
 
@@ -209,12 +467,6 @@ class DetailViewModel(
                 }
             }
         }
-    }
-
-    private fun refresh() {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        _uiState.value = current.copy(isRefreshing = true)
-        loadMeta(forceRefresh = true)
     }
 
     private fun updateWithResult(result: MetaResult) {
@@ -275,71 +527,16 @@ class DetailViewModel(
             }
         }
     }
+}
 
-    private fun toggleWatchlist() {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        viewModelScope.launch {
-            libraryRepository.toggleWatchlist(current.meta.toPreview())
-        }
-    }
-
-    private fun playMain() {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        val targetId = current.activeVideoId ?: return
-        _uiState.update {
-            current.copy(
-                showStreamsSheet = true,
-                streamsSheetVideoId = targetId,
-                streamsSheetTitle = current.meta.name,
-            )
-        }
-    }
-
-    private fun playEpisode(videoId: String) {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        val video = current.meta.videos.find { it.id == videoId } ?: return
-        if (!video.isReleased(clock())) {
-            viewModelScope.launch {
-                _effects.emit(DetailEffect.ShowMessage("Not released yet"))
-            }
-        } else {
-            val sheetTitle = "${current.meta.name} - ${video.title}"
-            _uiState.update {
-                current.copy(
-                    showStreamsSheet = true,
-                    streamsSheetVideoId = videoId,
-                    streamsSheetTitle = sheetTitle,
-                )
-            }
-        }
-    }
-
-    private fun openTrailer() {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        val url = current.trailerUrl ?: return
-        viewModelScope.launch {
-            _effects.emit(DetailEffect.OpenUrl(url))
-        }
-    }
-
-    private fun toggleWatched(videoId: String) {
-        val current = _uiState.value as? DetailUiState.Content ?: return
-        val video = current.meta.videos.find { it.id == videoId }
-        val isWatched = current.episodeProgress[videoId]?.watched == true
-        viewModelScope.launch {
-            progressRepository.setWatched(
-                meta = current.meta.toPreview(),
-                episode =
-                    EpisodeRef(
-                        videoId = videoId,
-                        type = current.meta.type,
-                        season = video?.season,
-                        episode = video?.episode,
-                    ),
-                watched = !isWatched,
-            )
-        }
-    }
+private suspend fun ProgressRepository.bulkMark(
+    content: DetailUiState.Content,
+    episodes: List<EpisodeRef>,
+    watched: Boolean,
+    count: Int,
+): String {
+    setWatchedMany(content.meta.toPreview(), episodes, watched)
+    return if (watched) "Marked $count episodes as watched" else "Marked $count episodes as unwatched"
 }
 
 private fun calculateDefaultSeason(
