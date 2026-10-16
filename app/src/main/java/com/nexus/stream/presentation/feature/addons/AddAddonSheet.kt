@@ -93,7 +93,7 @@ fun AddAddonSheet(
                 }
 
                 is AddSheetState.Preview -> {
-                    PreviewContent(
+                    PreviewCard(
                         preview = state,
                         onInstall = { onEvent(AddonManagerEvent.Install) },
                         onOpenUrl = onOpenUrl,
@@ -250,53 +250,7 @@ fun PreviewCard(
                 )
             }
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                for (type in manifest.types) {
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text(type) },
-                        shape = NexusTheme.shapes.chip,
-                    )
-                }
-                for (resource in manifest.resources) {
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text(resource.name) },
-                        shape = NexusTheme.shapes.chip,
-                    )
-                }
-                if (manifest.catalogs.isNotEmpty()) {
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(stringResource(R.string.addon_catalogs_count, manifest.catalogs.size))
-                        },
-                        shape = NexusTheme.shapes.chip,
-                    )
-                }
-                if (manifest.behaviorHints.adult) {
-                    BadgeChip(
-                        label = stringResource(R.string.addon_badge_18_plus),
-                        isWarning = true,
-                    )
-                }
-                if (manifest.behaviorHints.p2p) {
-                    BadgeChip(
-                        label = stringResource(R.string.addon_badge_p2p),
-                        isWarning = false,
-                    )
-                }
-                if (manifest.behaviorHints.configurationRequired) {
-                    BadgeChip(
-                        label = stringResource(R.string.addon_badge_config_required),
-                        isWarning = true,
-                    )
-                }
-            }
+            PreviewFlowChips(manifest = manifest)
 
             if (preview.alreadyInstalled) {
                 InfoBanner(message = stringResource(R.string.addon_already_installed_banner))
@@ -317,6 +271,13 @@ fun PreviewCard(
                 )
             }
 
+            if (preview.isAdultBlocked) {
+                WarningBanner(
+                    message = stringResource(R.string.addon_url_adult_blocked),
+                    isError = true,
+                )
+            }
+
             if (!preview.usable) {
                 WarningBanner(
                     message = stringResource(R.string.addon_unusable_warning),
@@ -333,7 +294,7 @@ fun PreviewCard(
 
             NexusButton(
                 onClick = onInstall,
-                enabled = preview.usable,
+                enabled = preview.usable && !preview.isAdultBlocked,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(buttonLabel)
@@ -343,16 +304,58 @@ fun PreviewCard(
 }
 
 @Composable
-private fun PreviewContent(
-    preview: AddSheetState.Preview,
-    onInstall: () -> Unit,
-    onOpenUrl: (String) -> Unit,
+private fun PreviewFlowChips(
+    manifest: AddonManifest,
+    modifier: Modifier = Modifier,
 ) {
-    PreviewCard(
-        preview = preview,
-        onInstall = onInstall,
-        onOpenUrl = onOpenUrl,
-    )
+    val spacing = NexusTheme.spacing
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(spacing.xs),
+    ) {
+        for (type in manifest.types) {
+            SuggestionChip(
+                onClick = {},
+                label = { Text(type) },
+                shape = NexusTheme.shapes.chip,
+            )
+        }
+        for (resource in manifest.resources) {
+            SuggestionChip(
+                onClick = {},
+                label = { Text(resource.name) },
+                shape = NexusTheme.shapes.chip,
+            )
+        }
+        if (manifest.catalogs.isNotEmpty()) {
+            AssistChip(
+                onClick = {},
+                label = {
+                    Text(stringResource(R.string.addon_catalogs_count, manifest.catalogs.size))
+                },
+                shape = NexusTheme.shapes.chip,
+            )
+        }
+        if (manifest.behaviorHints.adult) {
+            BadgeChip(
+                label = stringResource(R.string.addon_badge_18_plus),
+                isWarning = true,
+            )
+        }
+        if (manifest.behaviorHints.p2p) {
+            BadgeChip(
+                label = stringResource(R.string.addon_badge_p2p),
+                isWarning = false,
+            )
+        }
+        if (manifest.behaviorHints.configurationRequired) {
+            BadgeChip(
+                label = stringResource(R.string.addon_badge_config_required),
+                isWarning = true,
+            )
+        }
+    }
 }
 
 @Composable

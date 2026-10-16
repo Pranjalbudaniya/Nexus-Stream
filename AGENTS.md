@@ -60,4 +60,6 @@ Use exactly the report headings given in the prompt. A report in any other forma
 - Before reporting, do a cleanup pass: remove anything unused and list what you simplified.
 - Animations: only stock Compose, Material, Navigation and Coil animations with default specs. No custom animation frameworks, motion tokens, per-frame color interpolation or animation settings.
 - Buttons, chips, FABs, cards and image containers take their shape from NexusTheme.shapes (button, chip, card, poster); use the Nexus* button wrappers, never the Material defaults.
+- Every control and piece of information appears once per screen. No duplicate buttons or repeated text.
+- Content lists use AddonRepository.observeActive and ContentFilter so Family mode applies everywhere.
 

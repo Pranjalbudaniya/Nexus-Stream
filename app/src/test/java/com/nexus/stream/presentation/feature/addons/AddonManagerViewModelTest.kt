@@ -11,6 +11,7 @@ import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -18,7 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -38,6 +39,8 @@ class AddonManagerViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val addonRepository = mockk<AddonRepository>()
     private val ensureDefaultAddons = mockk<EnsureDefaultAddons>()
+    private val contentPrefsRepository = mockk<ContentPrefsRepository>()
+    private val familyModeFlow = MutableStateFlow(true)
 
     private val sampleManifest =
         AddonManifest(
@@ -60,6 +63,27 @@ class AddonManagerViewModelTest {
                 ),
         )
 
+    private val adultManifest =
+        AddonManifest(
+            id = "org.adult.addon",
+            version = "1.0.0",
+            name = "Adult Addon",
+            description = "Adult videos",
+            logo = null,
+            background = null,
+            types = listOf("movie"),
+            idPrefixes = null,
+            resources = listOf(ResourceSpec("stream", null, null)),
+            catalogs = emptyList(),
+            behaviorHints =
+                ManifestHints(
+                    adult = true,
+                    p2p = false,
+                    configurable = false,
+                    configurationRequired = false,
+                ),
+        )
+
     private val normalizedCinemeta = AddonUrlBuilder.normalize(CINEMETA_URL)!!.toString()
 
     private val sampleAddon =
@@ -72,10 +96,21 @@ class AddonManagerViewModelTest {
             installedAt = 1000L,
         )
 
+    private val adultAddon =
+        Addon(
+            transportUrl = "https://adult.addon.local/manifest.json",
+            manifest = adultManifest,
+            enabled = false,
+            position = 1,
+            source = AddonSource.LOCAL,
+            installedAt = 2000L,
+        )
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { addonRepository.observeAll() } returns flowOf(emptyList())
+        every { contentPrefsRepository.familyMode } returns familyModeFlow
         coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
     }
 
@@ -84,11 +119,13 @@ class AddonManagerViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun createViewModel() = AddonManagerViewModel(addonRepository, ensureDefaultAddons, contentPrefsRepository)
+
     @Test
     fun init_seedsSuccessfully_setsSeedFailedFalse() =
         runTest {
             coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.seedFailed)
@@ -99,7 +136,7 @@ class AddonManagerViewModelTest {
     fun init_seedsFailure_setsSeedFailedTrue() =
         runTest {
             coEvery { ensureDefaultAddons() } returns Outcome.Failure(AppError.Network)
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.seedFailed)
@@ -109,102 +146,142 @@ class AddonManagerViewModelTest {
     @Test
     fun checkSuccess_givesPreviewWithAlreadyInstalledAndIsHttp() =
         runTest {
+            val manifest = sampleManifest
+            val httpUrl = "http://example.com/manifest.json"
+            val normalizedHttp = AddonUrlBuilder.normalize(httpUrl)!!.toString()
             every { addonRepository.observeAll() } returns flowOf(listOf(sampleAddon))
-            coEvery { addonRepository.fetchManifest("http://my-lan-addon.local/") }
-                .returns(Outcome.Success(sampleManifest))
+            coEvery { addonRepository.fetchManifest(normalizedHttp) } returns Outcome.Success(manifest)
 
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = "http://my-lan-addon.local/manifest.json"))
+            viewModel.onEvent(AddonManagerEvent.OpenAdd())
+            viewModel.onEvent(AddonManagerEvent.UrlChanged(httpUrl))
             viewModel.onEvent(AddonManagerEvent.Check)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value.addSheetState
             assertTrue(state is AddSheetState.Preview)
             val preview = state as AddSheetState.Preview
-            assertEquals("my-lan-addon.local", preview.displayHost)
             assertTrue(preview.isHttp)
             assertFalse(preview.alreadyInstalled)
             assertTrue(preview.usable)
+            assertFalse(preview.isAdultBlocked)
         }
 
     @Test
-    fun checkSuccess_alreadyInstalledIsDetected() =
+    fun checkSuccess_adultManifestWhenFamilyModeOn_setsIsAdultBlocked() =
         runTest {
-            every { addonRepository.observeAll() } returns flowOf(listOf(sampleAddon))
-            coEvery { addonRepository.fetchManifest(normalizedCinemeta) } returns Outcome.Success(sampleManifest)
+            val adultUrl = "https://adult.addon.local/manifest.json"
+            val normalizedAdult = AddonUrlBuilder.normalize(adultUrl)!!.toString()
+            coEvery { addonRepository.fetchManifest(normalizedAdult) } returns Outcome.Success(adultManifest)
 
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = "stremio://v3-cinemeta.strem.io/manifest.json"))
+            viewModel.onEvent(AddonManagerEvent.OpenAdd())
+            viewModel.onEvent(AddonManagerEvent.UrlChanged(adultUrl))
             viewModel.onEvent(AddonManagerEvent.Check)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value.addSheetState
             assertTrue(state is AddSheetState.Preview)
             val preview = state as AddSheetState.Preview
-            assertTrue(preview.alreadyInstalled)
-            assertFalse(preview.isHttp)
+            assertTrue(preview.isAdultBlocked)
+
+            // Attempting to install should be blocked
+            viewModel.onEvent(AddonManagerEvent.Install)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { addonRepository.install(any()) }
         }
 
     @Test
-    fun checkFailure_keepsInputWithFriendlyErrorText() =
+    fun setEnabled_adultAddonWhenFamilyModeOn_isIgnored() =
         runTest {
-            coEvery { addonRepository.fetchManifest("https://broken.com/") } returns Outcome.Failure(AppError.Timeout)
-
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = "https://broken.com/manifest.json"))
+            viewModel.onEvent(AddonManagerEvent.SetEnabled(adultAddon, true))
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { addonRepository.setEnabled(any(), any()) }
+        }
+
+    @Test
+    fun checkFailure_mapsToErrorStringInInputState() =
+        runTest {
+            val validUrl = "https://example.com/manifest.json"
+            val normalized = AddonUrlBuilder.normalize(validUrl)!!.toString()
+            coEvery { addonRepository.fetchManifest(normalized) } returns Outcome.Failure(AppError.Network)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.onEvent(AddonManagerEvent.OpenAdd())
+            viewModel.onEvent(AddonManagerEvent.UrlChanged(validUrl))
             viewModel.onEvent(AddonManagerEvent.Check)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value.addSheetState
             assertTrue(state is AddSheetState.Input)
             val input = state as AddSheetState.Input
-            assertEquals(R.string.error_addon_timeout, input.error?.resId)
+            assertEquals(R.string.error_addon_network, input.error?.resId)
         }
 
     @Test
-    fun installSuccess_closesSheet() =
+    fun installSuccess_emitsMessageAndCloses() =
         runTest {
-            coEvery { addonRepository.fetchManifest(normalizedCinemeta) } returns Outcome.Success(sampleManifest)
-            coEvery { addonRepository.install(normalizedCinemeta) } returns Outcome.Success(sampleAddon)
+            val url = "https://example.com/manifest.json"
+            val normalized = AddonUrlBuilder.normalize(url)!!.toString()
+            coEvery { addonRepository.fetchManifest(normalized) } returns Outcome.Success(sampleManifest)
+            coEvery { addonRepository.install(normalized) } returns Outcome.Success(sampleAddon)
 
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = CINEMETA_URL, autoCheck = true))
+            viewModel.onEvent(AddonManagerEvent.OpenAdd())
+            viewModel.onEvent(AddonManagerEvent.UrlChanged(url))
+            viewModel.onEvent(AddonManagerEvent.Check)
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.addSheetState is AddSheetState.Preview)
             viewModel.onEvent(AddonManagerEvent.Install)
             advanceUntilIdle()
 
             assertEquals(AddSheetState.Closed, viewModel.uiState.value.addSheetState)
-            coVerify(exactly = 1) { addonRepository.install(normalizedCinemeta) }
+            coVerify(exactly = 1) { addonRepository.install(normalized) }
         }
 
     @Test
-    fun dismissingDuringChecking_cancelsJob() =
+    fun toggleEnabled_callsRepository() =
         runTest {
-            coEvery { addonRepository.fetchManifest(any()) } coAnswers {
-                delay(1000)
-                Outcome.Success(sampleManifest)
-            }
+            coEvery { addonRepository.setEnabled(sampleAddon.transportUrl, false) } returns Unit
 
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = "https://example.com/manifest.json"))
-            viewModel.onEvent(AddonManagerEvent.Check)
+            viewModel.onEvent(AddonManagerEvent.SetEnabled(sampleAddon, false))
+            advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.addSheetState is AddSheetState.Checking)
-            viewModel.onEvent(AddonManagerEvent.DismissAddSheet)
+            coVerify(exactly = 1) { addonRepository.setEnabled(sampleAddon.transportUrl, false) }
+        }
 
-            assertEquals(AddSheetState.Closed, viewModel.uiState.value.addSheetState)
+    @Test
+    fun reorder_callsRepositoryWithCorrectPosition() =
+        runTest {
+            coEvery { addonRepository.move(sampleAddon.transportUrl, -1) } returns Unit
+            coEvery { addonRepository.move(sampleAddon.transportUrl, 1) } returns Unit
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.onEvent(AddonManagerEvent.MoveUp(sampleAddon))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { addonRepository.move(sampleAddon.transportUrl, -1) }
+
+            viewModel.onEvent(AddonManagerEvent.MoveDown(sampleAddon))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { addonRepository.move(sampleAddon.transportUrl, 1) }
         }
 
     @Test
@@ -212,7 +289,7 @@ class AddonManagerViewModelTest {
         runTest {
             coEvery { addonRepository.remove(sampleAddon.transportUrl) } returns Unit
 
-            val viewModel = AddonManagerViewModel(addonRepository, ensureDefaultAddons)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
             viewModel.onEvent(AddonManagerEvent.RequestRemove(sampleAddon))

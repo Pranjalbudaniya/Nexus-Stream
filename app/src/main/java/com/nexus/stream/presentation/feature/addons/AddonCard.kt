@@ -108,6 +108,7 @@ fun AddonCard(
     onCopyUrl: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    isFamilyMode: Boolean = false,
 ) {
     val spacing = NexusTheme.spacing
     var menuExpanded by remember { mutableStateOf(false) }
@@ -116,7 +117,8 @@ fun AddonCard(
             addon.transportUrl.toDisplayHost()
         }
 
-    val contentAlpha = if (addon.enabled) 1f else DISABLED_ALPHA
+    val isLockedAdult = isFamilyMode && addon.isAdult
+    val contentAlpha = if (addon.enabled && !isLockedAdult) 1f else DISABLED_ALPHA
 
     NexusCard(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -226,13 +228,17 @@ fun AddonCard(
                             addon.manifest.name,
                         )
                     Switch(
-                        checked = addon.enabled,
-                        onCheckedChange = onToggleEnabled,
+                        checked = if (isLockedAdult) false else addon.enabled,
+                        enabled = !isLockedAdult,
+                        onCheckedChange = { if (!isLockedAdult) onToggleEnabled(it) },
                         modifier =
                             Modifier.semantics {
                                 contentDescription = enabledDescription
                             },
                     )
+                    if (isLockedAdult) {
+                        AddonFamilyModeLock()
+                    }
                 }
 
                 Box {
@@ -408,6 +414,34 @@ internal fun AddonCardDisabledPreview() {
             onConfigure = {},
             onCopyUrl = {},
             onRemove = {},
+        )
+    }
+}
+
+@Composable
+private fun AddonFamilyModeLock() {
+    val spacing = NexusTheme.spacing
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .clip(NexusTheme.shapes.chip)
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = spacing.sm, vertical = spacing.xxs),
+        ) {
+            Text(
+                text = stringResource(R.string.addon_badge_18_plus),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+        Text(
+            text = stringResource(R.string.addon_hidden_by_family_mode),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
         )
     }
 }

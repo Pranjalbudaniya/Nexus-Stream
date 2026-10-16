@@ -13,6 +13,7 @@ import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.capabilities
 import com.nexus.stream.domain.model.isUsable
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,6 +47,7 @@ sealed interface AddSheetState {
         val isHttp: Boolean,
         val alreadyInstalled: Boolean,
         val usable: Boolean,
+        val isAdultBlocked: Boolean = false,
     ) : AddSheetState
 
     data class Installing(
@@ -59,6 +62,7 @@ data class AddonManagerUiState(
     val seedFailed: Boolean = false,
     val addSheetState: AddSheetState = AddSheetState.Closed,
     val removeTarget: Addon? = null,
+    val isFamilyMode: Boolean = true,
 )
 
 sealed interface AddonManagerEvent {
@@ -136,6 +140,7 @@ class AddonManagerViewModel
     constructor(
         private val addonRepository: AddonRepository,
         private val ensureDefaultAddons: EnsureDefaultAddons,
+        private val contentPrefsRepository: ContentPrefsRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(AddonManagerUiState())
         val uiState: StateFlow<AddonManagerUiState> = _uiState.asStateFlow()
@@ -148,11 +153,17 @@ class AddonManagerViewModel
 
         init {
             viewModelScope.launch {
-                addonRepository.observeAll().collect { list ->
+                combine(
+                    addonRepository.observeAll(),
+                    contentPrefsRepository.familyMode,
+                ) { list, familyMode ->
+                    list to familyMode
+                }.collect { (list, familyMode) ->
                     _uiState.update { current ->
                         current.copy(
                             addons = list,
-                            capabilities = list.capabilities(),
+                            capabilities = list.filter { it.enabled && (!familyMode || !it.isAdult) }.capabilities(),
+                            isFamilyMode = familyMode,
                         )
                     }
                 }
@@ -223,6 +234,7 @@ class AddonManagerViewModel
         private fun handleListEvent(event: AddonManagerEvent) {
             when (event) {
                 is AddonManagerEvent.SetEnabled -> {
+                    if (_uiState.value.isFamilyMode && event.addon.isAdult) return
                     viewModelScope.launch { addonRepository.setEnabled(event.addon.transportUrl, event.enabled) }
                 }
 
@@ -235,20 +247,7 @@ class AddonManagerViewModel
                 }
 
                 is AddonManagerEvent.Refresh -> {
-                    viewModelScope.launch {
-                        when (val outcome = addonRepository.refresh(event.addon.transportUrl)) {
-                            is Outcome.Success -> {
-                                emitEffect(
-                                    AddonManagerEffect.ShowMessage(R.string.addon_updated_success),
-                                )
-                            }
-
-                            is Outcome.Failure -> {
-                                val message = outcome.error.toUserMessage()
-                                emitEffect(AddonManagerEffect.ShowMessage(message.resId, message.formatArgs))
-                            }
-                        }
-                    }
+                    handleRefresh(event.addon)
                 }
 
                 is AddonManagerEvent.CopyUrl -> {
@@ -272,6 +271,23 @@ class AddonManagerViewModel
                 }
 
                 else -> {}
+            }
+        }
+
+        private fun handleRefresh(addon: Addon) {
+            viewModelScope.launch {
+                when (val outcome = addonRepository.refresh(addon.transportUrl)) {
+                    is Outcome.Success -> {
+                        emitEffect(
+                            AddonManagerEffect.ShowMessage(R.string.addon_updated_success),
+                        )
+                    }
+
+                    is Outcome.Failure -> {
+                        val message = outcome.error.toUserMessage()
+                        emitEffect(AddonManagerEffect.ShowMessage(message.resId, message.formatArgs))
+                    }
+                }
             }
         }
 
@@ -338,6 +354,7 @@ class AddonManagerViewModel
                     when (val outcome = addonRepository.fetchManifest(normalizedUrl)) {
                         is Outcome.Success -> {
                             val manifest = outcome.value
+                            val isAdultBlocked = _uiState.value.isFamilyMode && manifest.isAdult
                             _uiState.update { current ->
                                 current.copy(
                                     addSheetState =
@@ -348,6 +365,7 @@ class AddonManagerViewModel
                                             isHttp = normalized.scheme == "http",
                                             alreadyInstalled = current.addons.any { it.transportUrl == normalizedUrl },
                                             usable = manifest.isUsable,
+                                            isAdultBlocked = isAdultBlocked,
                                         ),
                                 )
                             }
@@ -371,7 +389,7 @@ class AddonManagerViewModel
 
         private fun installAddon() {
             val preview = _uiState.value.addSheetState as? AddSheetState.Preview ?: return
-            if (!preview.usable) return
+            if (!preview.usable || preview.isAdultBlocked) return
 
             _uiState.update { it.copy(addSheetState = AddSheetState.Installing(preview.transportUrl)) }
             installJob?.cancel()

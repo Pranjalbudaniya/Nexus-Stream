@@ -214,6 +214,7 @@ fun AddonManagerContent(
                             onConfigure = { onEvent(AddonManagerEvent.OpenConfigure(addon)) },
                             onCopyUrl = { onEvent(AddonManagerEvent.CopyUrl(addon)) },
                             onRemove = { onEvent(AddonManagerEvent.RequestRemove(addon)) },
+                            isFamilyMode = uiState.isFamilyMode,
                         )
                     }
                 }
