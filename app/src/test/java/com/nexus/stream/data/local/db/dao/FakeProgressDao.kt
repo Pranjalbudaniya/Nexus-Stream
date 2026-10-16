@@ -63,5 +63,24 @@ class FakeProgressDao : ProgressDao {
         val current = progressEntities.value.toMutableMap()
         current.entries.removeIf { it.value.metaId == metaId && !it.value.watched }
         progressEntities.value = current
+
+        val remainingForMeta = current.values.filter { it.metaId == metaId }
+        val newest = remainingForMeta.maxByOrNull { it.updatedAt }
+        val existingRow = continueRows.value.firstOrNull { it.metaId == metaId }
+        val updatedList = continueRows.value.filter { it.metaId != metaId }.toMutableList()
+        if (newest != null && existingRow != null) {
+            updatedList.add(
+                existingRow.copy(
+                    videoId = newest.videoId,
+                    season = newest.season,
+                    episode = newest.episode,
+                    positionMs = newest.positionMs,
+                    durationMs = newest.durationMs,
+                    watched = newest.watched,
+                    updatedAt = newest.updatedAt,
+                ),
+            )
+        }
+        continueRows.value = updatedList
     }
 }

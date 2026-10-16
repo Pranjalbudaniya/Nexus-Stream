@@ -37,6 +37,7 @@ class DevToolsActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
     private val addonTesterViewModel: AddonTesterViewModel by viewModels()
     private val homeTestDataViewModel: HomeTestDataViewModel by viewModels()
+    private val databaseDevViewModel: DatabaseDevViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +47,7 @@ class DevToolsActivity : ComponentActivity() {
                 themeViewModel = themeViewModel,
                 addonTesterViewModel = addonTesterViewModel,
                 homeTestDataViewModel = homeTestDataViewModel,
+                databaseDevViewModel = databaseDevViewModel,
             )
         }
     }
@@ -56,6 +58,7 @@ private fun DevToolsContent(
     themeViewModel: ThemeViewModel,
     addonTesterViewModel: AddonTesterViewModel,
     homeTestDataViewModel: HomeTestDataViewModel,
+    databaseDevViewModel: DatabaseDevViewModel,
 ) {
     val uiState by themeViewModel.uiState.collectAsState()
     val state = uiState as? ThemeUiState.Ready ?: return
@@ -104,11 +107,22 @@ private fun DevToolsContent(
                     )
                 }
 
+                DevScreen.DATABASE -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    val dbState by databaseDevViewModel.state.collectAsState()
+                    DatabaseDevScreen(
+                        state = dbState,
+                        onRefresh = databaseDevViewModel::refresh,
+                        onBack = { currentScreen = DevScreen.MENU },
+                    )
+                }
+
                 DevScreen.MENU -> {
                     DevToolsMenu(
                         onNavigateGallery = { currentScreen = DevScreen.THEME_GALLERY },
                         onNavigateTester = { currentScreen = DevScreen.ADDON_TESTER },
                         onNavigateHomeTestData = { currentScreen = DevScreen.HOME_TEST_DATA },
+                        onNavigateDatabase = { currentScreen = DevScreen.DATABASE },
                     )
                 }
             }
@@ -122,6 +136,7 @@ private fun DevToolsMenu(
     onNavigateGallery: () -> Unit,
     onNavigateTester: () -> Unit,
     onNavigateHomeTestData: () -> Unit,
+    onNavigateDatabase: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -169,6 +184,17 @@ private fun DevToolsMenu(
                             .clickable(onClick = onNavigateHomeTestData),
                 )
             }
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.dev_tools_database))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateDatabase),
+                )
+            }
         }
     }
 }
@@ -178,4 +204,5 @@ private enum class DevScreen {
     THEME_GALLERY,
     ADDON_TESTER,
     HOME_TEST_DATA,
+    DATABASE,
 }

@@ -198,6 +198,70 @@ class ProgressRepositoryImplTest {
         }
 
     @Test
+    fun `series in progress leaves continue watching after clearInProgress while watched remain`() =
+        runTest(testDispatcher) {
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|v1",
+                    metaId = "s1",
+                    videoId = "v1",
+                    type = "series",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 100L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|v2",
+                    metaId = "s1",
+                    videoId = "v2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 500_000L,
+                    durationMs = 1_000_000L,
+                    watched = false,
+                    updatedAt = 200L,
+                ),
+            )
+            fakeDao.continueRows.value =
+                listOf(
+                    ContinueRow(
+                        metaId = "s1",
+                        type = "series",
+                        name = "Test Series",
+                        poster = "https://poster.jpg",
+                        videoId = "v2",
+                        season = 1,
+                        episode = 2,
+                        positionMs = 500_000L,
+                        durationMs = 1_000_000L,
+                        watched = false,
+                        updatedAt = 200L,
+                    ),
+                )
+
+            val before = repository.observeContinueWatching().first()
+            assertEquals(1, before.size)
+            assertEquals("s1", before[0].metaId)
+
+            repository.clearInProgress("s1")
+
+            val after = repository.observeContinueWatching().first()
+            assertTrue(after.isEmpty())
+
+            val remaining = fakeDao.progressEntities.value
+            assertEquals(1, remaining.size)
+            assertTrue(remaining.containsKey("s1|v1"))
+            assertEquals(true, remaining["s1|v1"]?.watched)
+            assertFalse(remaining.containsKey("s1|v2"))
+        }
+
+    @Test
     fun `setWatchedMany true creates snapshot without changing inWatchlist and writes watched rows`() =
         runTest(testDispatcher) {
             currentTime = 6000L

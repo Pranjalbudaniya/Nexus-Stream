@@ -141,4 +141,17 @@
     <string name="home_test_data_status_short_added">Added movie under 60 s (position 30 s)</string>
     <string name="home_test_data_status_series_added">Added series episode (S1 E3, 60%%)</string>
     <string name="home_test_data_status_cleared">Cleared %1$d test items</string>
+
+    <!-- Debug Database tool -->
+    <string name="dev_tools_database">Database</string>
+    <string name="dev_tools_database_title">Room Database</string>
+    <string name="dev_tools_database_room_version">Room version: %1$d</string>
+    <string name="dev_tools_database_table_counts">Table Counts</string>
+    <string name="dev_tools_database_library_items">library_items (newest 20)</string>
+    <string name="dev_tools_database_watch_progress">watch_progress (newest 20)</string>
+    <string name="dev_tools_database_meta_cache">meta_cache (newest 20)</string>
+    <string name="dev_tools_database_addons">addons</string>
+    <string name="dev_tools_database_empty">No rows</string>
+    <string name="dev_tools_database_refresh">Refresh</string>
+    <string name="dev_tools_database_back">Back</string>
 </resources>
