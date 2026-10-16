@@ -8,6 +8,7 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.HomeRowSpec
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
+import com.nexus.stream.domain.model.RowState
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.usecase.BuildHomeRows
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
@@ -38,6 +39,13 @@ sealed interface RowStatus {
     data class Failed(
         val error: AppError,
     ) : RowStatus
+
+    fun toRowState(): RowState =
+        when (this) {
+            Loading -> RowState.Loading
+            is Loaded -> RowState.Loaded(items)
+            is Failed -> RowState.Failed(error)
+        }
 }
 
 data class HomeRow(

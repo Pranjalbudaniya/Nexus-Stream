@@ -6,6 +6,8 @@ import com.nexus.stream.data.local.db.NexusDatabase
 import com.nexus.stream.data.local.db.RoomTransactionRunner
 import com.nexus.stream.data.local.db.TransactionRunner
 import com.nexus.stream.data.local.db.dao.AddonDao
+import com.nexus.stream.data.local.db.dao.LibraryDao
+import com.nexus.stream.data.local.db.dao.ProgressDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,6 +34,12 @@ object DatabaseModule {
 
     @Provides
     fun provideAddonDao(database: NexusDatabase): AddonDao = database.addonDao()
+
+    @Provides
+    fun provideLibraryDao(database: NexusDatabase): LibraryDao = database.libraryDao()
+
+    @Provides
+    fun provideProgressDao(database: NexusDatabase): ProgressDao = database.progressDao()
 
     @Provides
     @Singleton
