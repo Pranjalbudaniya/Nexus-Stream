@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.AppError
@@ -126,15 +127,39 @@ internal fun HomeScreenContent(
                 }
 
                 else -> {
+                    val topPadding =
+                        if (uiState.isFirstRowLoading || uiState.hero.isNotEmpty()) {
+                            0.dp
+                        } else {
+                            NexusTheme.spacing.sm
+                        }
+
                     LazyColumn(
                         state = lazyListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding =
                             PaddingValues(
-                                top = NexusTheme.spacing.sm,
+                                top = topPadding,
                                 bottom = NexusTheme.spacing.lg,
                             ),
                     ) {
+                        if (uiState.isFirstRowLoading) {
+                            item(key = "hero_skeleton") {
+                                HeroSkeleton()
+                                Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
+                            }
+                        } else if (uiState.hero.isNotEmpty()) {
+                            item(key = "hero_banner") {
+                                HeroBanner(
+                                    items = uiState.hero,
+                                    inWatchlist = { id -> id in uiState.watchlistIds },
+                                    onDetails = onItemClick,
+                                    onToggleWatchlist = { onEvent(HomeEvent.ToggleWatchlist(it)) },
+                                )
+                                Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
+                            }
+                        }
+
                         if (uiState.offline) {
                             item(key = "offline_banner") {
                                 OfflineBanner(

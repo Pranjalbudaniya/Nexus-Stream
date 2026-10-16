@@ -6,12 +6,14 @@ import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.CatalogSpec
+import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.AddonRepository
-import com.nexus.stream.domain.usecase.BuildHomeRows
+import com.nexus.stream.domain.repository.LibraryRepository
+import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -40,16 +42,21 @@ class HomeViewModelTest {
     private val addonRepository: AddonRepository = mockk()
     private val ensureDefaultAddons: EnsureDefaultAddons = mockk()
     private val homeRowLoader: HomeRowLoader = mockk(relaxed = true)
-    private val buildHomeRows = BuildHomeRows()
+    private val libraryRepository: LibraryRepository = mockk(relaxed = true)
+    private val progressRepository: ProgressRepository = mockk(relaxed = true)
 
     private val allAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
     private val enabledAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
+    private val watchlistFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val continueWatchingFlow = MutableStateFlow<List<ContinueWatchingItem>>(emptyList())
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { addonRepository.observeAll() } returns allAddonsFlow
         every { addonRepository.observeEnabled() } returns enabledAddonsFlow
+        every { libraryRepository.observeWatchlistIds() } returns watchlistFlow
+        every { progressRepository.observeContinueWatching() } returns continueWatchingFlow
         coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
     }
 
@@ -62,8 +69,9 @@ class HomeViewModelTest {
         HomeViewModel(
             addonRepository = addonRepository,
             ensureDefaultAddons = ensureDefaultAddons,
-            buildHomeRows = buildHomeRows,
             homeRowLoader = homeRowLoader,
+            libraryRepository = libraryRepository,
+            progressRepository = progressRepository,
             dispatcher = testDispatcher,
         )
 
@@ -310,6 +318,7 @@ class HomeViewModelTest {
     private fun createMetaPreview(
         id: String,
         name: String,
+        background: String? = null,
     ): MetaPreview =
         MetaPreview(
             id = id,
@@ -317,11 +326,85 @@ class HomeViewModelTest {
             name = name,
             poster = null,
             posterShape = PosterShape.POSTER,
-            background = null,
+            background = background,
             logo = null,
             description = null,
             releaseInfo = null,
             imdbRating = null,
             genres = emptyList(),
         )
+
+    @Test
+    fun hero_isBuiltFromFirstQualifyingLoadedRow() =
+        runTest(testDispatcher) {
+            val addon = createAddon(name = "addon1", type = "movie", catalogId = "top")
+            val qualifyingItems =
+                listOf(
+                    createMetaPreview("1", "M1", background = "https://bg1.jpg"),
+                    createMetaPreview("2", "M2", background = "https://bg2.jpg"),
+                    createMetaPreview("3", "M3", background = "https://bg3.jpg"),
+                )
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(qualifyingItems)
+
+            val viewModel = createViewModel()
+            allAddonsFlow.value = listOf(addon)
+            enabledAddonsFlow.value = listOf(addon)
+            advanceUntilIdle()
+
+            val hero = viewModel.uiState.value.hero
+            assertEquals(3, hero.size)
+            assertEquals("1", hero[0].id)
+            assertEquals("2", hero[1].id)
+            assertEquals("3", hero[2].id)
+        }
+
+    @Test
+    fun toggleWatchlist_callsRepositoryOnce() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+            val item = createMetaPreview("tt1", "Test")
+
+            viewModel.onEvent(HomeEvent.ToggleWatchlist(item))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { libraryRepository.toggleWatchlist(item) }
+        }
+
+    @Test
+    fun removeContinue_callsRepositoryOnce() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+
+            viewModel.onEvent(HomeEvent.RemoveContinue("m1"))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { progressRepository.removeFromContinueWatching("m1") }
+        }
+
+    @Test
+    fun continueWatching_followsRepositoryFlow() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+            val items =
+                listOf(
+                    ContinueWatchingItem(
+                        metaId = "m1",
+                        type = "movie",
+                        name = "Movie 1",
+                        poster = null,
+                        videoId = "m1",
+                        season = null,
+                        episode = null,
+                        positionMs = 100L,
+                        durationMs = 200L,
+                        updatedAt = 1000L,
+                    ),
+                )
+
+            continueWatchingFlow.value = items
+            advanceUntilIdle()
+
+            assertEquals(items, viewModel.uiState.value.continueWatching)
+            assertEquals(items, viewModel.continueWatching)
+        }
 }

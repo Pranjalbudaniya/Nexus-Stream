@@ -165,4 +165,16 @@
     <!-- Detail screen -->
     <string name="detail_title">Detail</string>
     <string name="detail_coming_soon">Detail screen is coming soon</string>
+
+    <!-- Home Hero Banner -->
+    <string name="hero_btn_details">Details</string>
+    <string name="hero_btn_add_watchlist">+ Watchlist</string>
+    <string name="hero_btn_in_watchlist">In watchlist</string>
+    <string name="hero_watchlist_add_desc">Add %1$s to watchlist</string>
+    <string name="hero_watchlist_remove_desc">Remove %1$s from watchlist</string>
+
+    <!-- Continue Watching -->
+    <string name="continue_watching_title">Continue watching</string>
+    <string name="continue_watching_remove">Remove from Continue watching</string>
+    <string name="continue_watching_remove_desc">Remove %1$s from Continue watching</string>
 </resources>

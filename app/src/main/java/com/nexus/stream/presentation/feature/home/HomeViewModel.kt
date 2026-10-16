@@ -5,11 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.stream.data.remote.addon.HomeRowLoader
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.HomeRowSpec
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.RowState
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.LibraryRepository
+import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.BuildHero
 import com.nexus.stream.domain.usecase.BuildHomeRows
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -55,6 +59,10 @@ data class HomeRow(
 
 data class HomeUiState(
     val rows: List<HomeRow> = emptyList(),
+    val hero: List<MetaPreview> = emptyList(),
+    val isFirstRowLoading: Boolean = false,
+    val watchlistIds: Set<String> = emptySet(),
+    val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val hasAddons: Boolean = false,
     val hasCatalogRows: Boolean = false,
     val seedFailed: Boolean = false,
@@ -70,6 +78,14 @@ sealed interface HomeEvent {
     data object Refresh : HomeEvent
 
     data object RetrySeed : HomeEvent
+
+    data class ToggleWatchlist(
+        val item: MetaPreview,
+    ) : HomeEvent
+
+    data class RemoveContinue(
+        val metaId: String,
+    ) : HomeEvent
 }
 
 sealed interface HomeEffect
@@ -80,12 +96,25 @@ class HomeViewModel
     constructor(
         private val addonRepository: AddonRepository,
         private val ensureDefaultAddons: EnsureDefaultAddons,
-        private val buildHomeRows: BuildHomeRows,
         private val homeRowLoader: HomeRowLoader,
+        private val libraryRepository: LibraryRepository,
+        private val progressRepository: ProgressRepository,
         @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
     ) : ViewModel() {
+        private val buildHomeRows = BuildHomeRows()
+        private val buildHero = BuildHero()
+
         private val _uiState = MutableStateFlow(HomeUiState())
         val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+        val hero: List<MetaPreview>
+            get() = _uiState.value.hero
+
+        val watchlistIds: Set<String>
+            get() = _uiState.value.watchlistIds
+
+        val continueWatching: List<ContinueWatchingItem>
+            get() = _uiState.value.continueWatching
 
         private val _effects = MutableSharedFlow<HomeEffect>()
         val effects: SharedFlow<HomeEffect> = _effects.asSharedFlow()
@@ -100,6 +129,8 @@ class HomeViewModel
         init {
             runSeed()
             observeAddons()
+            observeWatchlist()
+            observeContinueWatching()
         }
 
         fun onEvent(event: HomeEvent) {
@@ -107,6 +138,36 @@ class HomeViewModel
                 is HomeEvent.Retry -> onRetryRow(event.key)
                 is HomeEvent.Refresh -> onRefresh()
                 is HomeEvent.RetrySeed -> runSeed()
+                is HomeEvent.ToggleWatchlist -> onToggleWatchlist(event.item)
+                is HomeEvent.RemoveContinue -> onRemoveContinue(event.metaId)
+            }
+        }
+
+        private fun onToggleWatchlist(item: MetaPreview) {
+            viewModelScope.launch {
+                libraryRepository.toggleWatchlist(item)
+            }
+        }
+
+        private fun onRemoveContinue(metaId: String) {
+            viewModelScope.launch {
+                progressRepository.removeFromContinueWatching(metaId)
+            }
+        }
+
+        private fun observeWatchlist() {
+            viewModelScope.launch {
+                libraryRepository.observeWatchlistIds().collectLatest { ids ->
+                    _uiState.update { it.copy(watchlistIds = ids) }
+                }
+            }
+        }
+
+        private fun observeContinueWatching() {
+            viewModelScope.launch {
+                progressRepository.observeContinueWatching().collectLatest { items ->
+                    _uiState.update { it.copy(continueWatching = items) }
+                }
             }
         }
 
@@ -225,10 +286,14 @@ class HomeViewModel
                 }
             val anyLoading = orderedRows.any { it.status is RowStatus.Loading }
             val offline = networkFailures >= 2 && !anyLoading
+            val hero = buildHero(orderedRows.map { it.status.toRowState() })
+            val isFirstRowLoading = orderedRows.isNotEmpty() && orderedRows.first().status is RowStatus.Loading
 
             _uiState.update {
                 it.copy(
                     rows = orderedRows,
+                    hero = hero,
+                    isFirstRowLoading = isFirstRowLoading,
                     hasAddons = hasAddons,
                     hasCatalogRows = currentSpecs.isNotEmpty(),
                     seedFailed = seedFailed,
