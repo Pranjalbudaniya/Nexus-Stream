@@ -10,15 +10,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,6 +22,7 @@ import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.model.progress
+import com.nexus.stream.presentation.common.LocalPosterActions
 import com.nexus.stream.presentation.common.PosterCard
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -34,7 +30,6 @@ import com.nexus.stream.presentation.theme.NexusTheme
 fun ContinueWatchingRow(
     items: List<ContinueWatchingItem>,
     onItemClick: (type: String, id: String) -> Unit,
-    onRemoveItem: (metaId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -64,7 +59,6 @@ fun ContinueWatchingRow(
                 ContinueWatchingCard(
                     item = item,
                     onClick = { onItemClick(item.type, item.metaId) },
-                    onRemove = { onRemoveItem(item.metaId) },
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -76,11 +70,9 @@ fun ContinueWatchingRow(
 private fun ContinueWatchingCard(
     item: ContinueWatchingItem,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
+    val posterActions = LocalPosterActions.current
     val preview =
         remember(item) {
             MetaPreview(
@@ -108,29 +100,15 @@ private fun ContinueWatchingCard(
             }
         }
 
-    Box(modifier = modifier) {
-        PosterCard(
-            item = preview,
-            progress = item.progress,
-            subtitle = subtitle,
-            onClick = onClick,
-            onLongClick = { menuExpanded = true },
-            onLongClickLabel = stringResource(R.string.continue_watching_remove),
-        )
-
-        DropdownMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.continue_watching_remove)) },
-                onClick = {
-                    menuExpanded = false
-                    onRemove()
-                },
-            )
-        }
-    }
+    PosterCard(
+        item = preview,
+        progress = item.progress,
+        subtitle = subtitle,
+        onClick = onClick,
+        onLongClick = { posterActions.show(preview, fromContinue = true) },
+        onLongClickLabel = stringResource(R.string.open_actions),
+        modifier = modifier,
+    )
 }
 
 @Preview(name = "ContinueWatchingRow - Light")
@@ -166,7 +144,6 @@ internal fun ContinueWatchingRowPreview() {
                     ),
                 ),
             onItemClick = { _, _ -> },
-            onRemoveItem = {},
         )
     }
 }

@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -37,7 +43,9 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.nexus.stream.R
 import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -53,6 +61,7 @@ fun PosterCard(
     item: MetaPreview,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    mark: PosterMark? = null,
     progress: Float? = null,
     subtitle: String? = null,
     onLongClick: (() -> Unit)? = null,
@@ -65,41 +74,27 @@ fun PosterCard(
             PosterShape.LANDSCAPE -> LANDSCAPE_WIDTH to LANDSCAPE_HEIGHT
         }
 
-    val platformContext = LocalPlatformContext.current
-    var isError by remember(item.poster) { mutableStateOf(false) }
-
-    val clickModifier =
-        if (onLongClick != null) {
-            Modifier.combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-                onLongClickLabel = onLongClickLabel,
-            )
-        } else {
-            Modifier.clickable(onClick = onClick)
-        }
-
-    val semanticsModifier =
-        if (onLongClick != null && !onLongClickLabel.isNullOrBlank()) {
-            Modifier.semantics {
-                customActions =
-                    listOf(
-                        CustomAccessibilityAction(label = onLongClickLabel) {
-                            onLongClick()
-                            true
-                        },
-                    )
-            }
-        } else {
-            Modifier
-        }
+    val posterActions = LocalPosterActions.current
+    val effectiveLongClick: () -> Unit = onLongClick ?: { posterActions.show(item, fromContinue = false) }
+    val effectiveLongClickLabel = onLongClickLabel ?: stringResource(R.string.open_actions)
 
     Column(
         modifier =
             modifier
                 .width(width)
-                .then(clickModifier)
-                .then(semanticsModifier),
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = effectiveLongClick,
+                    onLongClickLabel = effectiveLongClickLabel,
+                ).semantics {
+                    customActions =
+                        listOf(
+                            CustomAccessibilityAction(label = effectiveLongClickLabel) {
+                                effectiveLongClick()
+                                true
+                            },
+                        )
+                },
     ) {
         Box(
             modifier =
@@ -109,30 +104,10 @@ fun PosterCard(
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            if (!item.poster.isNullOrBlank() && !isError) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(platformContext)
-                            .data(item.poster)
-                            .crossfade(true)
-                            .build(),
-                    contentDescription = item.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    onError = { isError = true },
-                )
-            } else {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(NexusTheme.spacing.xs),
-                )
-            }
+            PosterImageOrPlaceholder(
+                item = item,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             if (progress != null) {
                 val clampedProgress = progress.coerceIn(0f, 1f)
@@ -145,6 +120,13 @@ fun PosterCard(
                             .height(NexusTheme.spacing.xs),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
+
+            if (mark != null) {
+                PosterMarkBadge(
+                    mark = mark,
+                    modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
         }
@@ -166,6 +148,73 @@ fun PosterCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+private fun PosterImageOrPlaceholder(
+    item: MetaPreview,
+    modifier: Modifier = Modifier,
+) {
+    val platformContext = LocalPlatformContext.current
+    var isError by remember(item.poster) { mutableStateOf(false) }
+
+    if (!item.poster.isNullOrBlank() && !isError) {
+        AsyncImage(
+            model =
+                ImageRequest
+                    .Builder(platformContext)
+                    .data(item.poster)
+                    .crossfade(true)
+                    .build(),
+            contentDescription = item.name,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+            onError = { isError = true },
+        )
+    } else {
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(NexusTheme.spacing.xs),
+        )
+    }
+}
+
+@Composable
+private fun PosterMarkBadge(
+    mark: PosterMark,
+    modifier: Modifier = Modifier,
+) {
+    val icon =
+        when (mark) {
+            PosterMark.WATCHED -> Icons.Default.Check
+            PosterMark.WATCHING -> Icons.Default.PlayArrow
+        }
+    val contentDesc =
+        when (mark) {
+            PosterMark.WATCHED -> stringResource(R.string.poster_mark_watched)
+            PosterMark.WATCHING -> stringResource(R.string.poster_mark_watching)
+        }
+    Box(
+        modifier =
+            modifier
+                .padding(NexusTheme.spacing.xs)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.tertiaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDesc,
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
@@ -286,6 +335,31 @@ internal fun PosterCardLandscapePreview() {
                     imdbRating = null,
                     genres = emptyList(),
                 ),
+            onClick = {},
+        )
+    }
+}
+
+@Preview(name = "PosterCard - With Badge")
+@Composable
+internal fun PosterCardWithBadgePreview() {
+    NexusTheme {
+        PosterCard(
+            item =
+                MetaPreview(
+                    id = "tt0111161",
+                    type = "movie",
+                    name = "The Shawshank Redemption",
+                    poster = null,
+                    posterShape = PosterShape.POSTER,
+                    background = null,
+                    logo = null,
+                    description = null,
+                    releaseInfo = "1994",
+                    imdbRating = "9.3",
+                    genres = listOf("Drama"),
+                ),
+            mark = PosterMark.WATCHED,
             onClick = {},
         )
     }

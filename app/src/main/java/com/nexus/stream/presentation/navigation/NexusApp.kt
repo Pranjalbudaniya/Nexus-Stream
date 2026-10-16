@@ -20,6 +20,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.nexus.stream.presentation.common.OneShot
+import com.nexus.stream.presentation.common.PosterActionsHost
+import com.nexus.stream.presentation.common.StreamsSheetHost
 
 @Composable
 fun NexusApp(
@@ -45,50 +47,58 @@ fun NexusApp(
         }
     }
 
-    Scaffold(
-        modifier = modifier,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    TopLevelDestination.entries.forEach { destination ->
-                        NavigationBarItem(
-                            selected =
-                                currentDestination?.hasRoute(destination.route::class) == true,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = stringResource(destination.labelResId),
+    StreamsSheetHost {
+        PosterActionsHost(
+            onNavigateToDetail = { type, id ->
+                navController.navigate(Detail(type = type, id = id))
+            },
+        ) {
+            Scaffold(
+                modifier = modifier,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
+                    if (showBottomBar) {
+                        NavigationBar {
+                            TopLevelDestination.entries.forEach { destination ->
+                                NavigationBarItem(
+                                    selected =
+                                        currentDestination?.hasRoute(destination.route::class) == true,
+                                    onClick = {
+                                        navController.navigate(destination.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = destination.icon,
+                                            contentDescription = stringResource(destination.labelResId),
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = stringResource(destination.labelResId),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    },
                                 )
-                            },
-                            label = {
-                                Text(
-                                    text = stringResource(destination.labelResId),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                        )
+                            }
+                        }
                     }
-                }
+                },
+            ) { innerPadding ->
+                NexusNavHost(
+                    navController = navController,
+                    modifier =
+                        Modifier
+                            .padding(innerPadding)
+                            .consumeWindowInsets(innerPadding),
+                )
             }
-        },
-    ) { innerPadding ->
-        NexusNavHost(
-            navController = navController,
-            modifier =
-                Modifier
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding),
-        )
+        }
     }
 }

@@ -38,7 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -54,10 +56,14 @@ import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.MetaSource
 import com.nexus.stream.domain.usecase.WatchAction
+import com.nexus.stream.domain.usecase.isReleased
+import com.nexus.stream.presentation.common.ListStatusDialog
+import com.nexus.stream.presentation.common.LocalPlayback
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.common.NexusTextButton
+import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.common.toUserMessage
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -132,6 +138,7 @@ fun DetailScreenContent(
             }
 
             is DetailUiState.Content -> {
+                val playbackLauncher = LocalPlayback.current
                 NexusRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { onEvent(DetailEvent.Refresh) },
@@ -148,11 +155,23 @@ fun DetailScreenContent(
                             DetailHeader(
                                 meta = state.meta,
                                 inWatchlist = state.inWatchlist,
+                                listStatus = state.listStatus,
                                 isSynopsisExpanded = state.isSynopsisExpanded,
                                 trailerUrl = state.trailerUrl,
                                 playActionTitle = state.playActionTitle,
                                 isPlayEnabled = state.isPlayEnabled,
-                                onPlayMain = { onEvent(DetailEvent.PlayMain) },
+                                onPlayMain = {
+                                    state.activeVideoId?.let { targetId ->
+                                        playbackLauncher.open(
+                                            PlaybackRequest(
+                                                type = state.meta.type,
+                                                metaId = state.meta.id,
+                                                videoId = targetId,
+                                                title = state.meta.name,
+                                            ),
+                                        )
+                                    }
+                                },
                                 onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
                                 onOpenTrailer = { onEvent(DetailEvent.OpenTrailer) },
                                 onDownload = { onEvent(DetailEvent.Download()) },
@@ -182,7 +201,21 @@ fun DetailScreenContent(
                                 SeriesEpisodesSection(
                                     content = state,
                                     onSelectSeason = { onEvent(DetailEvent.SelectSeason(it)) },
-                                    onPlayEpisode = { onEvent(DetailEvent.PlayEpisode(it)) },
+                                    onPlayEpisode = { videoId ->
+                                        val video = state.meta.videos.find { it.id == videoId }
+                                        if (video != null && !video.isReleased(System.currentTimeMillis())) {
+                                            onEvent(DetailEvent.PlayEpisode(videoId))
+                                        } else if (video != null) {
+                                            playbackLauncher.open(
+                                                PlaybackRequest(
+                                                    type = state.meta.type,
+                                                    metaId = state.meta.id,
+                                                    videoId = video.id,
+                                                    title = "${state.meta.name} - ${video.title}",
+                                                ),
+                                            )
+                                        }
+                                    },
                                     onToggleWatched = { onEvent(DetailEvent.ToggleWatched(it)) },
                                     onDownload = { onEvent(DetailEvent.Download(it)) },
                                     modifier =
@@ -505,20 +538,33 @@ private fun DetailDialogsAndSheets(
     state: DetailUiState.Content,
     onEvent: (DetailEvent) -> Unit,
 ) {
-    if (state.showStreamsSheet && state.streamsSheetVideoId != null) {
-        StreamsSheetPlaceholder(
-            title = state.streamsSheetTitle ?: state.meta.name,
-            videoId = state.streamsSheetVideoId,
-            onDismissRequest = { onEvent(DetailEvent.DismissStreamsSheet) },
-        )
-    }
+    var showListStatusDialog by remember { mutableStateOf(false) }
 
     if (state.showWatchOptionsSheet) {
         WatchOptionsSheet(
             title = state.meta.name,
             actions = state.watchActions,
+            listStatus = state.listStatus,
+            onOpenListStatusDialog = { showListStatusDialog = true },
             onAction = { onEvent(DetailEvent.ApplyWatchAction(it)) },
             onDismissRequest = { onEvent(DetailEvent.DismissWatchOptions) },
+        )
+    }
+
+    if (showListStatusDialog) {
+        ListStatusDialog(
+            current = state.listStatus,
+            onSelect = {
+                onEvent(DetailEvent.SetListStatus(it))
+                showListStatusDialog = false
+            },
+            onRemove = {
+                onEvent(DetailEvent.SetListStatus(null))
+                showListStatusDialog = false
+            },
+            onDismiss = {
+                showListStatusDialog = false
+            },
         )
     }
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.presentation.feature.home.RowStatus
 import com.nexus.stream.presentation.theme.NexusTheme
@@ -40,6 +41,7 @@ fun ContentRow(
     onRetry: () -> Unit,
     onItemClick: (type: String, id: String) -> Unit,
     modifier: Modifier = Modifier,
+    posterMarks: Map<String, PosterMark> = emptyMap(),
 ) {
     if (status is RowStatus.Loaded && status.items.isEmpty()) {
         return
@@ -93,6 +95,7 @@ fun ContentRow(
                         PosterCard(
                             item = item,
                             onClick = { onItemClick(item.type, item.id) },
+                            mark = posterMarks[item.id],
                         )
                     }
                 }

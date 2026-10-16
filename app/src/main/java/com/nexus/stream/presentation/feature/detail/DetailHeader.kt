@@ -45,9 +45,11 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
+import com.nexus.stream.presentation.common.labelResId
 import com.nexus.stream.presentation.theme.NexusTheme
 
 private const val GRADIENT_STOP_THRESHOLD: Float = 0.55f
@@ -71,6 +73,7 @@ fun DetailHeader(
     onOpenAllCast: () -> Unit,
     onOpenAllDirectors: () -> Unit,
     modifier: Modifier = Modifier,
+    listStatus: ListStatus? = null,
 ) {
     val configuration = LocalConfiguration.current
     val headerHeight = headerHeightDp(configuration.screenHeightDp.toFloat()).dp
@@ -112,6 +115,7 @@ fun DetailHeader(
             ActionButtonsRow(
                 meta = meta,
                 inWatchlist = inWatchlist,
+                listStatus = listStatus,
                 trailerUrl = trailerUrl,
                 onOpenWatchOptions = onOpenWatchOptions,
                 onOpenTrailer = onOpenTrailer,
@@ -268,6 +272,7 @@ private fun ActionButtonsRow(
     onOpenTrailer: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
+    listStatus: ListStatus? = null,
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -282,18 +287,25 @@ private fun ActionButtonsRow(
                 stringResource(R.string.detail_watchlist_add_desc, meta.name)
             }
 
+        val (watchlistLabel, watchlistIcon) =
+            if (listStatus != null) {
+                stringResource(listStatus.labelResId()) to Icons.Default.Check
+            } else {
+                stringResource(R.string.detail_watchlist) to Icons.Default.Add
+            }
+
         NexusOutlinedButton(
             onClick = onOpenWatchOptions,
             modifier = Modifier.weight(1f),
         ) {
             Icon(
-                imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.Add,
+                imageVector = watchlistIcon,
                 contentDescription = watchlistDesc,
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
             Text(
-                text = stringResource(R.string.detail_watchlist),
+                text = watchlistLabel,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

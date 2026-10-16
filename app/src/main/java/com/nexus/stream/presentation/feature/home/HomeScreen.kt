@@ -14,11 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,6 +41,7 @@ import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
+import com.nexus.stream.presentation.common.labelResId
 import com.nexus.stream.presentation.theme.NexusTheme
 
 @Composable
@@ -160,9 +163,6 @@ internal fun HomeScreenContent(
                                 ContinueWatchingRow(
                                     items = uiState.continueWatching,
                                     onItemClick = onItemClick,
-                                    onRemoveItem = { metaId ->
-                                        onEvent(HomeEvent.RemoveContinue(metaId))
-                                    },
                                 )
                                 Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
                             }
@@ -184,11 +184,37 @@ internal fun HomeScreenContent(
                                 status = row.status,
                                 onRetry = { onEvent(HomeEvent.Retry(row.spec.key)) },
                                 onItemClick = onItemClick,
+                                posterMarks = uiState.posterMarks,
                             )
                         }
                     }
                 }
             }
+        }
+
+        uiState.confirmRemoveItem?.let { (item, status) ->
+            AlertDialog(
+                onDismissRequest = { onEvent(HomeEvent.DismissRemoveDialog) },
+                title = { Text(stringResource(R.string.watchlist_remove_confirm_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.watchlist_remove_confirm_body,
+                            stringResource(status.labelResId()),
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { onEvent(HomeEvent.ConfirmRemoveWatchlist(item)) }) {
+                        Text(stringResource(R.string.watchlist_remove_confirm_button))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { onEvent(HomeEvent.DismissRemoveDialog) }) {
+                        Text(stringResource(R.string.watchlist_remove_cancel_button))
+                    }
+                },
+            )
         }
     }
 }

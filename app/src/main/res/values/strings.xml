@@ -245,8 +245,32 @@
     <string name="list_status_remove">Remove from watchlist</string>
     <string name="list_status_dialog_title">Watchlist status</string>
     <string name="watchlist_in_status">In watchlist: %1$s</string>
+    <string name="watch_options_watchlist_status">Watchlist: %1$s</string>
     <string name="watchlist_remove_confirm_title">Remove from watchlist?</string>
     <string name="watchlist_remove_confirm_body">Remove from watchlist? It is marked %1$s.</string>
     <string name="watchlist_remove_confirm_button">Remove</string>
     <string name="watchlist_remove_cancel_button">Cancel</string>
+
+    <!-- Poster Actions & Badges -->
+    <string name="poster_action_play">Play</string>
+    <string name="poster_action_detail">Detail</string>
+    <string name="poster_action_trailer_checking">Checking trailer…</string>
+    <string name="poster_action_trailer_available">Trailer</string>
+    <string name="poster_action_trailer_none">No trailer available</string>
+    <string name="poster_action_add_watchlist">Add to watchlist</string>
+    <string name="poster_action_remove_continue">Remove from Continue watching</string>
+    <string name="open_actions">Open actions</string>
+    <string name="poster_mark_watched">Watched</string>
+    <string name="poster_mark_watching">Watching</string>
+
+    <!-- Family mode -->
+    <string name="settings_family_mode_title">Family mode</string>
+    <string name="settings_family_mode_subtitle">Hides adult addons and content. On by default.</string>
+    <string name="settings_family_mode_subtitle_hidden">Hides adult addons and content. On by default. %1$d adult addon hidden.</string>
+    <string name="settings_family_mode_subtitle_hidden_plural">Hides adult addons and content. On by default. %1$d adult addons hidden.</string>
+    <string name="settings_family_mode_disable_confirm_title">Show adult content?</string>
+    <string name="settings_family_mode_disable_confirm_message">Only turn this off if you are 18 or older.</string>
+    <string name="settings_family_mode_turn_off">Turn off</string>
+    <string name="addon_hidden_by_family_mode">Hidden by Family mode</string>
+    <string name="addon_url_adult_blocked">This addon is for adults and Family mode is on.</string>
 </resources>

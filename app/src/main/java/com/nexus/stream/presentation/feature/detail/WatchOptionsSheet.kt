@@ -29,7 +29,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.usecase.WatchAction
+import com.nexus.stream.presentation.common.labelResId
 import com.nexus.stream.presentation.theme.NexusTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +42,8 @@ fun WatchOptionsSheet(
     onAction: (WatchAction) -> Unit,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    listStatus: ListStatus? = null,
+    onOpenListStatusDialog: () -> Unit = {},
     sheetState: SheetState = rememberModalBottomSheetState(),
 ) {
     ModalBottomSheet(
@@ -67,13 +71,17 @@ fun WatchOptionsSheet(
             )
 
             actions.forEach { action ->
-                val (label, icon) = actionLabelAndIcon(action)
+                val (label, icon) = actionLabelAndIcon(action, listStatus)
                 WatchOptionRow(
                     label = label,
                     icon = icon,
                     onClick = {
                         onDismissRequest()
-                        onAction(action)
+                        if (action is WatchAction.ToggleWatchlist) {
+                            onOpenListStatusDialog()
+                        } else {
+                            onAction(action)
+                        }
                     },
                 )
             }
@@ -112,13 +120,19 @@ private fun WatchOptionRow(
 }
 
 @Composable
-private fun actionLabelAndIcon(action: WatchAction): Pair<String, ImageVector> =
+private fun actionLabelAndIcon(
+    action: WatchAction,
+    listStatus: ListStatus?,
+): Pair<String, ImageVector> =
     when (action) {
         is WatchAction.ToggleWatchlist -> {
-            if (action.add) {
+            if (listStatus == null) {
                 stringResource(R.string.watch_options_add_watchlist) to Icons.Default.Add
             } else {
-                stringResource(R.string.watch_options_remove_watchlist) to Icons.Default.Close
+                stringResource(
+                    R.string.watch_options_watchlist_status,
+                    stringResource(listStatus.labelResId()),
+                ) to Icons.Default.Check
             }
         }
 
