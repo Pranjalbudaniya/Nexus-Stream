@@ -7,6 +7,7 @@ import com.nexus.stream.data.local.db.RoomTransactionRunner
 import com.nexus.stream.data.local.db.TransactionRunner
 import com.nexus.stream.data.local.db.dao.AddonDao
 import com.nexus.stream.data.local.db.dao.LibraryDao
+import com.nexus.stream.data.local.db.dao.MetaCacheDao
 import com.nexus.stream.data.local.db.dao.ProgressDao
 import dagger.Module
 import dagger.Provides
@@ -40,6 +41,9 @@ object DatabaseModule {
 
     @Provides
     fun provideProgressDao(database: NexusDatabase): ProgressDao = database.progressDao()
+
+    @Provides
+    fun provideMetaCacheDao(database: NexusDatabase): MetaCacheDao = database.metaCacheDao()
 
     @Provides
     @Singleton

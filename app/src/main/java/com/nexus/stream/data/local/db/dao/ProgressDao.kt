@@ -43,4 +43,10 @@ interface ProgressDao {
 
     @Query("DELETE FROM watch_progress WHERE metaId = :metaId")
     suspend fun deleteByMeta(metaId: String)
+
+    @Query("SELECT * FROM watch_progress WHERE metaId = :metaId")
+    fun observeByMeta(metaId: String): Flow<List<WatchProgressEntity>>
+
+    @Query("DELETE FROM watch_progress WHERE `key` = :key")
+    suspend fun deleteByKey(key: String)
 }

@@ -29,6 +29,11 @@ data class FetchedManifest(
     val rawJson: String,
 )
 
+data class FetchedMeta(
+    val meta: MetaDetail,
+    val rawJson: String,
+)
+
 data class CatalogPage(
     val items: List<MetaPreview>,
     val skipped: Int,
@@ -98,11 +103,11 @@ class AddonRemoteDataSource
             }
         }
 
-        suspend fun meta(
+        suspend fun metaWithRaw(
             transportUrl: String,
             type: String,
             id: String,
-        ): Outcome<MetaDetail> {
+        ): Outcome<FetchedMeta> {
             val url = AddonUrlBuilder.resourceUrl(transportUrl, "meta", type, id)
             return safeCall(url) { targetUrl ->
                 val jsonObject = api.get(targetUrl)
@@ -115,10 +120,20 @@ class AddonRemoteDataSource
                         } ?: throw NotFoundException()
 
                     val dto = json.decodeFromJsonElement<MetaDetailDto>(targetObj)
-                    AddonMappers.mapMetaDetail(dto) ?: throw NotFoundException()
+                    val mappedMeta = AddonMappers.mapMetaDetail(dto) ?: throw NotFoundException()
+                    FetchedMeta(
+                        meta = mappedMeta,
+                        rawJson = jsonObject.toString(),
+                    )
                 }
             }
         }
+
+        suspend fun meta(
+            transportUrl: String,
+            type: String,
+            id: String,
+        ): Outcome<MetaDetail> = metaWithRaw(transportUrl, type, id).map { it.meta }
 
         suspend fun streams(
             transportUrl: String,

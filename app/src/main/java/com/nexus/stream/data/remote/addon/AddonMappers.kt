@@ -115,6 +115,36 @@ object AddonMappers {
         )
     }
 
+    private val defaultJson =
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+            explicitNulls = false
+        }
+
+    fun parseMeta(
+        rawJson: String,
+        json: Json = defaultJson,
+    ): MetaDetail? =
+        try {
+            val element = json.parseToJsonElement(rawJson) as? JsonObject
+            val targetObj =
+                when (val rawMeta = element?.get("meta")) {
+                    is JsonObject -> rawMeta.takeIf { it.isNotEmpty() }
+                    is JsonArray -> rawMeta.firstOrNull() as? JsonObject
+                    else -> element
+                }
+            if (targetObj != null) {
+                val dto = json.decodeFromJsonElement<MetaDetailDto>(targetObj)
+                mapMetaDetail(dto)
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
     fun mapStream(dto: StreamDto): Stream =
         Stream(
             source = resolveStreamSource(dto),

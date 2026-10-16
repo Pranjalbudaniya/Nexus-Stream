@@ -1,28 +1,61 @@
 package com.nexus.stream.data.repository
 
+import com.nexus.stream.data.local.db.TransactionRunner
+import com.nexus.stream.data.local.db.dao.FakeLibraryDao
 import com.nexus.stream.data.local.db.dao.FakeProgressDao
+import com.nexus.stream.data.local.db.entity.LibraryItemEntity
 import com.nexus.stream.data.local.db.entity.WatchProgressEntity
 import com.nexus.stream.domain.model.ContinueRow
+import com.nexus.stream.domain.model.EpisodeRef
+import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.usecase.ContinueWatchingRules
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProgressRepositoryImplTest {
     private val fakeDao = FakeProgressDao()
+    private val fakeLibraryDao = FakeLibraryDao()
     private val testDispatcher = UnconfinedTestDispatcher()
     private val rules = ContinueWatchingRules()
+    private var currentTime = 1000L
+
+    private val transactionRunner =
+        object : TransactionRunner {
+            override suspend fun <T> run(block: suspend () -> T): T = block()
+        }
 
     private val repository =
         ProgressRepositoryImpl(
             progressDao = fakeDao,
+            libraryDao = fakeLibraryDao,
+            transactionRunner = transactionRunner,
             continueWatchingRules = rules,
             dispatcher = testDispatcher,
+            clock = { currentTime },
+        )
+
+    private fun testPreview(id: String = "m1") =
+        MetaPreview(
+            id = id,
+            type = "series",
+            name = "Test Series",
+            poster = "https://poster.jpg",
+            posterShape = PosterShape.POSTER,
+            background = "https://bg.jpg",
+            logo = null,
+            description = "Desc",
+            releaseInfo = "2024",
+            imdbRating = "8.5",
+            genres = listOf("Drama"),
         )
 
     @Test
@@ -117,5 +150,156 @@ class ProgressRepositoryImplTest {
             val remaining = fakeDao.progressEntities.value
             assertEquals(1, remaining.size)
             assertTrue(remaining.containsKey("m2|v1"))
+        }
+
+    @Test
+    fun `setWatched true creates snapshot without changing inWatchlist and writes watched row`() =
+        runTest(testDispatcher) {
+            currentTime = 5000L
+            val preview = testPreview("s1")
+
+            repository.setWatched(
+                meta = preview,
+                episode =
+                    EpisodeRef(
+                        videoId = "s1:1:1",
+                        type = "series",
+                        season = 1,
+                        episode = 1,
+                    ),
+                watched = true,
+            )
+
+            val snapshot = fakeLibraryDao.items.value["s1"]
+            assertTrue(snapshot != null)
+            assertEquals("Test Series", snapshot?.name)
+            assertFalse(snapshot?.inWatchlist == true)
+            assertEquals(5000L, snapshot?.addedAt)
+
+            val progress = fakeDao.progressEntities.value["s1|s1:1:1"]
+            assertTrue(progress != null)
+            assertEquals(true, progress?.watched)
+            assertEquals(0L, progress?.positionMs)
+            assertEquals(0L, progress?.durationMs)
+            assertEquals(5000L, progress?.updatedAt)
+        }
+
+    @Test
+    fun `setWatched true preserves existing inWatchlist state`() =
+        runTest(testDispatcher) {
+            fakeLibraryDao.upsert(
+                LibraryItemEntity(
+                    metaId = "s1",
+                    type = "series",
+                    name = "Existing Series",
+                    poster = null,
+                    background = null,
+                    inWatchlist = true,
+                    addedAt = 1000L,
+                ),
+            )
+
+            repository.setWatched(
+                meta = testPreview("s1"),
+                episode =
+                    EpisodeRef(
+                        videoId = "s1:1:2",
+                        type = "series",
+                        season = 1,
+                        episode = 2,
+                    ),
+                watched = true,
+            )
+
+            val snapshot = fakeLibraryDao.items.value["s1"]
+            assertEquals(true, snapshot?.inWatchlist)
+        }
+
+    @Test
+    fun `setWatched false deletes only that episode row`() =
+        runTest(testDispatcher) {
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:1",
+                    metaId = "s1",
+                    videoId = "s1:1:1",
+                    type = "series",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 1000L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:2",
+                    metaId = "s1",
+                    videoId = "s1:1:2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 1000L,
+                ),
+            )
+
+            repository.setWatched(
+                meta = testPreview("s1"),
+                episode =
+                    EpisodeRef(
+                        videoId = "s1:1:1",
+                        type = "series",
+                        season = 1,
+                        episode = 1,
+                    ),
+                watched = false,
+            )
+
+            assertTrue(fakeDao.deletedKeys.contains("s1|s1:1:1"))
+            assertNull(fakeDao.progressEntities.value["s1|s1:1:1"])
+            assertTrue(fakeDao.progressEntities.value.containsKey("s1|s1:1:2"))
+        }
+
+    @Test
+    fun `observeEpisodeProgress maps rows by video id`() =
+        runTest(testDispatcher) {
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:1",
+                    metaId = "s1",
+                    videoId = "s1:1:1",
+                    type = "series",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 30_000L,
+                    durationMs = 120_000L,
+                    watched = false,
+                    updatedAt = 2000L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:2",
+                    metaId = "s1",
+                    videoId = "s1:1:2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 3000L,
+                ),
+            )
+
+            val progressMap = repository.observeEpisodeProgress("s1").first()
+            assertEquals(2, progressMap.size)
+            assertEquals(30_000L, progressMap["s1:1:1"]?.positionMs)
+            assertFalse(progressMap["s1:1:1"]?.watched == true)
+            assertTrue(progressMap["s1:1:2"]?.watched == true)
         }
 }

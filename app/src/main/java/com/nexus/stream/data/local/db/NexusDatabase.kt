@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.nexus.stream.data.local.db.dao.AddonDao
 import com.nexus.stream.data.local.db.dao.LibraryDao
+import com.nexus.stream.data.local.db.dao.MetaCacheDao
 import com.nexus.stream.data.local.db.dao.ProgressDao
 import com.nexus.stream.data.local.db.entity.AddonEntity
 import com.nexus.stream.data.local.db.entity.LibraryItemEntity
@@ -30,4 +31,6 @@ abstract class NexusDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     abstract fun progressDao(): ProgressDao
+
+    abstract fun metaCacheDao(): MetaCacheDao
 }
