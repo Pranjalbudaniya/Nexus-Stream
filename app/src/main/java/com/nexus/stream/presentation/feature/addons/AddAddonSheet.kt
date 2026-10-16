@@ -19,17 +19,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -45,7 +42,10 @@ import com.nexus.stream.R
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ResourceSpec
+import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
+import com.nexus.stream.presentation.common.NexusOutlinedButton
+import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,7 +150,7 @@ private fun InputContent(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(spacing.sm, Alignment.End),
     ) {
-        OutlinedButton(
+        NexusOutlinedButton(
             onClick = {
                 val clipText =
                     clipboardManager
@@ -166,7 +166,7 @@ private fun InputContent(
             Text(stringResource(R.string.addon_btn_paste))
         }
 
-        Button(
+        NexusButton(
             onClick = { onEvent(AddonManagerEvent.Check) },
             enabled = state.url.isNotBlank(),
         ) {
@@ -256,10 +256,18 @@ fun PreviewCard(
                 verticalArrangement = Arrangement.spacedBy(spacing.xs),
             ) {
                 for (type in manifest.types) {
-                    SuggestionChip(onClick = {}, label = { Text(type) })
+                    SuggestionChip(
+                        onClick = {},
+                        label = { Text(type) },
+                        shape = NexusTheme.shapes.chip,
+                    )
                 }
                 for (resource in manifest.resources) {
-                    SuggestionChip(onClick = {}, label = { Text(resource.name) })
+                    SuggestionChip(
+                        onClick = {},
+                        label = { Text(resource.name) },
+                        shape = NexusTheme.shapes.chip,
+                    )
                 }
                 if (manifest.catalogs.isNotEmpty()) {
                     AssistChip(
@@ -267,6 +275,7 @@ fun PreviewCard(
                         label = {
                             Text(stringResource(R.string.addon_catalogs_count, manifest.catalogs.size))
                         },
+                        shape = NexusTheme.shapes.chip,
                     )
                 }
                 if (manifest.behaviorHints.adult) {
@@ -322,7 +331,7 @@ fun PreviewCard(
                     stringResource(R.string.addon_btn_install)
                 }
 
-            Button(
+            NexusButton(
                 onClick = onInstall,
                 enabled = preview.usable,
                 modifier = Modifier.fillMaxWidth(),
@@ -448,7 +457,7 @@ fun WarningBanner(
             )
         }
         if (actionLabel != null && onAction != null) {
-            TextButton(
+            NexusTextButton(
                 onClick = onAction,
                 modifier = Modifier.align(Alignment.End),
             ) {

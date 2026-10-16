@@ -18,14 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -266,7 +263,7 @@ fun CustomColorSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
+                NexusTextButton(
                     onClick = {
                         val defaultHsv = colorToHsv(BrandAccent)
                         hue = defaultHsv.first
@@ -282,7 +279,7 @@ fun CustomColorSheet(
                 }
 
                 Row {
-                    OutlinedButton(
+                    NexusOutlinedButton(
                         onClick = {
                             onPreview(null, true)
                             onDismiss()
@@ -291,7 +288,7 @@ fun CustomColorSheet(
                         Text(stringResource(R.string.btn_cancel))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(
+                    NexusButton(
                         onClick = {
                             if (isHexValid) {
                                 val currentArgb = toNormalizedArgb(Color.hsv(hue, saturation, value))

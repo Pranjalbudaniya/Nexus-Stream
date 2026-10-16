@@ -17,7 +17,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
@@ -49,6 +48,7 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.presentation.common.NexusCard
+import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
 
 private val LOGO_SIZE: Dp = 48.dp
@@ -180,29 +180,34 @@ fun AddonCard(
                     SuggestionChip(
                         onClick = {},
                         label = { Text(stringResource(R.string.addon_catalogs_chip)) },
+                        shape = NexusTheme.shapes.chip,
                     )
                 }
                 if (addon.manifest.resources.any { it.name == META_RESOURCE }) {
                     SuggestionChip(
                         onClick = {},
                         label = { Text(stringResource(R.string.addon_meta_chip)) },
+                        shape = NexusTheme.shapes.chip,
                     )
                 }
                 if (addon.manifest.resources.any { it.name == STREAM_RESOURCE }) {
                     SuggestionChip(
                         onClick = {},
                         label = { Text(stringResource(R.string.addon_streams_chip)) },
+                        shape = NexusTheme.shapes.chip,
                     )
                 }
                 if (addon.manifest.resources.any { it.name == SUBTITLES_RESOURCE }) {
                     SuggestionChip(
                         onClick = {},
                         label = { Text(stringResource(R.string.addon_subtitles_chip)) },
+                        shape = NexusTheme.shapes.chip,
                     )
                 }
                 AssistChip(
                     onClick = {},
                     label = { Text(host) },
+                    shape = NexusTheme.shapes.chip,
                 )
             }
 
@@ -236,7 +241,7 @@ fun AddonCard(
                             R.string.addon_overflow_description,
                             addon.manifest.name,
                         )
-                    IconButton(
+                    NexusIconButton(
                         onClick = { menuExpanded = true },
                         modifier =
                             Modifier.semantics {

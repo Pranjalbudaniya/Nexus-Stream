@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,17 +16,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +58,7 @@ import coil3.request.crossfade
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
+import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
 import kotlinx.coroutines.delay
 
@@ -243,7 +241,10 @@ private fun HeroPage(
         modifier =
             modifier
                 .fillMaxSize()
-                .clickable(onClick = onDetails),
+                .clickable(
+                    onClick = onDetails,
+                    onClickLabel = "Open details",
+                ),
     ) {
         if (!item.background.isNullOrBlank() && !isBackdropError) {
             AsyncImage(
@@ -329,39 +330,20 @@ private fun HeroPage(
                 )
             }
 
-            if (!item.description.isNullOrBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
+            ) {
                 Text(
-                    text = item.description,
+                    text = item.description.orEmpty(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            }
 
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.xxs))
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Button(
-                    onClick = onDetails,
-                ) {
-                    Text(
-                        text = stringResource(R.string.hero_btn_details),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                val watchlistLabel =
-                    if (inWatchlist) {
-                        stringResource(R.string.hero_btn_in_watchlist)
-                    } else {
-                        stringResource(R.string.hero_btn_add_watchlist)
-                    }
                 val watchlistDesc =
                     if (inWatchlist) {
                         stringResource(R.string.hero_watchlist_remove_desc, item.name)
@@ -369,22 +351,18 @@ private fun HeroPage(
                         stringResource(R.string.hero_watchlist_add_desc, item.name)
                     }
 
-                OutlinedButton(
+                NexusIconButton(
                     onClick = onToggleWatchlist,
-                    modifier = Modifier.semantics { contentDescription = watchlistDesc },
+                    shape = NexusTheme.shapes.button,
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .semantics { contentDescription = watchlistDesc },
                 ) {
-                    if (inWatchlist) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(CHECK_ICON_SIZE),
-                        )
-                        Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
-                    }
-                    Text(
-                        text = watchlistLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Icon(
+                        imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(CHECK_ICON_SIZE),
                     )
                 }
             }

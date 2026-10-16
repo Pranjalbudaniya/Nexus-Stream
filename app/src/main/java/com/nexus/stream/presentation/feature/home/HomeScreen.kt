@@ -14,10 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -37,7 +35,9 @@ import com.nexus.stream.R
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.HomeRowSpec
 import com.nexus.stream.presentation.common.ContentRow
+import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
+import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -83,7 +83,7 @@ internal fun HomeScreenContent(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToSettings) {
+                    NexusIconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = stringResource(R.string.settings_gear_description),
@@ -218,7 +218,7 @@ private fun OfflineBanner(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = NexusTheme.spacing.sm),
             )
-            Button(onClick = onRetryAll) {
+            NexusButton(onClick = onRetryAll) {
                 Text(stringResource(R.string.home_retry_all))
             }
         }
@@ -247,7 +247,7 @@ private fun EmptyStateView(
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
-        Button(onClick = onButtonClick) {
+        NexusButton(onClick = onButtonClick) {
             Text(buttonText)
         }
     }

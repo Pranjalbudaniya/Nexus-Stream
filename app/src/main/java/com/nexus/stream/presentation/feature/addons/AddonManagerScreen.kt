@@ -20,18 +20,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,7 +54,11 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.isBoardCatalog
+import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
+import com.nexus.stream.presentation.common.NexusIconButton
+import com.nexus.stream.presentation.common.NexusOutlinedButton
+import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,7 +145,7 @@ fun AddonManagerContent(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    NexusIconButton(onClick = onNavigateUp) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.navigate_up),
@@ -159,6 +159,7 @@ fun AddonManagerContent(
                 onClick = { onEvent(AddonManagerEvent.OpenAdd()) },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text(stringResource(R.string.addon_manager_add_fab)) },
+                shape = NexusTheme.shapes.button,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -254,7 +255,7 @@ private fun SeedFailedCard(onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onRetry) {
+            NexusTextButton(onClick = onRetry) {
                 Text(
                     text = stringResource(R.string.addon_manager_retry),
                     fontWeight = FontWeight.Bold,
@@ -293,10 +294,10 @@ private fun EmptyStateView(
             )
             Spacer(modifier = Modifier.height(spacing.sm))
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-                OutlinedButton(onClick = onAddCinemeta) {
+                NexusOutlinedButton(onClick = onAddCinemeta) {
                     Text(stringResource(R.string.addon_manager_add_cinemeta))
                 }
-                Button(onClick = onAddAddon) {
+                NexusButton(onClick = onAddAddon) {
                     Text(stringResource(R.string.addon_manager_add_fab))
                 }
             }
@@ -343,7 +344,7 @@ private fun RemoveConfirmDialog(
         },
         text = { Text(bodyText) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            NexusTextButton(onClick = onConfirm) {
                 Text(
                     text = stringResource(R.string.addon_dialog_remove),
                     color = MaterialTheme.colorScheme.error,
@@ -351,7 +352,7 @@ private fun RemoveConfirmDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) {
+            NexusTextButton(onClick = onCancel) {
                 Text(stringResource(R.string.addon_dialog_cancel))
             }
         },
