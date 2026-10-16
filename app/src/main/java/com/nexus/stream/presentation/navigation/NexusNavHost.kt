@@ -55,12 +55,10 @@ fun NexusNavHost(
                 prefillUrl = args.prefillUrl,
             )
         }
-        composable<Detail> { backStackEntry ->
-            val args = backStackEntry.toRoute<Detail>()
+        composable<Detail> {
             DetailScreen(
-                type = args.type,
-                id = args.id,
                 onNavigateUp = { navController.navigateUp() },
+                onOpenAddons = { navController.navigate(Addons()) },
             )
         }
     }

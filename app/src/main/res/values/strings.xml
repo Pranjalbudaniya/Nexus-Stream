@@ -162,10 +162,6 @@
     <string name="home_retry_all">Retry all</string>
     <string name="retry">Retry</string>
 
-    <!-- Detail screen -->
-    <string name="detail_title">Detail</string>
-    <string name="detail_coming_soon">Detail screen is coming soon</string>
-
     <!-- Home Hero Banner -->
     <string name="hero_btn_details">Details</string>
     <string name="hero_btn_add_watchlist">+ Watchlist</string>
@@ -177,4 +173,33 @@
     <string name="continue_watching_title">Continue watching</string>
     <string name="continue_watching_remove">Remove from Continue watching</string>
     <string name="continue_watching_remove_desc">Remove %1$s from Continue watching</string>
+
+    <!-- Detail screen -->
+    <string name="detail_title">Detail</string>
+    <string name="detail_coming_soon">Detail screen is coming soon</string>
+    <string name="detail_play">Play</string>
+    <string name="detail_play_episode">Play S%1$d E%2$d</string>
+    <string name="detail_resume_episode">Resume S%1$d E%2$d</string>
+    <string name="detail_watchlist_add">+ Watchlist</string>
+    <string name="detail_watchlist_in">In watchlist</string>
+    <string name="detail_watchlist_add_desc">Add %1$s to watchlist</string>
+    <string name="detail_watchlist_remove_desc">Remove %1$s from watchlist</string>
+    <string name="detail_trailer">Trailer</string>
+    <string name="detail_read_more">Read more</string>
+    <string name="detail_read_less">Read less</string>
+    <string name="detail_stale_banner">Showing saved info. Couldn\'t refresh.</string>
+    <string name="detail_no_addons_meta">None of your addons has details for this title.</string>
+    <string name="detail_btn_addons">Addons</string>
+    <string name="detail_no_episodes">No episode list available.</string>
+    <string name="detail_not_released">Not released yet</string>
+    <string name="detail_mark_as_watched">Mark as watched</string>
+    <string name="detail_mark_as_unwatched">Mark as unwatched</string>
+    <string name="detail_season_label">Season %1$d</string>
+    <string name="detail_season_specials">Specials</string>
+    <string name="detail_season_episodes">Episodes</string>
+    <string name="detail_streams_placeholder_text">Stream list arrives in the next update</string>
+    <string name="detail_director">Director: %1$s</string>
+    <string name="detail_directors">Directors: %1$s</string>
+    <string name="detail_trailer_app_not_found">No app found to open the trailer.</string>
+    <string name="detail_episode_title">E%1$d • %2$s</string>
 </resources>
