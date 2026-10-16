@@ -41,6 +41,9 @@ interface ProgressDao {
     @Upsert
     suspend fun upsert(entity: WatchProgressEntity)
 
+    @Upsert
+    suspend fun upsertAll(entities: List<WatchProgressEntity>)
+
     @Query("DELETE FROM watch_progress WHERE metaId = :metaId")
     suspend fun deleteByMeta(metaId: String)
 
@@ -49,4 +52,13 @@ interface ProgressDao {
 
     @Query("DELETE FROM watch_progress WHERE `key` = :key")
     suspend fun deleteByKey(key: String)
+
+    @Query("DELETE FROM watch_progress WHERE metaId = :metaId AND videoId IN (:videoIds)")
+    suspend fun clearWatched(
+        metaId: String,
+        videoIds: List<String>,
+    )
+
+    @Query("DELETE FROM watch_progress WHERE metaId = :metaId AND watched = 0")
+    suspend fun clearInProgress(metaId: String)
 }

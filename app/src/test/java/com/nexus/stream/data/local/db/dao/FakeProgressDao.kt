@@ -20,6 +20,14 @@ class FakeProgressDao : ProgressDao {
         progressEntities.value = current
     }
 
+    override suspend fun upsertAll(entities: List<WatchProgressEntity>) {
+        val current = progressEntities.value.toMutableMap()
+        for (entity in entities) {
+            current[entity.key] = entity
+        }
+        progressEntities.value = current
+    }
+
     override suspend fun deleteByMeta(metaId: String) {
         deletedMetaIds.add(metaId)
         val current = progressEntities.value.toMutableMap()
@@ -38,6 +46,22 @@ class FakeProgressDao : ProgressDao {
         deletedKeys.add(key)
         val current = progressEntities.value.toMutableMap()
         current.remove(key)
+        progressEntities.value = current
+    }
+
+    override suspend fun clearWatched(
+        metaId: String,
+        videoIds: List<String>,
+    ) {
+        deletedKeys.addAll(videoIds.map { "$metaId|$it" })
+        val current = progressEntities.value.toMutableMap()
+        current.entries.removeIf { it.value.metaId == metaId && it.value.videoId in videoIds }
+        progressEntities.value = current
+    }
+
+    override suspend fun clearInProgress(metaId: String) {
+        val current = progressEntities.value.toMutableMap()
+        current.entries.removeIf { it.value.metaId == metaId && !it.value.watched }
         progressEntities.value = current
     }
 }

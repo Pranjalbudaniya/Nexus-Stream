@@ -99,7 +99,7 @@ class ProgressRepositoryImplTest {
         }
 
     @Test
-    fun `removeFromContinueWatching removes every progress row of that meta and leaves other titles`() =
+    fun `removeFromContinueWatching removes only in-progress rows and keeps watched rows`() =
         runTest(testDispatcher) {
             fakeDao.upsert(
                 WatchProgressEntity(
@@ -146,10 +146,142 @@ class ProgressRepositoryImplTest {
 
             repository.removeFromContinueWatching("m1")
 
-            assertTrue(fakeDao.deletedMetaIds.contains("m1"))
+            val remaining = fakeDao.progressEntities.value
+            assertEquals(2, remaining.size)
+            // Watched row for m1 is kept
+            assertTrue(remaining.containsKey("m1|v1"))
+            assertEquals(true, remaining["m1|v1"]?.watched)
+            // In-progress row for m1 is removed
+            assertFalse(remaining.containsKey("m1|v2"))
+            // Other title is unaffected
+            assertTrue(remaining.containsKey("m2|v1"))
+        }
+
+    @Test
+    fun `clearInProgress removes only unwatched rows and keeps watched ones`() =
+        runTest(testDispatcher) {
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "series",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 100L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "m1|v2",
+                    metaId = "m1",
+                    videoId = "v2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 50L,
+                    durationMs = 100L,
+                    watched = false,
+                    updatedAt = 200L,
+                ),
+            )
+
+            repository.clearInProgress("m1")
+
             val remaining = fakeDao.progressEntities.value
             assertEquals(1, remaining.size)
-            assertTrue(remaining.containsKey("m2|v1"))
+            assertTrue(remaining.containsKey("m1|v1"))
+            assertFalse(remaining.containsKey("m1|v2"))
+        }
+
+    @Test
+    fun `setWatchedMany true creates snapshot without changing inWatchlist and writes watched rows`() =
+        runTest(testDispatcher) {
+            currentTime = 6000L
+            val preview = testPreview("s1")
+            val episodes =
+                listOf(
+                    EpisodeRef(videoId = "s1:1:1", type = "series", season = 1, episode = 1),
+                    EpisodeRef(videoId = "s1:1:2", type = "series", season = 1, episode = 2),
+                )
+
+            repository.setWatchedMany(meta = preview, episodes = episodes, watched = true)
+
+            val snapshot = fakeLibraryDao.items.value["s1"]
+            assertTrue(snapshot != null)
+            assertEquals("Test Series", snapshot?.name)
+            assertFalse(snapshot?.inWatchlist == true)
+
+            val ep1 = fakeDao.progressEntities.value["s1|s1:1:1"]
+            val ep2 = fakeDao.progressEntities.value["s1|s1:1:2"]
+            assertEquals(true, ep1?.watched)
+            assertEquals(true, ep2?.watched)
+            assertEquals(6000L, ep1?.updatedAt)
+            assertEquals(6000L, ep2?.updatedAt)
+        }
+
+    @Test
+    fun `setWatchedMany false deletes only those video ids`() =
+        runTest(testDispatcher) {
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:1",
+                    metaId = "s1",
+                    videoId = "s1:1:1",
+                    type = "series",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 1000L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:2",
+                    metaId = "s1",
+                    videoId = "s1:1:2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 1000L,
+                ),
+            )
+            fakeDao.upsert(
+                WatchProgressEntity(
+                    key = "s1|s1:1:3",
+                    metaId = "s1",
+                    videoId = "s1:1:3",
+                    type = "series",
+                    season = 1,
+                    episode = 3,
+                    positionMs = 0L,
+                    durationMs = 0L,
+                    watched = true,
+                    updatedAt = 1000L,
+                ),
+            )
+
+            val episodesToDelete =
+                listOf(
+                    EpisodeRef(videoId = "s1:1:1", type = "series", season = 1, episode = 1),
+                    EpisodeRef(videoId = "s1:1:2", type = "series", season = 1, episode = 2),
+                )
+
+            repository.setWatchedMany(meta = testPreview("s1"), episodes = episodesToDelete, watched = false)
+
+            val remaining = fakeDao.progressEntities.value
+            assertEquals(1, remaining.size)
+            assertNull(remaining["s1|s1:1:1"])
+            assertNull(remaining["s1|s1:1:2"])
+            assertTrue(remaining.containsKey("s1|s1:1:3"))
         }
 
     @Test

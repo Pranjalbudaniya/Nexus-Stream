@@ -18,4 +18,12 @@ interface ProgressRepository {
         episode: EpisodeRef,
         watched: Boolean,
     )
+
+    suspend fun setWatchedMany(
+        meta: MetaPreview,
+        episodes: List<EpisodeRef>,
+        watched: Boolean,
+    )
+
+    suspend fun clearInProgress(metaId: String)
 }

@@ -52,8 +52,12 @@ class ProgressRepositoryImpl(
             .flowOn(dispatcher)
 
     override suspend fun removeFromContinueWatching(metaId: String) {
+        clearInProgress(metaId)
+    }
+
+    override suspend fun clearInProgress(metaId: String) {
         withContext(dispatcher) {
-            progressDao.deleteByMeta(metaId)
+            progressDao.clearInProgress(metaId)
         }
     }
 
@@ -79,9 +83,17 @@ class ProgressRepositoryImpl(
         episode: EpisodeRef,
         watched: Boolean,
     ) {
+        setWatchedMany(meta, listOf(episode), watched)
+    }
+
+    override suspend fun setWatchedMany(
+        meta: MetaPreview,
+        episodes: List<EpisodeRef>,
+        watched: Boolean,
+    ) {
+        if (episodes.isEmpty()) return
         withContext(dispatcher) {
             transactionRunner.run {
-                val key = "${meta.id}|${episode.videoId}"
                 if (watched) {
                     val existing = libraryDao.get(meta.id)
                     if (existing == null) {
@@ -97,22 +109,26 @@ class ProgressRepositoryImpl(
                             ),
                         )
                     }
-                    progressDao.upsert(
-                        WatchProgressEntity(
-                            key = key,
-                            metaId = meta.id,
-                            videoId = episode.videoId,
-                            type = episode.type,
-                            season = episode.season,
-                            episode = episode.episode,
-                            positionMs = 0L,
-                            durationMs = 0L,
-                            watched = true,
-                            updatedAt = clock(),
-                        ),
-                    )
+                    val now = clock()
+                    val entities =
+                        episodes.map { ep ->
+                            WatchProgressEntity(
+                                key = "${meta.id}|${ep.videoId}",
+                                metaId = meta.id,
+                                videoId = ep.videoId,
+                                type = ep.type,
+                                season = ep.season,
+                                episode = ep.episode,
+                                positionMs = 0L,
+                                durationMs = 0L,
+                                watched = true,
+                                updatedAt = now,
+                            )
+                        }
+                    progressDao.upsertAll(entities)
                 } else {
-                    progressDao.deleteByKey(key)
+                    val videoIds = episodes.map { it.videoId }
+                    progressDao.clearWatched(meta.id, videoIds)
                 }
             }
         }
