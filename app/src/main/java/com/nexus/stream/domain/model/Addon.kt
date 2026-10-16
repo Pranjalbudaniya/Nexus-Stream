@@ -12,4 +12,6 @@ data class Addon(
     val position: Int,
     val source: AddonSource,
     val installedAt: Long,
-)
+) {
+    val isAdult: Boolean get() = manifest.isAdult
+}

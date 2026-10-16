@@ -1,5 +1,6 @@
 package com.nexus.stream.data.local.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -12,4 +13,6 @@ data class LibraryItemEntity(
     val background: String?,
     val inWatchlist: Boolean,
     val addedAt: Long,
+    @ColumnInfo(name = "listStatus", defaultValue = "PLAN_TO_WATCH")
+    val listStatus: String = "PLAN_TO_WATCH",
 )

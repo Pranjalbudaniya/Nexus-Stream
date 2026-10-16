@@ -2,6 +2,7 @@ package com.nexus.stream.data.repository
 
 import com.nexus.stream.data.local.db.TransactionRunner
 import com.nexus.stream.data.local.db.dao.FakeLibraryDao
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,70 +53,103 @@ class LibraryRepositoryImplTest {
         )
 
     @Test
-    fun `first toggle inserts with inWatchlist true and addedAt now`() =
+    fun `adding sets Plan to watch and creates snapshot`() =
         runTest(testDispatcher) {
             val preview = createPreview("tt1")
             currentTime = 123456L
 
-            repository.toggleWatchlist(preview)
+            repository.setStatus(preview, ListStatus.PLAN_TO_WATCH)
 
             val row = fakeDao.get("tt1")
             assertNotNull(row)
             assertTrue(row!!.inWatchlist)
+            assertEquals("PLAN_TO_WATCH", row.listStatus)
             assertEquals(123456L, row.addedAt)
             assertEquals("Test Movie", row.name)
             assertEquals("https://example.com/poster.jpg", row.poster)
 
-            val watchlistIds = repository.observeWatchlistIds().first()
-            assertEquals(setOf("tt1"), watchlistIds)
+            val statuses = repository.observeListStatuses().first()
+            assertEquals(mapOf("tt1" to ListStatus.PLAN_TO_WATCH), statuses)
         }
 
     @Test
-    fun `second toggle flips to false and keeps the row`() =
+    fun `changing status keeps the row and updates listStatus`() =
         runTest(testDispatcher) {
             val preview = createPreview("tt1")
-            repository.toggleWatchlist(preview)
+            repository.setStatus(preview, ListStatus.PLAN_TO_WATCH)
 
-            repository.toggleWatchlist(preview)
+            repository.setStatus(preview, ListStatus.WATCHING)
+
+            val row = fakeDao.get("tt1")
+            assertNotNull(row)
+            assertTrue(row!!.inWatchlist)
+            assertEquals("WATCHING", row.listStatus)
+
+            val statuses = repository.observeListStatuses().first()
+            assertEquals(mapOf("tt1" to ListStatus.WATCHING), statuses)
+        }
+
+    @Test
+    fun `removing sets inWatchlist false and keeps the row`() =
+        runTest(testDispatcher) {
+            val preview = createPreview("tt1")
+            repository.setStatus(preview, ListStatus.PLAN_TO_WATCH)
+
+            repository.setStatus(preview, null)
 
             val row = fakeDao.get("tt1")
             assertNotNull(row)
             assertFalse(row!!.inWatchlist)
 
-            val watchlistIds = repository.observeWatchlistIds().first()
-            assertTrue(watchlistIds.isEmpty())
+            val statuses = repository.observeListStatuses().first()
+            assertTrue(statuses.isEmpty())
         }
 
     @Test
-    fun `toggling on again refreshes name and poster from the preview`() =
+    fun `re-adding refreshes snapshot fields`() =
         runTest(testDispatcher) {
             val initial = createPreview("tt1", name = "Old Name", poster = "https://old.jpg")
-            repository.toggleWatchlist(initial)
+            repository.setStatus(initial, ListStatus.PLAN_TO_WATCH)
 
-            // Turn off
-            repository.toggleWatchlist(initial)
+            repository.setStatus(initial, null)
             assertFalse(fakeDao.get("tt1")!!.inWatchlist)
 
-            // Turn on with updated metadata
             val updated = createPreview("tt1", name = "New Name", poster = "https://new.jpg")
-            repository.toggleWatchlist(updated)
+            repository.setStatus(updated, ListStatus.COMPLETED)
 
             val row = fakeDao.get("tt1")
             assertNotNull(row)
             assertTrue(row!!.inWatchlist)
+            assertEquals("COMPLETED", row.listStatus)
             assertEquals("New Name", row.name)
             assertEquals("https://new.jpg", row.poster)
         }
 
     @Test
-    fun `two sequential toggles end consistent`() =
+    fun `observeListStatuses only includes listed titles`() =
+        runTest(testDispatcher) {
+            val item1 = createPreview("t1")
+            val item2 = createPreview("t2")
+            repository.setStatus(item1, ListStatus.WATCHING)
+            repository.setStatus(item2, ListStatus.DROPPED)
+
+            repository.setStatus(item1, null) // removed
+
+            val statuses = repository.observeListStatuses().first()
+            assertEquals(1, statuses.size)
+            assertEquals(ListStatus.DROPPED, statuses["t2"])
+            assertFalse(statuses.containsKey("t1"))
+        }
+
+    @Test
+    fun `two quick calls end consistent`() =
         runTest(testDispatcher) {
             val preview = createPreview("tt1")
+            repository.setStatus(preview, ListStatus.PLAN_TO_WATCH)
+            repository.setStatus(preview, null)
 
-            repository.toggleWatchlist(preview)
-            repository.toggleWatchlist(preview)
-
-            assertEquals(emptySet<String>(), repository.observeWatchlistIds().first())
+            val statuses = repository.observeListStatuses().first()
+            assertTrue(statuses.isEmpty())
             assertFalse(fakeDao.get("tt1")!!.inWatchlist)
         }
 }

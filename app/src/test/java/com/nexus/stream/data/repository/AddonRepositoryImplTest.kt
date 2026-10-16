@@ -13,16 +13,31 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.ResourceSpec
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+private class FakeContentPrefsRepository(
+    initialFamilyMode: Boolean = true,
+) : ContentPrefsRepository {
+    val familyModeFlow = MutableStateFlow(initialFamilyMode)
+    override val familyMode: Flow<Boolean> = familyModeFlow
+
+    override suspend fun setFamilyMode(enabled: Boolean) {
+        familyModeFlow.value = enabled
+    }
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddonRepositoryImplTest {
@@ -34,6 +49,7 @@ class AddonRepositoryImplTest {
         }
     private val json = NetworkModule.provideJson()
     private val testDispatcher = UnconfinedTestDispatcher()
+    private val fakeContentPrefsRepository = FakeContentPrefsRepository()
     private var currentTime = 1_000L
 
     private val repository =
@@ -42,6 +58,7 @@ class AddonRepositoryImplTest {
             remoteDataSource = remoteDataSource,
             transactionRunner = passThroughRunner,
             json = json,
+            contentPrefsRepository = fakeContentPrefsRepository,
             dispatcher = testDispatcher,
             clock = { currentTime },
         )
@@ -77,10 +94,62 @@ class AddonRepositoryImplTest {
         name: String = "Example Addon",
         version: String = "1.0.0",
         hasResources: Boolean = true,
+        adult: Boolean = false,
     ): String {
-        val resourcesPart = if (hasResources) """["catalog"]""" else "[]"
-        return """{"id":"$id","name":"$name","version":"$version","resources":$resourcesPart,"types":["movie"]}"""
+        val part = if (hasResources) """["catalog"]""" else "[]"
+        return "{\"id\":\"$id\",\"name\":\"$name\",\"version\":\"$version\"," +
+            "\"resources\":$part,\"types\":[\"movie\"],\"behaviorHints\":{\"adult\":$adult}}"
     }
+
+    @Test
+    fun `observeActive excludes adult addons only when Family mode is on and reacts live to the flag`() =
+        runTest(testDispatcher) {
+            val normalRaw = sampleRawJson(id = "normal", name = "Normal Addon", adult = false)
+            val adultRaw = sampleRawJson(id = "adult", name = "Adult Addon", adult = true)
+
+            fakeDao.upsert(
+                AddonEntity(
+                    transportUrl = "https://example.com/normal/manifest.json",
+                    id = "normal",
+                    name = "Normal Addon",
+                    version = "1.0.0",
+                    enabled = true,
+                    position = 0,
+                    source = AddonSource.LOCAL,
+                    installedAt = 1000L,
+                    manifestJson = normalRaw,
+                ),
+            )
+            fakeDao.upsert(
+                AddonEntity(
+                    transportUrl = "https://example.com/adult/manifest.json",
+                    id = "adult",
+                    name = "Adult Addon",
+                    version = "1.0.0",
+                    enabled = true,
+                    position = 1,
+                    source = AddonSource.LOCAL,
+                    installedAt = 1000L,
+                    manifestJson = adultRaw,
+                ),
+            )
+
+            // Family mode is ON (default true)
+            fakeContentPrefsRepository.familyModeFlow.value = true
+            val activeWhenOn = repository.observeActive().first()
+            assertEquals(1, activeWhenOn.size)
+            assertEquals("normal", activeWhenOn[0].manifest.id)
+
+            // Family mode toggled to OFF live
+            fakeContentPrefsRepository.familyModeFlow.value = false
+            val activeWhenOff = repository.observeActive().first()
+            assertEquals(2, activeWhenOff.size)
+
+            // Family mode toggled back to ON
+            fakeContentPrefsRepository.familyModeFlow.value = true
+            val activeWhenOnAgain = repository.observeActive().first()
+            assertEquals(1, activeWhenOnAgain.size)
+        }
 
     @Test
     fun install_newAddonGetsPositionZeroAndClockTimestamp_secondGetsPositionOne() =

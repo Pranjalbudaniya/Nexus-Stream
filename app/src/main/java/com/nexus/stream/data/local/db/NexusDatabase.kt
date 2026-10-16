@@ -22,7 +22,7 @@ import com.nexus.stream.data.local.db.entity.WatchProgressEntity
         SkipSegmentCacheEntity::class,
         MetaCacheEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class NexusDatabase : RoomDatabase() {

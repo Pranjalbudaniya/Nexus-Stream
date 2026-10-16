@@ -8,9 +8,11 @@ import kotlinx.coroutines.flow.map
 class FakeLibraryDao : LibraryDao {
     val items = MutableStateFlow<Map<String, LibraryItemEntity>>(emptyMap())
 
-    override fun observeWatchlistIds(): Flow<List<String>> =
+    override fun observeListStatuses(): Flow<List<LibraryStatusTuple>> =
         items.map { map ->
-            map.values.filter { it.inWatchlist }.map { it.metaId }
+            map.values
+                .filter { it.inWatchlist }
+                .map { LibraryStatusTuple(metaId = it.metaId, listStatus = it.listStatus) }
         }
 
     override suspend fun get(metaId: String): LibraryItemEntity? = items.value[metaId]

@@ -142,7 +142,7 @@ class MetaRepositoryImplTest {
                     fetchedAt = currentTime - 3600_000L,
                 ),
             )
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(testAddon()))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(testAddon()))
             coEvery { remoteDataSource.metaWithRaw("https://addon.com/manifest.json", "movie", "tt0111161") } returns
                 Outcome.Success(FetchedMeta(meta = testDetail.copy(name = "Updated"), rawJson = rawJson))
 
@@ -167,7 +167,7 @@ class MetaRepositoryImplTest {
                     fetchedAt = currentTime - 90_000_000L, // > 24 hours ago
                 ),
             )
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(testAddon()))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(testAddon()))
             coEvery { remoteDataSource.metaWithRaw("https://addon.com/manifest.json", "movie", "tt0111161") } returns
                 Outcome.Success(FetchedMeta(meta = testDetail, rawJson = rawJson))
 
@@ -188,7 +188,7 @@ class MetaRepositoryImplTest {
             val addon1 = testAddon("https://addon1.com/manifest.json", position = 0)
             val addon2 = testAddon("https://addon2.com/manifest.json", position = 1)
 
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(addon2, addon1)) // unsorted in list
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(addon2, addon1)) // unsorted in list
             coEvery { remoteDataSource.metaWithRaw(addon1.transportUrl, "movie", "tt0111161") } returns
                 Outcome.Failure(AppError.Network)
             coEvery { remoteDataSource.metaWithRaw(addon2.transportUrl, "movie", "tt0111161") } returns
@@ -215,7 +215,7 @@ class MetaRepositoryImplTest {
                 ),
             )
             val addon = testAddon()
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(addon))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(addon))
             coEvery { remoteDataSource.metaWithRaw(addon.transportUrl, "movie", "tt0111161") } returns
                 Outcome.Failure(AppError.Network)
 
@@ -230,7 +230,7 @@ class MetaRepositoryImplTest {
             val addon1 = testAddon("https://addon1.com/manifest.json", position = 0)
             val addon2 = testAddon("https://addon2.com/manifest.json", position = 1)
 
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(addon1, addon2))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(addon1, addon2))
             coEvery { remoteDataSource.metaWithRaw(addon1.transportUrl, "movie", "tt0111161") } returns
                 Outcome.Failure(AppError.NotFound)
             coEvery { remoteDataSource.metaWithRaw(addon2.transportUrl, "movie", "tt0111161") } returns
@@ -244,7 +244,7 @@ class MetaRepositoryImplTest {
     @Test
     fun `no supporting addon gives NotFound`() =
         runTest(testDispatcher) {
-            coEvery { addonRepository.observeEnabled() } returns flowOf(emptyList())
+            coEvery { addonRepository.observeActive() } returns flowOf(emptyList())
 
             val outcome = repository.getMeta(type = "movie", id = "tt0111161")
             assertTrue(outcome is Outcome.Failure)
@@ -261,7 +261,7 @@ class MetaRepositoryImplTest {
                     fetchedAt = currentTime - 1000L,
                 ),
             )
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(testAddon()))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(testAddon()))
             coEvery { remoteDataSource.metaWithRaw("https://addon.com/manifest.json", "movie", "tt0111161") } returns
                 Outcome.Success(FetchedMeta(meta = testDetail, rawJson = rawJson))
 
@@ -274,7 +274,7 @@ class MetaRepositoryImplTest {
     fun `cancellation is always rethrown`() =
         runTest(testDispatcher) {
             val addon = testAddon()
-            coEvery { addonRepository.observeEnabled() } returns flowOf(listOf(addon))
+            coEvery { addonRepository.observeActive() } returns flowOf(listOf(addon))
             coEvery { remoteDataSource.metaWithRaw(addon.transportUrl, "movie", "tt0111161") } throws
                 CancellationException("Cancelled")
 

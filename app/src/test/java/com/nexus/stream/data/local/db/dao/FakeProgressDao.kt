@@ -83,4 +83,11 @@ class FakeProgressDao : ProgressDao {
         }
         continueRows.value = updatedList
     }
+
+    override fun observeWatchedMovieIds(): Flow<List<String>> =
+        progressEntities.map { map ->
+            map.values
+                .filter { it.watched && it.type.equals("movie", ignoreCase = true) }
+                .map { it.metaId }
+        }
 }

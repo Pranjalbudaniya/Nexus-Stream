@@ -235,4 +235,18 @@
     <string name="watch_options_marked_episodes_watched">Marked %1$d episodes as watched</string>
     <string name="watch_options_marked_episodes_unwatched">Marked %1$d episodes as unwatched</string>
     <string name="watch_options_removed_continue">Removed from Continue watching</string>
+
+    <!-- Watchlist statuses -->
+    <string name="list_status_plan_to_watch">Plan to watch</string>
+    <string name="list_status_watching">Watching</string>
+    <string name="list_status_completed">Completed</string>
+    <string name="list_status_on_hold">On hold</string>
+    <string name="list_status_dropped">Dropped</string>
+    <string name="list_status_remove">Remove from watchlist</string>
+    <string name="list_status_dialog_title">Watchlist status</string>
+    <string name="watchlist_in_status">In watchlist: %1$s</string>
+    <string name="watchlist_remove_confirm_title">Remove from watchlist?</string>
+    <string name="watchlist_remove_confirm_body">Remove from watchlist? It is marked %1$s.</string>
+    <string name="watchlist_remove_confirm_button">Remove</string>
+    <string name="watchlist_remove_cancel_button">Cancel</string>
 </resources>

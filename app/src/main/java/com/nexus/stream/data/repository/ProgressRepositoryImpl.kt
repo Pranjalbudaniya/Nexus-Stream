@@ -61,6 +61,13 @@ class ProgressRepositoryImpl(
         }
     }
 
+    override fun observeWatchedMovieIds(): Flow<Set<String>> =
+        progressDao
+            .observeWatchedMovieIds()
+            .map { it.toSet() }
+            .distinctUntilChanged()
+            .flowOn(dispatcher)
+
     override fun observeEpisodeProgress(metaId: String): Flow<Map<String, EpisodeProgress>> =
         progressDao
             .observeByMeta(metaId)

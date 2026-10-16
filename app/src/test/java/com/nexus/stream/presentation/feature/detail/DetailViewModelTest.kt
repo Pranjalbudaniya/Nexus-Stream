@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.PosterShape
@@ -20,6 +21,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -76,7 +78,8 @@ class DetailViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        coEvery { libraryRepository.observeWatchlistIds() } returns flowOf(emptySet())
+        coEvery { libraryRepository.observeListStatuses() } returns flowOf(emptyMap())
+        coEvery { libraryRepository.setStatus(any(), any()) } returns Unit
         coEvery { progressRepository.observeEpisodeProgress(any()) } returns flowOf(emptyMap())
     }
 
@@ -143,7 +146,7 @@ class DetailViewModelTest {
             val meta = testMeta("m1")
             coEvery { metaRepository.getMeta("movie", "m1", false) } returns
                 Outcome.Success(MetaResult(meta, MetaSource.FRESH))
-            coEvery { libraryRepository.observeWatchlistIds() } returns flowOf(setOf("m1"))
+            coEvery { libraryRepository.observeListStatuses() } returns flowOf(mapOf("m1" to ListStatus.PLAN_TO_WATCH))
 
             val viewModel = createViewModel("movie", "m1")
             assertTrue((viewModel.uiState.value as DetailUiState.Content).inWatchlist)
@@ -151,8 +154,34 @@ class DetailViewModelTest {
             viewModel.onEvent(DetailEvent.ToggleWatchlist)
 
             coVerify(exactly = 1) {
-                libraryRepository.toggleWatchlist(meta.toPreview())
+                libraryRepository.setStatus(meta.toPreview(), null)
             }
+        }
+
+    @Test
+    fun `SetListStatus applies a status and updates button label`() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            val statusesFlow = MutableStateFlow<Map<String, ListStatus>>(emptyMap())
+            coEvery { libraryRepository.observeListStatuses() } returns statusesFlow
+
+            val viewModel = createViewModel("movie", "m1")
+            val initial = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(null, initial.listStatus)
+            assertFalse(initial.inWatchlist)
+
+            viewModel.onEvent(DetailEvent.SetListStatus(ListStatus.WATCHING))
+
+            coVerify(exactly = 1) {
+                libraryRepository.setStatus(meta.toPreview(), ListStatus.WATCHING)
+            }
+
+            statusesFlow.value = mapOf("m1" to ListStatus.WATCHING)
+            val updated = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(ListStatus.WATCHING, updated.listStatus)
+            assertTrue(updated.inWatchlist)
         }
 
     @Test

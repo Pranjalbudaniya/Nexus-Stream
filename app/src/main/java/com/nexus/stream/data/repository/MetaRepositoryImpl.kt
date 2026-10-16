@@ -59,7 +59,7 @@ class MetaRepositoryImpl(
 
             val candidates =
                 addonRepository
-                    .observeEnabled()
+                    .observeActive()
                     .first()
                     .filter { it.manifest.supports("meta", type, id) }
                     .sortedBy { it.position }

@@ -7,11 +7,14 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.CatalogSpec
 import com.nexus.stream.domain.model.ContinueWatchingItem
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
+import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
@@ -44,10 +47,13 @@ class HomeViewModelTest {
     private val homeRowLoader: HomeRowLoader = mockk(relaxed = true)
     private val libraryRepository: LibraryRepository = mockk(relaxed = true)
     private val progressRepository: ProgressRepository = mockk(relaxed = true)
+    private val contentPrefsRepository: ContentPrefsRepository = mockk()
 
     private val allAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
     private val enabledAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
-    private val watchlistFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val familyModeFlow = MutableStateFlow(true)
+    private val listStatusesFlow = MutableStateFlow<Map<String, ListStatus>>(emptyMap())
+    private val watchedMovieIdsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val continueWatchingFlow = MutableStateFlow<List<ContinueWatchingItem>>(emptyList())
 
     @Before
@@ -55,8 +61,12 @@ class HomeViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { addonRepository.observeAll() } returns allAddonsFlow
         every { addonRepository.observeEnabled() } returns enabledAddonsFlow
-        every { libraryRepository.observeWatchlistIds() } returns watchlistFlow
+        every { addonRepository.observeActive() } returns enabledAddonsFlow
+        every { contentPrefsRepository.familyMode } returns familyModeFlow
+        every { libraryRepository.observeListStatuses() } returns listStatusesFlow
+        every { progressRepository.observeWatchedMovieIds() } returns watchedMovieIdsFlow
         every { progressRepository.observeContinueWatching() } returns continueWatchingFlow
+        coEvery { libraryRepository.setStatus(any(), any()) } returns Unit
         coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
     }
 
@@ -72,6 +82,7 @@ class HomeViewModelTest {
             homeRowLoader = homeRowLoader,
             libraryRepository = libraryRepository,
             progressRepository = progressRepository,
+            contentPrefsRepository = contentPrefsRepository,
             dispatcher = testDispatcher,
         )
 
@@ -319,6 +330,7 @@ class HomeViewModelTest {
         id: String,
         name: String,
         background: String? = null,
+        genres: List<String> = emptyList(),
     ): MetaPreview =
         MetaPreview(
             id = id,
@@ -331,7 +343,7 @@ class HomeViewModelTest {
             description = null,
             releaseInfo = null,
             imdbRating = null,
-            genres = emptyList(),
+            genres = genres,
         )
 
     @Test
@@ -359,7 +371,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun toggleWatchlist_callsRepositoryOnce() =
+    fun hero_tick_adds_as_Plan_to_watch() =
         runTest(testDispatcher) {
             val viewModel = createViewModel()
             val item = createMetaPreview("tt1", "Test")
@@ -367,7 +379,100 @@ class HomeViewModelTest {
             viewModel.onEvent(HomeEvent.ToggleWatchlist(item))
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { libraryRepository.toggleWatchlist(item) }
+            coVerify(exactly = 1) { libraryRepository.setStatus(item, ListStatus.PLAN_TO_WATCH) }
+        }
+
+    @Test
+    fun tick_on_a_Watching_title_asks_for_confirmation_and_Cancel_changes_nothing() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+            val item = createMetaPreview("tt1", "Test")
+
+            listStatusesFlow.value = mapOf("tt1" to ListStatus.WATCHING)
+            advanceUntilIdle()
+
+            viewModel.onEvent(HomeEvent.ToggleWatchlist(item))
+            advanceUntilIdle()
+
+            assertEquals(item to ListStatus.WATCHING, viewModel.uiState.value.confirmRemoveItem)
+            coVerify(exactly = 0) { libraryRepository.setStatus(item, null) }
+
+            viewModel.onEvent(HomeEvent.DismissRemoveDialog)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.confirmRemoveItem)
+            coVerify(exactly = 0) { libraryRepository.setStatus(item, null) }
+        }
+
+    @Test
+    fun posterMarks_follows_the_flows() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            listStatusesFlow.value = mapOf("s1" to ListStatus.COMPLETED, "s2" to ListStatus.WATCHING)
+            watchedMovieIdsFlow.value = setOf("m1")
+            advanceUntilIdle()
+
+            val marks = viewModel.uiState.value.posterMarks
+            assertEquals(PosterMark.WATCHED, marks["s1"])
+            assertEquals(PosterMark.WATCHING, marks["s2"])
+            assertEquals(PosterMark.WATCHED, marks["m1"])
+        }
+
+    @Test
+    fun adult_items_are_dropped_and_an_emptied_row_is_hidden_when_Family_mode_is_on() =
+        runTest(testDispatcher) {
+            val addon = createAddon("u1", type = "movie", catalogId = "top")
+
+            val adultItem = createMetaPreview("a1", "Porn Film")
+            val safeItem = createMetaPreview("s1", "Safe Movie")
+
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(listOf(adultItem, safeItem))
+
+            val viewModel = createViewModel()
+            allAddonsFlow.value = listOf(addon)
+            enabledAddonsFlow.value = listOf(addon)
+            advanceUntilIdle()
+
+            val loadedRows = viewModel.uiState.value.rows
+            assertEquals(1, loadedRows.size)
+            val items = (loadedRows[0].status as RowStatus.Loaded).items
+            assertEquals(listOf(safeItem), items)
+        }
+
+    @Test
+    fun turning_Family_mode_off_restores_adult_items_without_refetch() =
+        runTest(testDispatcher) {
+            val addon = createAddon("u1", type = "movie", catalogId = "top")
+
+            val adultItem = createMetaPreview("a1", "Adult Movie", genres = listOf("Erotica"))
+            val safeItem = createMetaPreview("s1", "Safe Movie")
+
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(listOf(adultItem, safeItem))
+
+            val viewModel = createViewModel()
+            allAddonsFlow.value = listOf(addon)
+            enabledAddonsFlow.value = listOf(addon)
+            advanceUntilIdle()
+
+            assertEquals(
+                1,
+                (
+                    viewModel.uiState.value.rows[0]
+                        .status as RowStatus.Loaded
+                ).items.size,
+            )
+
+            familyModeFlow.value = false
+            advanceUntilIdle()
+
+            val items =
+                (
+                    viewModel.uiState.value.rows[0]
+                        .status as RowStatus.Loaded
+                ).items
+            assertEquals(2, items.size)
         }
 
     @Test

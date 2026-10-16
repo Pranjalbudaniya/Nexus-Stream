@@ -10,6 +10,8 @@ interface AddonRepository {
 
     fun observeEnabled(): Flow<List<Addon>>
 
+    fun observeActive(): Flow<List<Addon>>
+
     suspend fun install(transportUrl: String): Outcome<Addon>
 
     suspend fun refresh(transportUrl: String): Outcome<Addon>

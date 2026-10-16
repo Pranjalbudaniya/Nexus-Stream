@@ -2,6 +2,7 @@ package com.nexus.stream.di
 
 import android.content.Context
 import androidx.room.Room
+import com.nexus.stream.data.local.db.MIGRATION_1_2
 import com.nexus.stream.data.local.db.NexusDatabase
 import com.nexus.stream.data.local.db.RoomTransactionRunner
 import com.nexus.stream.data.local.db.TransactionRunner
@@ -31,7 +32,8 @@ object DatabaseModule {
                 context,
                 NexusDatabase::class.java,
                 DATABASE_NAME,
-            ).build()
+            ).addMigrations(MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideAddonDao(database: NexusDatabase): AddonDao = database.addonDao()

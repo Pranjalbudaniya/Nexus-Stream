@@ -61,4 +61,7 @@ interface ProgressDao {
 
     @Query("DELETE FROM watch_progress WHERE metaId = :metaId AND watched = 0")
     suspend fun clearInProgress(metaId: String)
+
+    @Query("SELECT metaId FROM watch_progress WHERE watched = 1 AND type = 'movie'")
+    fun observeWatchedMovieIds(): Flow<List<String>>
 }

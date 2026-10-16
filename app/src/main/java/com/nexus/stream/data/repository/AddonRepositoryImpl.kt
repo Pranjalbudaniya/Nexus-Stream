@@ -14,19 +14,24 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
+@Suppress("LongParameterList")
 class AddonRepositoryImpl(
     private val addonDao: AddonDao,
     private val remoteDataSource: AddonRemoteDataSource,
     private val transactionRunner: TransactionRunner,
     private val json: Json,
+    private val contentPrefsRepository: ContentPrefsRepository,
     @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
     private val clock: () -> Long,
 ) : AddonRepository {
@@ -36,12 +41,14 @@ class AddonRepositoryImpl(
         remoteDataSource: AddonRemoteDataSource,
         transactionRunner: TransactionRunner,
         json: Json,
+        contentPrefsRepository: ContentPrefsRepository,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
     ) : this(
         addonDao = addonDao,
         remoteDataSource = remoteDataSource,
         transactionRunner = transactionRunner,
         json = json,
+        contentPrefsRepository = contentPrefsRepository,
         dispatcher = dispatcher,
         clock = { System.currentTimeMillis() },
     )
@@ -54,6 +61,11 @@ class AddonRepositoryImpl(
         }
 
     override fun observeEnabled(): Flow<List<Addon>> = observeAll().map { addons -> addons.filter { it.enabled } }
+
+    override fun observeActive(): Flow<List<Addon>> =
+        combine(observeEnabled(), contentPrefsRepository.familyMode) { enabled, familyMode ->
+            if (familyMode) enabled.filter { !it.isAdult } else enabled
+        }.distinctUntilChanged()
 
     override fun toString(): String = "AddonRepositoryImpl"
 

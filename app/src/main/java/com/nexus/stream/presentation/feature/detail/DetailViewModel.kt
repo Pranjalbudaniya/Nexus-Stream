@@ -7,6 +7,7 @@ import androidx.navigation.toRoute
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.SeasonGroup
@@ -50,6 +51,7 @@ sealed interface DetailUiState {
         val meta: MetaDetail,
         val source: MetaSource,
         val inWatchlist: Boolean = false,
+        val listStatus: ListStatus? = null,
         val isSynopsisExpanded: Boolean = false,
         val seasons: List<SeasonGroup> = emptyList(),
         val selectedSeason: Int? = null,
@@ -79,6 +81,10 @@ sealed interface DetailEvent {
     data object Refresh : DetailEvent
 
     data object ToggleWatchlist : DetailEvent
+
+    data class SetListStatus(
+        val status: ListStatus?,
+    ) : DetailEvent
 
     data object PlayMain : DetailEvent
 
@@ -276,7 +282,12 @@ class DetailViewModel(
             }
 
             DetailEvent.ToggleWatchlist -> {
-                viewModelScope.launch { libraryRepository.toggleWatchlist(content.meta.toPreview()) }
+                val newStatus = if (content.inWatchlist) null else ListStatus.PLAN_TO_WATCH
+                viewModelScope.launch { libraryRepository.setStatus(content.meta.toPreview(), newStatus) }
+            }
+
+            is DetailEvent.SetListStatus -> {
+                viewModelScope.launch { libraryRepository.setStatus(content.meta.toPreview(), event.status) }
             }
 
             DetailEvent.ToggleSynopsis -> {
@@ -394,7 +405,8 @@ class DetailViewModel(
             val msg =
                 when (action) {
                     is WatchAction.ToggleWatchlist -> {
-                        libraryRepository.toggleWatchlist(content.meta.toPreview())
+                        val status = if (action.add) ListStatus.PLAN_TO_WATCH else null
+                        libraryRepository.setStatus(content.meta.toPreview(), status)
                         if (action.add) "Added to watchlist" else "Removed from watchlist"
                     }
 
@@ -502,12 +514,13 @@ class DetailViewModel(
     private fun observeUserData() {
         viewModelScope.launch {
             combine(
-                libraryRepository.observeWatchlistIds(),
+                libraryRepository.observeListStatuses(),
                 progressRepository.observeEpisodeProgress(id),
-            ) { watchlistIds, progressMap ->
-                val inWatchlist = watchlistIds.contains(id)
-                Pair(inWatchlist, progressMap)
-            }.collect { (inWatchlist, progressMap) ->
+            ) { statuses, progressMap ->
+                val listStatus = statuses[id]
+                val inWatchlist = listStatus != null
+                Triple(inWatchlist, listStatus, progressMap)
+            }.collect { (inWatchlist, listStatus, progressMap) ->
                 _uiState.update { current ->
                     if (current !is DetailUiState.Content) return@update current
                     val selectedSeason =
@@ -517,6 +530,7 @@ class DetailViewModel(
 
                     current.copy(
                         inWatchlist = inWatchlist,
+                        listStatus = listStatus,
                         episodeProgress = progressMap,
                         selectedSeason = selectedSeason,
                         playActionTitle = playState.title,

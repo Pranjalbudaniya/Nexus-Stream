@@ -26,4 +26,6 @@ interface ProgressRepository {
     )
 
     suspend fun clearInProgress(metaId: String)
+
+    fun observeWatchedMovieIds(): Flow<Set<String>>
 }
