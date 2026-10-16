@@ -73,4 +73,9 @@ class HeroPagingTest {
             )
         assertEquals("", allMissing)
     }
+
+    @Test
+    fun `hero auto advance timer is 10 seconds`() {
+        assertEquals(10_000L, HERO_AUTO_ADVANCE_MS)
+    }
 }

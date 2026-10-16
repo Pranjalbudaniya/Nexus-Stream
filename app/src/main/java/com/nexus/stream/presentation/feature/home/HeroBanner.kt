@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -64,7 +65,17 @@ import com.nexus.stream.presentation.theme.NexusTheme
 import kotlinx.coroutines.delay
 
 const val HERO_ASPECT: Float = 0.8f
-private const val AUTO_ADVANCE_DELAY_MS: Long = 6_000L
+const val HERO_AUTO_ADVANCE_MS: Long = 10_000L
+
+private const val SCRIM_START_FRACTION: Float = 0.45f
+private const val SCRIM_END_FRACTION: Float = 1.0f
+private const val SCRIM_ALPHA: Float = 0.75f
+
+private val DOT_SIZE_SELECTED: Dp = 8.dp
+private val DOT_SIZE_UNSELECTED: Dp = 6.dp
+private val LOGO_MAX_HEIGHT: Dp = 56.dp
+private val LOGO_MAX_WIDTH: Dp = 240.dp
+private val CHECK_ICON_SIZE: Dp = 18.dp
 
 fun nextHeroPage(
     current: Int,
@@ -112,7 +123,9 @@ fun HeroSkeleton(modifier: Modifier = Modifier) {
         modifier =
             modifier
                 .fillMaxWidth()
+                .padding(horizontal = NexusTheme.spacing.lg)
                 .aspectRatio(HERO_ASPECT)
+                .clip(NexusTheme.shapes.card)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     )
 }
@@ -142,7 +155,7 @@ fun HeroBanner(
         LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress, items.size) {
             if (pagerState.isScrollInProgress) return@LaunchedEffect
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                delay(AUTO_ADVANCE_DELAY_MS)
+                delay(HERO_AUTO_ADVANCE_MS)
                 if (!pagerState.isScrollInProgress) {
                     val nextPage = nextHeroPage(pagerState.currentPage, items.size)
                     pagerState.animateScrollToPage(nextPage)
@@ -151,42 +164,46 @@ fun HeroBanner(
         }
     }
 
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .aspectRatio(HERO_ASPECT),
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-        ) { pageIndex ->
-            val item = items[pageIndex]
-            HeroPage(
-                item = item,
-                inWatchlist = inWatchlist(item.id),
-                onDetails = { onDetails(item.type, item.id) },
-                onToggleWatchlist = { onToggleWatchlist(item) },
-            )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = NexusTheme.spacing.lg)
+                    .aspectRatio(HERO_ASPECT)
+                    .clip(NexusTheme.shapes.card),
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { pageIndex ->
+                val item = items[pageIndex]
+                HeroPage(
+                    item = item,
+                    inWatchlist = inWatchlist(item.id),
+                    onDetails = { onDetails(item.type, item.id) },
+                    onToggleWatchlist = { onToggleWatchlist(item) },
+                )
+            }
         }
 
         if (items.size > 1) {
+            Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
             Row(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = NexusTheme.spacing.xs),
                 horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(items.size) { index ->
                     val isSelected = pagerState.currentPage == index
-                    val dotSize = if (isSelected) 8.dp else 6.dp
+                    val dotSize = if (isSelected) DOT_SIZE_SELECTED else DOT_SIZE_UNSELECTED
                     val dotColor =
                         if (isSelected) {
                             MaterialTheme.colorScheme.primary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     Box(
                         modifier =
@@ -213,13 +230,12 @@ private fun HeroPage(
     var isBackdropError by remember(item.background) { mutableStateOf(false) }
     var isLogoError by remember(item.logo) { mutableStateOf(false) }
 
-    val backgroundColor = MaterialTheme.colorScheme.background
     val scrimBrush =
-        remember(backgroundColor) {
+        remember {
             Brush.verticalGradient(
                 0.0f to Color.Transparent,
-                0.4f to Color.Transparent,
-                1.0f to backgroundColor,
+                SCRIM_START_FRACTION to Color.Transparent,
+                SCRIM_END_FRACTION to Color.Black.copy(alpha = SCRIM_ALPHA),
             )
         }
 
@@ -271,8 +287,7 @@ private fun HeroPage(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
-                    .padding(horizontal = NexusTheme.spacing.md, vertical = NexusTheme.spacing.lg)
-                    .padding(bottom = NexusTheme.spacing.md),
+                    .padding(NexusTheme.spacing.lg),
             verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
         ) {
             if (!item.logo.isNullOrBlank() && !isLogoError) {
@@ -288,8 +303,8 @@ private fun HeroPage(
                     alignment = Alignment.BottomStart,
                     modifier =
                         Modifier
-                            .heightIn(max = 56.dp)
-                            .widthIn(max = 240.dp),
+                            .heightIn(max = LOGO_MAX_HEIGHT)
+                            .widthIn(max = LOGO_MAX_WIDTH),
                     onError = { isLogoError = true },
                 )
             } else {
@@ -297,7 +312,7 @@ private fun HeroPage(
                     text = item.name,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -308,7 +323,7 @@ private fun HeroPage(
                 Text(
                     text = infoLine,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -318,7 +333,7 @@ private fun HeroPage(
                 Text(
                     text = item.description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -362,7 +377,7 @@ private fun HeroPage(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(CHECK_ICON_SIZE),
                         )
                         Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
                     }
@@ -404,6 +419,19 @@ internal fun HeroBannerPreview() {
                         releaseInfo = "2024",
                         imdbRating = "8.6",
                         genres = listOf("Action", "Adventure", "Sci-Fi"),
+                    ),
+                    MetaPreview(
+                        id = "2",
+                        type = "movie",
+                        name = "Oppenheimer",
+                        poster = null,
+                        posterShape = PosterShape.POSTER,
+                        background = null,
+                        logo = null,
+                        description = "The story of J. Robert Oppenheimer's role in the Manhattan Project.",
+                        releaseInfo = "2023",
+                        imdbRating = "8.9",
+                        genres = listOf("Biography", "Drama", "History"),
                     ),
                 ),
             inWatchlist = { false },

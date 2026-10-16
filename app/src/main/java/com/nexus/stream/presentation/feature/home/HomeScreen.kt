@@ -127,12 +127,7 @@ internal fun HomeScreenContent(
                 }
 
                 else -> {
-                    val topPadding =
-                        if (uiState.isFirstRowLoading || uiState.hero.isNotEmpty()) {
-                            0.dp
-                        } else {
-                            NexusTheme.spacing.sm
-                        }
+                    val topPadding = NexusTheme.spacing.sm
 
                     LazyColumn(
                         state = lazyListState,
