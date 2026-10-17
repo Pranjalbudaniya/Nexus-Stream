@@ -53,6 +53,7 @@ fun NexusNavHost(
             AddonManagerScreen(
                 onNavigateUp = { navController.navigateUp() },
                 prefillUrl = args.prefillUrl,
+                storeCategory = args.storeCategory,
             )
         }
         composable<Detail> {

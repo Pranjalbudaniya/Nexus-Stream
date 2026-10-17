@@ -47,7 +47,11 @@ fun NexusApp(
         }
     }
 
-    StreamsSheetHost {
+    StreamsSheetHost(
+        onNavigateToStore = { category ->
+            navController.navigate(Addons(storeCategory = category))
+        },
+    ) {
         PosterActionsHost(
             onNavigateToDetail = { type, id ->
                 navController.navigate(Detail(type = type, id = id))

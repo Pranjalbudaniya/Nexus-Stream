@@ -6,6 +6,7 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
+import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -28,9 +29,11 @@ import org.junit.Test
 class SettingsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val contentPrefsRepository = mockk<ContentPrefsRepository>(relaxed = true)
+    private val playerPrefsRepository = mockk<PlayerPrefsRepository>(relaxed = true)
     private val addonRepository = mockk<AddonRepository>()
 
     private val familyModeFlow = MutableStateFlow(true)
+    private val quickPlayFlow = MutableStateFlow(false)
     private val addonsFlow = MutableStateFlow<List<Addon>>(emptyList())
 
     private val adultAddon =
@@ -95,6 +98,7 @@ class SettingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { contentPrefsRepository.familyMode } returns familyModeFlow
+        every { playerPrefsRepository.quickPlay } returns quickPlayFlow
         every { addonRepository.observeAll() } returns addonsFlow
     }
 
@@ -107,11 +111,12 @@ class SettingsViewModelTest {
     fun `initial state reflects family mode and hidden adult count`() =
         runTest {
             addonsFlow.value = listOf(adultAddon, standardAddon)
-            val viewModel = SettingsViewModel(contentPrefsRepository, addonRepository)
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.familyMode)
             assertEquals(1, viewModel.uiState.value.hiddenAdultAddonsCount)
+            assertFalse(viewModel.uiState.value.quickPlay)
         }
 
     @Test
@@ -119,7 +124,7 @@ class SettingsViewModelTest {
         runTest {
             familyModeFlow.value = false
             addonsFlow.value = listOf(adultAddon, standardAddon)
-            val viewModel = SettingsViewModel(contentPrefsRepository, addonRepository)
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.familyMode)
@@ -129,12 +134,34 @@ class SettingsViewModelTest {
     @Test
     fun `SetFamilyMode event updates repository`() =
         runTest {
-            val viewModel = SettingsViewModel(contentPrefsRepository, addonRepository)
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
             advanceUntilIdle()
 
             viewModel.onEvent(SettingsEvent.SetFamilyMode(false))
             advanceUntilIdle()
 
             coVerify { contentPrefsRepository.setFamilyMode(false) }
+        }
+
+    @Test
+    fun `quickPlay reflects repository value`() =
+        runTest {
+            quickPlayFlow.value = true
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.quickPlay)
+        }
+
+    @Test
+    fun `SetQuickPlay event updates repository`() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            viewModel.onEvent(SettingsEvent.SetQuickPlay(true))
+            advanceUntilIdle()
+
+            coVerify { playerPrefsRepository.setQuickPlay(true) }
         }
 }

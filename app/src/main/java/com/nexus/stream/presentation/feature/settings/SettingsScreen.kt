@@ -171,6 +171,48 @@ internal fun SettingsContent(
                 }
             }
 
+            Text(
+                text = stringResource(R.string.settings_player_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = spacing.xs),
+            )
+
+            NexusCard(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(spacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f).padding(end = spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_quick_play_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_quick_play_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = uiState.quickPlay,
+                        onCheckedChange = { checked ->
+                            onEvent(SettingsEvent.SetQuickPlay(checked))
+                        },
+                    )
+                }
+            }
+
             NexusCard(
                 modifier =
                     Modifier
@@ -243,7 +285,7 @@ internal fun SettingsContent(
 internal fun SettingsScreenLightPreview() {
     NexusTheme {
         SettingsContent(
-            uiState = SettingsUiState(familyMode = true, hiddenAdultAddonsCount = 2),
+            uiState = SettingsUiState(familyMode = true, hiddenAdultAddonsCount = 2, quickPlay = false),
             onEvent = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
@@ -256,7 +298,7 @@ internal fun SettingsScreenLightPreview() {
 internal fun SettingsScreenDarkPreview() {
     NexusTheme {
         SettingsContent(
-            uiState = SettingsUiState(familyMode = false, hiddenAdultAddonsCount = 0),
+            uiState = SettingsUiState(familyMode = false, hiddenAdultAddonsCount = 0, quickPlay = true),
             onEvent = {},
             onNavigateUp = {},
             onNavigateToAddons = {},

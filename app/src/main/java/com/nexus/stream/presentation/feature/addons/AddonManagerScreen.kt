@@ -67,6 +67,7 @@ import com.nexus.stream.presentation.theme.NexusTheme
 fun AddonManagerScreen(
     onNavigateUp: () -> Unit,
     prefillUrl: String? = null,
+    storeCategory: String? = null,
     viewModel: AddonManagerViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
 ) {
@@ -80,6 +81,17 @@ fun AddonManagerScreen(
         if (!prefillUrl.isNullOrBlank() && !handledPrefill) {
             handledPrefill = true
             viewModel.onEvent(AddonManagerEvent.OpenAdd(prefill = prefillUrl, autoCheck = true))
+        }
+    }
+
+    var handledStoreCategory by rememberSaveable(storeCategory) { mutableStateOf(false) }
+    LaunchedEffect(storeCategory) {
+        if (!storeCategory.isNullOrBlank() && !handledStoreCategory) {
+            handledStoreCategory = true
+            val category = runCatching { AddonCategory.valueOf(storeCategory.uppercase()) }.getOrNull()
+            if (category != null) {
+                viewModel.onEvent(AddonManagerEvent.OpenStore(category))
+            }
         }
     }
 

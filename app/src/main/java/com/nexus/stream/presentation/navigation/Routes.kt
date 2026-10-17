@@ -20,6 +20,7 @@ data object Settings
 @Serializable
 data class Addons(
     val prefillUrl: String? = null,
+    val storeCategory: String? = null,
 )
 
 @Serializable
