@@ -3,16 +3,20 @@ package com.nexus.stream.presentation.feature.addons
 import com.nexus.stream.R
 import com.nexus.stream.data.remote.addon.AddonUrlBuilder
 import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.AddonCategory
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.CINEMETA_URL
+import com.nexus.stream.domain.model.CatalogSpec
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
+import com.nexus.stream.domain.usecase.RefreshAllAddons
+import com.nexus.stream.domain.usecase.RefreshSummary
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -40,6 +44,7 @@ class AddonManagerViewModelTest {
     private val addonRepository = mockk<AddonRepository>()
     private val ensureDefaultAddons = mockk<EnsureDefaultAddons>()
     private val contentPrefsRepository = mockk<ContentPrefsRepository>()
+    private val refreshAllAddons = mockk<RefreshAllAddons>()
     private val familyModeFlow = MutableStateFlow(true)
 
     private val sampleManifest =
@@ -53,11 +58,32 @@ class AddonManagerViewModelTest {
             types = listOf("movie"),
             idPrefixes = null,
             resources = listOf(ResourceSpec("catalog", null, null)),
-            catalogs = emptyList(),
+            catalogs = listOf(CatalogSpec("movie", "top", "Top", emptyList())),
             behaviorHints =
                 ManifestHints(
                     adult = false,
                     p2p = false,
+                    configurable = false,
+                    configurationRequired = false,
+                ),
+        )
+
+    private val streamsManifest =
+        AddonManifest(
+            id = "org.stream.provider",
+            version = "1.0.0",
+            name = "Torrent Streams",
+            description = "Fast streams",
+            logo = null,
+            background = null,
+            types = listOf("movie"),
+            idPrefixes = null,
+            resources = listOf(ResourceSpec("stream", null, null)),
+            catalogs = emptyList(),
+            behaviorHints =
+                ManifestHints(
+                    adult = false,
+                    p2p = true,
                     configurable = false,
                     configurationRequired = false,
                 ),
@@ -96,12 +122,22 @@ class AddonManagerViewModelTest {
             installedAt = 1000L,
         )
 
+    private val streamsAddon =
+        Addon(
+            transportUrl = "https://streams.addon.local/manifest.json",
+            manifest = streamsManifest,
+            enabled = true,
+            position = 1,
+            source = AddonSource.LOCAL,
+            installedAt = 1500L,
+        )
+
     private val adultAddon =
         Addon(
             transportUrl = "https://adult.addon.local/manifest.json",
             manifest = adultManifest,
             enabled = false,
-            position = 1,
+            position = 2,
             source = AddonSource.LOCAL,
             installedAt = 2000L,
         )
@@ -112,6 +148,7 @@ class AddonManagerViewModelTest {
         every { addonRepository.observeAll() } returns flowOf(emptyList())
         every { contentPrefsRepository.familyMode } returns familyModeFlow
         coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
+        coEvery { refreshAllAddons(any()) } returns RefreshSummary(updated = 0, failed = emptyList())
     }
 
     @After
@@ -119,7 +156,13 @@ class AddonManagerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = AddonManagerViewModel(addonRepository, ensureDefaultAddons, contentPrefsRepository)
+    private fun createViewModel() =
+        AddonManagerViewModel(
+            addonRepository = addonRepository,
+            ensureDefaultAddons = ensureDefaultAddons,
+            contentPrefsRepository = contentPrefsRepository,
+            refreshAllAddons = refreshAllAddons,
+        )
 
     @Test
     fun init_seedsSuccessfully_setsSeedFailedFalse() =
@@ -267,21 +310,97 @@ class AddonManagerViewModelTest {
         }
 
     @Test
-    fun reorder_callsRepositoryWithCorrectPosition() =
+    fun searchAndCategoryChips_filterAddonsAndCount() =
         runTest {
-            coEvery { addonRepository.move(sampleAddon.transportUrl, -1) } returns Unit
-            coEvery { addonRepository.move(sampleAddon.transportUrl, 1) } returns Unit
+            every { addonRepository.observeAll() } returns flowOf(listOf(sampleAddon, streamsAddon))
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // In "All" mode initially
+            assertEquals(2, viewModel.uiState.value.flattenedVisibleAddons.size)
+            assertEquals(1, viewModel.uiState.value.categoryCounts[AddonCategory.CATALOGS])
+            assertEquals(1, viewModel.uiState.value.categoryCounts[AddonCategory.STREAMS])
+
+            // Search filtering
+            viewModel.onEvent(AddonManagerEvent.SearchQueryChanged("Torrent"))
+            assertEquals(1, viewModel.uiState.value.flattenedVisibleAddons.size)
+            assertEquals(
+                "Torrent Streams",
+                viewModel.uiState.value.flattenedVisibleAddons
+                    .first()
+                    .manifest.name,
+            )
+
+            viewModel.onEvent(AddonManagerEvent.ClearSearch)
+            assertEquals(2, viewModel.uiState.value.flattenedVisibleAddons.size)
+
+            // Category filtering
+            viewModel.onEvent(AddonManagerEvent.SelectCategory(AddonCategory.STREAMS))
+            assertEquals(1, viewModel.uiState.value.visibleAddons.size)
+            assertEquals(
+                streamsAddon.transportUrl,
+                viewModel.uiState.value.visibleAddons
+                    .first()
+                    .transportUrl,
+            )
+
+            viewModel.onEvent(AddonManagerEvent.SelectCategory(null))
+            assertEquals(2, viewModel.uiState.value.flattenedVisibleAddons.size)
+        }
+
+    @Test
+    fun reorder_usesVisibleNeighborPosition() =
+        runTest {
+            coEvery { addonRepository.move(any(), any()) } returns Unit
+            every { addonRepository.observeAll() } returns flowOf(listOf(sampleAddon, streamsAddon))
 
             val viewModel = createViewModel()
             advanceUntilIdle()
 
+            // When in "All" mode, sampleAddon is first (pos 0), streamsAddon is second (pos 1)
+            // MoveUp on first addon has no neighbor above -> ignored
             viewModel.onEvent(AddonManagerEvent.MoveUp(sampleAddon))
             advanceUntilIdle()
-            coVerify(exactly = 1) { addonRepository.move(sampleAddon.transportUrl, -1) }
+            coVerify(exactly = 0) { addonRepository.move(sampleAddon.transportUrl, any()) }
 
+            // MoveDown on first addon swaps with streamsAddon (position 1)
             viewModel.onEvent(AddonManagerEvent.MoveDown(sampleAddon))
             advanceUntilIdle()
             coVerify(exactly = 1) { addonRepository.move(sampleAddon.transportUrl, 1) }
+
+            // MoveUp on streamsAddon swaps with sampleAddon (position 0)
+            viewModel.onEvent(AddonManagerEvent.MoveUp(streamsAddon))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { addonRepository.move(streamsAddon.transportUrl, 0) }
+
+            // MoveDown on last addon has no neighbor below -> ignored
+            viewModel.onEvent(AddonManagerEvent.MoveDown(streamsAddon))
+            advanceUntilIdle()
+            coVerify(exactly = 0) { addonRepository.move(streamsAddon.transportUrl, -1) }
+        }
+
+    @Test
+    fun refreshAll_tracksProgressAndUpdatesFailedSet() =
+        runTest {
+            var capturedProgress: ((Int, Int) -> Unit)? = null
+            coEvery { refreshAllAddons(any()) } coAnswers {
+                capturedProgress = firstArg()
+                capturedProgress?.invoke(1, 2)
+                RefreshSummary(updated = 1, failed = listOf("Failing Addon"))
+            }
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.onEvent(AddonManagerEvent.RefreshAll)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { refreshAllAddons(any()) }
+            assertFalse(viewModel.uiState.value.isRefreshingAll)
+            assertTrue(
+                viewModel.uiState.value.failedRefreshAddons
+                    .contains("Failing Addon"),
+            )
         }
 
     @Test

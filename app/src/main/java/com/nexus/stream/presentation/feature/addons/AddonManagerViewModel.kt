@@ -7,6 +7,7 @@ import com.nexus.stream.R
 import com.nexus.stream.data.remote.addon.AddonUrlBuilder
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonCapabilities
+import com.nexus.stream.domain.model.AddonCategory
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.CINEMETA_URL
 import com.nexus.stream.domain.model.Outcome
@@ -14,7 +15,10 @@ import com.nexus.stream.domain.model.capabilities
 import com.nexus.stream.domain.model.isUsable
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
+import com.nexus.stream.domain.usecase.AddonFilters
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
+import com.nexus.stream.domain.usecase.RefreshAllAddons
+import com.nexus.stream.domain.usecase.toDisplayHost
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,13 +61,37 @@ sealed interface AddSheetState {
 
 data class AddonManagerUiState(
     val addons: List<Addon> = emptyList(),
+    val searchQuery: String = "",
+    val selectedCategory: AddonCategory? = null,
     val capabilities: AddonCapabilities = AddonCapabilities(hasCatalogs = false, hasStreams = false),
     val seedLoading: Boolean = false,
     val seedFailed: Boolean = false,
     val addSheetState: AddSheetState = AddSheetState.Closed,
     val removeTarget: Addon? = null,
     val isFamilyMode: Boolean = true,
-)
+    val isRefreshingAll: Boolean = false,
+    val refreshProgress: Pair<Int, Int>? = null,
+    val failedRefreshAddons: Set<String> = emptySet(),
+    val isStoreOpen: Boolean = false,
+    val storeInitialCategory: AddonCategory? = null,
+) {
+    val visibleAddons: List<Addon>
+        get() = AddonFilters.filterInstalled(addons, searchQuery, selectedCategory)
+
+    val sections: List<Pair<AddonCategory, List<Addon>>>
+        get() = AddonFilters.groupBySection(visibleAddons)
+
+    val categoryCounts: Map<AddonCategory, Int>
+        get() = AddonFilters.categoryCounts(addons)
+
+    val flattenedVisibleAddons: List<Addon>
+        get() =
+            if (selectedCategory == null) {
+                sections.flatMap { it.second }
+            } else {
+                visibleAddons
+            }
+}
 
 sealed interface AddonManagerEvent {
     data object RetrySeed : AddonManagerEvent
@@ -84,6 +112,24 @@ sealed interface AddonManagerEvent {
     data object Install : AddonManagerEvent
 
     data object DismissAddSheet : AddonManagerEvent
+
+    data class SearchQueryChanged(
+        val query: String,
+    ) : AddonManagerEvent
+
+    data object ClearSearch : AddonManagerEvent
+
+    data class SelectCategory(
+        val category: AddonCategory?,
+    ) : AddonManagerEvent
+
+    data object RefreshAll : AddonManagerEvent
+
+    data class OpenStore(
+        val initialCategory: AddonCategory? = null,
+    ) : AddonManagerEvent
+
+    data object DismissStore : AddonManagerEvent
 
     data class SetEnabled(
         val addon: Addon,
@@ -141,6 +187,7 @@ class AddonManagerViewModel
         private val addonRepository: AddonRepository,
         private val ensureDefaultAddons: EnsureDefaultAddons,
         private val contentPrefsRepository: ContentPrefsRepository,
+        private val refreshAllAddons: RefreshAllAddons,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(AddonManagerUiState())
         val uiState: StateFlow<AddonManagerUiState> = _uiState.asStateFlow()
@@ -178,22 +225,50 @@ class AddonManagerViewModel
                 AddonManagerEvent.Check,
                 AddonManagerEvent.Install,
                 AddonManagerEvent.DismissAddSheet,
-                -> handleAddSheetEvent(event)
+                -> {
+                    handleAddSheetEvent(event)
+                }
 
-                is AddonManagerEvent.SetEnabled,
+                is AddonManagerEvent.SearchQueryChanged,
+                AddonManagerEvent.ClearSearch,
+                is AddonManagerEvent.SelectCategory,
+                is AddonManagerEvent.OpenStore,
+                AddonManagerEvent.DismissStore,
+                -> {
+                    handleFilterEvent(event)
+                }
+
                 is AddonManagerEvent.MoveUp,
                 is AddonManagerEvent.MoveDown,
-                is AddonManagerEvent.Refresh,
-                is AddonManagerEvent.CopyUrl,
-                is AddonManagerEvent.OpenConfigure,
-                AddonManagerEvent.AddCinemeta,
-                AddonManagerEvent.RetrySeed,
-                -> handleListEvent(event)
+                -> {
+                    handleMove(event)
+                }
 
-                is AddonManagerEvent.RequestRemove,
-                AddonManagerEvent.ConfirmRemove,
-                AddonManagerEvent.CancelRemove,
-                -> handleDialogEvent(event)
+                is AddonManagerEvent.RequestRemove -> {
+                    _uiState.update { it.copy(removeTarget = event.addon) }
+                }
+
+                AddonManagerEvent.CancelRemove -> {
+                    _uiState.update { it.copy(removeTarget = null) }
+                }
+
+                AddonManagerEvent.ConfirmRemove -> {
+                    val target = _uiState.value.removeTarget ?: return
+                    _uiState.update { it.copy(removeTarget = null) }
+                    viewModelScope.launch {
+                        addonRepository.remove(target.transportUrl)
+                        _effects.emit(
+                            AddonManagerEffect.ShowMessage(
+                                R.string.addon_removed_success,
+                                listOf(target.transportUrl.toDisplayHost()),
+                            ),
+                        )
+                    }
+                }
+
+                else -> {
+                    handleListEvent(event)
+                }
             }
         }
 
@@ -231,19 +306,75 @@ class AddonManagerViewModel
             }
         }
 
+        private fun handleFilterEvent(event: AddonManagerEvent) {
+            when (event) {
+                is AddonManagerEvent.SearchQueryChanged -> {
+                    _uiState.update { it.copy(searchQuery = event.query) }
+                }
+
+                AddonManagerEvent.ClearSearch -> {
+                    _uiState.update { it.copy(searchQuery = "") }
+                }
+
+                is AddonManagerEvent.SelectCategory -> {
+                    _uiState.update { it.copy(selectedCategory = event.category) }
+                }
+
+                is AddonManagerEvent.OpenStore -> {
+                    _uiState.update {
+                        it.copy(
+                            isStoreOpen = true,
+                            storeInitialCategory = event.initialCategory,
+                        )
+                    }
+                }
+
+                AddonManagerEvent.DismissStore -> {
+                    _uiState.update { it.copy(isStoreOpen = false, storeInitialCategory = null) }
+                }
+
+                else -> {}
+            }
+        }
+
+        private fun handleMove(event: AddonManagerEvent) {
+            val list =
+                if (_uiState.value.selectedCategory == null) {
+                    _uiState.value.flattenedVisibleAddons
+                } else {
+                    _uiState.value.visibleAddons
+                }
+            val addon =
+                if (event is AddonManagerEvent.MoveUp) {
+                    event.addon
+                } else {
+                    (event as AddonManagerEvent.MoveDown).addon
+                }
+            val index = list.indexOfFirst { it.transportUrl == addon.transportUrl }
+            val neighbor =
+                if (event is AddonManagerEvent.MoveUp) {
+                    if (index > 0) list[index - 1] else null
+                } else {
+                    if (index in 0 until list.size - 1) list[index + 1] else null
+                } ?: return
+
+            viewModelScope.launch {
+                addonRepository.move(addon.transportUrl, neighbor.position)
+            }
+        }
+
         private fun handleListEvent(event: AddonManagerEvent) {
             when (event) {
+                AddonManagerEvent.RefreshAll -> {
+                    handleRefreshAll()
+                }
+
                 is AddonManagerEvent.SetEnabled -> {
-                    if (_uiState.value.isFamilyMode && event.addon.isAdult) return
-                    viewModelScope.launch { addonRepository.setEnabled(event.addon.transportUrl, event.enabled) }
-                }
-
-                is AddonManagerEvent.MoveUp -> {
-                    viewModelScope.launch { addonRepository.move(event.addon.transportUrl, event.addon.position - 1) }
-                }
-
-                is AddonManagerEvent.MoveDown -> {
-                    viewModelScope.launch { addonRepository.move(event.addon.transportUrl, event.addon.position + 1) }
+                    if (!_uiState.value.isFamilyMode || !event.addon.isAdult) {
+                        viewModelScope.launch {
+                            addonRepository.setEnabled(event.addon.transportUrl, event.enabled)
+                        }
+                    }
                 }
 
                 is AddonManagerEvent.Refresh -> {
@@ -251,14 +382,15 @@ class AddonManagerViewModel
                 }
 
                 is AddonManagerEvent.CopyUrl -> {
-                    emitEffect(AddonManagerEffect.CopyToClipboard(event.addon.transportUrl))
-                    emitEffect(AddonManagerEffect.ShowMessage(R.string.addon_copied_clipboard))
+                    viewModelScope.launch {
+                        _effects.emit(AddonManagerEffect.CopyToClipboard(event.addon.transportUrl))
+                        _effects.emit(AddonManagerEffect.ShowMessage(R.string.addon_copied_clipboard))
+                    }
                 }
 
                 is AddonManagerEvent.OpenConfigure -> {
-                    val configUrl = AddonUrlBuilder.configureUrl(event.addon.transportUrl)
-                    if (configUrl != null) {
-                        emitEffect(AddonManagerEffect.OpenUrl(configUrl))
+                    AddonUrlBuilder.configureUrl(event.addon.transportUrl)?.let { url ->
+                        viewModelScope.launch { _effects.emit(AddonManagerEffect.OpenUrl(url)) }
                     }
                 }
 
@@ -274,48 +406,59 @@ class AddonManagerViewModel
             }
         }
 
+        private fun handleRefreshAll() {
+            if (_uiState.value.isRefreshingAll) return
+            _uiState.update { it.copy(isRefreshingAll = true, refreshProgress = null) }
+            viewModelScope.launch {
+                val summary =
+                    refreshAllAddons { done, total ->
+                        _uiState.update { it.copy(refreshProgress = done to total) }
+                    }
+                _uiState.update {
+                    it.copy(
+                        isRefreshingAll = false,
+                        refreshProgress = null,
+                        failedRefreshAddons = summary.failed.toSet(),
+                    )
+                }
+                if (summary.failed.isEmpty()) {
+                    _effects.emit(
+                        AddonManagerEffect.ShowMessage(
+                            R.string.addon_refresh_all_success,
+                            listOf(summary.updated),
+                        ),
+                    )
+                } else {
+                    _effects.emit(
+                        AddonManagerEffect.ShowMessage(
+                            R.string.addon_refresh_all_partial,
+                            listOf(summary.updated, summary.failed.size),
+                        ),
+                    )
+                }
+            }
+        }
+
         private fun handleRefresh(addon: Addon) {
             viewModelScope.launch {
                 when (val outcome = addonRepository.refresh(addon.transportUrl)) {
                     is Outcome.Success -> {
-                        emitEffect(
+                        _uiState.update {
+                            it.copy(failedRefreshAddons = it.failedRefreshAddons - addon.manifest.name)
+                        }
+                        _effects.emit(
                             AddonManagerEffect.ShowMessage(R.string.addon_updated_success),
                         )
                     }
 
                     is Outcome.Failure -> {
+                        _uiState.update {
+                            it.copy(failedRefreshAddons = it.failedRefreshAddons + addon.manifest.name)
+                        }
                         val message = outcome.error.toUserMessage()
-                        emitEffect(AddonManagerEffect.ShowMessage(message.resId, message.formatArgs))
+                        _effects.emit(AddonManagerEffect.ShowMessage(message.resId, message.formatArgs))
                     }
                 }
-            }
-        }
-
-        private fun handleDialogEvent(event: AddonManagerEvent) {
-            when (event) {
-                is AddonManagerEvent.RequestRemove -> {
-                    _uiState.update { it.copy(removeTarget = event.addon) }
-                }
-
-                AddonManagerEvent.CancelRemove -> {
-                    _uiState.update { it.copy(removeTarget = null) }
-                }
-
-                AddonManagerEvent.ConfirmRemove -> {
-                    val target = _uiState.value.removeTarget ?: return
-                    _uiState.update { it.copy(removeTarget = null) }
-                    viewModelScope.launch {
-                        addonRepository.remove(target.transportUrl)
-                        emitEffect(
-                            AddonManagerEffect.ShowMessage(
-                                R.string.addon_removed_success,
-                                listOf(target.transportUrl.toDisplayHost()),
-                            ),
-                        )
-                    }
-                }
-
-                else -> {}
             }
         }
 
@@ -404,7 +547,7 @@ class AddonManagerViewModel
                                 } else {
                                     R.string.addon_installed_success
                                 }
-                            emitEffect(AddonManagerEffect.ShowMessage(messageRes, listOf(preview.displayHost)))
+                            _effects.emit(AddonManagerEffect.ShowMessage(messageRes, listOf(preview.displayHost)))
                         }
 
                         is Outcome.Failure -> {
@@ -420,10 +563,6 @@ class AddonManagerViewModel
                         }
                     }
                 }
-        }
-
-        private fun emitEffect(effect: AddonManagerEffect) {
-            viewModelScope.launch { _effects.emit(effect) }
         }
     }
 

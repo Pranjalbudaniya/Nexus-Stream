@@ -5,25 +5,25 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -49,13 +49,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonCapabilities
+import com.nexus.stream.domain.model.AddonCategory
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.isBoardCatalog
+import com.nexus.stream.domain.usecase.AddonFilters
 import com.nexus.stream.presentation.common.NexusButton
-import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
 import com.nexus.stream.presentation.common.NexusTextButton
@@ -172,53 +173,67 @@ fun AddonManagerContent(
                     .padding(horizontal = spacing.md),
             verticalArrangement = Arrangement.spacedBy(spacing.sm),
         ) {
+            AddonManagerToolbarRow(uiState = uiState, onEvent = onEvent)
+
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { onEvent(AddonManagerEvent.SearchQueryChanged(it)) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.addon_search_placeholder)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                    )
+                },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        NexusIconButton(onClick = { onEvent(AddonManagerEvent.ClearSearch) }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.addon_search_clear),
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = NexusTheme.shapes.button,
+            )
+
+            AddonCategoryChipsRow(
+                selectedCategory = uiState.selectedCategory,
+                categoryCounts = uiState.categoryCounts,
+                totalCount =
+                    if (uiState.searchQuery.isBlank()) {
+                        uiState.addons.size
+                    } else {
+                        AddonFilters.filterInstalled(uiState.addons, uiState.searchQuery, null).size
+                    },
+                onSelectCategory = { onEvent(AddonManagerEvent.SelectCategory(it)) },
+            )
+
             if (!uiState.capabilities.hasStreams) {
                 WarningBanner(
                     message = stringResource(R.string.addon_banner_no_stream),
+                    actionLabel = stringResource(R.string.addon_banner_find_streams),
+                    onAction = { onEvent(AddonManagerEvent.OpenStore(AddonCategory.STREAMS)) },
                 )
             }
             if (!uiState.capabilities.hasCatalogs) {
                 WarningBanner(
                     message = stringResource(R.string.addon_banner_no_catalog),
+                    actionLabel = stringResource(R.string.addon_banner_find_catalogs),
+                    onAction = { onEvent(AddonManagerEvent.OpenStore(AddonCategory.CATALOGS)) },
                 )
             }
             if (uiState.seedFailed) {
                 SeedFailedCard(onRetry = { onEvent(AddonManagerEvent.RetrySeed) })
             }
 
-            if (uiState.addons.isEmpty() && !uiState.seedLoading) {
-                EmptyStateView(
-                    onAddCinemeta = { onEvent(AddonManagerEvent.AddCinemeta) },
-                    onAddAddon = { onEvent(AddonManagerEvent.OpenAdd()) },
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = spacing.xxl * 3),
-                    verticalArrangement = Arrangement.spacedBy(spacing.sm),
-                ) {
-                    itemsIndexed(
-                        items = uiState.addons,
-                        key = { _, addon -> addon.transportUrl },
-                    ) { index, addon ->
-                        AddonCard(
-                            addon = addon,
-                            isFirst = index == 0,
-                            isLast = index == uiState.addons.size - 1,
-                            onToggleEnabled = { enabled ->
-                                onEvent(AddonManagerEvent.SetEnabled(addon, enabled))
-                            },
-                            onMoveUp = { onEvent(AddonManagerEvent.MoveUp(addon)) },
-                            onMoveDown = { onEvent(AddonManagerEvent.MoveDown(addon)) },
-                            onRefresh = { onEvent(AddonManagerEvent.Refresh(addon)) },
-                            onConfigure = { onEvent(AddonManagerEvent.OpenConfigure(addon)) },
-                            onCopyUrl = { onEvent(AddonManagerEvent.CopyUrl(addon)) },
-                            onRemove = { onEvent(AddonManagerEvent.RequestRemove(addon)) },
-                            isFamilyMode = uiState.isFamilyMode,
-                        )
-                    }
-                }
-            }
+            AddonManagerList(
+                uiState = uiState,
+                onEvent = onEvent,
+            )
         }
     }
 
@@ -236,72 +251,84 @@ fun AddonManagerContent(
         onEvent = onEvent,
         onOpenUrl = onOpenUrl,
     )
+
+    if (uiState.isStoreOpen) {
+        AddonStoreSheet(
+            initialCategory = uiState.storeInitialCategory,
+            onDismiss = { onEvent(AddonManagerEvent.DismissStore) },
+        )
+    }
 }
 
 @Composable
-private fun SeedFailedCard(onRetry: () -> Unit) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+private fun AddonManagerToolbarRow(
+    uiState: AddonManagerUiState,
+    onEvent: (AddonManagerEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NexusButton(onClick = { onEvent(AddonManagerEvent.OpenStore()) }) {
+            Text(stringResource(R.string.addon_toolbar_install))
+        }
+        val isRefreshing = uiState.isRefreshingAll
+        NexusOutlinedButton(
+            onClick = { onEvent(AddonManagerEvent.RefreshAll) },
+            enabled = !isRefreshing && uiState.addons.isNotEmpty(),
         ) {
-            Text(
-                text = stringResource(R.string.addon_manager_seed_failed_title),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.weight(1f),
-            )
-            NexusTextButton(onClick = onRetry) {
-                Text(
-                    text = stringResource(R.string.addon_manager_retry),
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            val label =
+                if (isRefreshing) {
+                    val progress = uiState.refreshProgress ?: (0 to 0)
+                    stringResource(
+                        R.string.addon_refreshing_progress,
+                        progress.first,
+                        progress.second,
+                    )
+                } else {
+                    stringResource(R.string.addon_toolbar_refresh_all)
+                }
+            Text(label)
         }
     }
 }
 
 @Composable
-private fun EmptyStateView(
-    onAddCinemeta: () -> Unit,
-    onAddAddon: () -> Unit,
+private fun AddonCategoryChipsRow(
+    selectedCategory: AddonCategory?,
+    categoryCounts: Map<AddonCategory, Int>,
+    totalCount: Int,
+    onSelectCategory: (AddonCategory?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val spacing = NexusTheme.spacing
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(spacing.xl),
-        contentAlignment = Alignment.Center,
+    val categoryOptions =
+        listOf(
+            null to stringResource(R.string.addon_category_all),
+            AddonCategory.CATALOGS to stringResource(R.string.addon_category_catalogs),
+            AddonCategory.STREAMS to stringResource(R.string.addon_category_streams),
+            AddonCategory.SUBTITLES to stringResource(R.string.addon_category_subtitles),
+            AddonCategory.OTHER to stringResource(R.string.addon_category_other),
+        )
+
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(spacing.md),
-        ) {
-            Text(
-                text = stringResource(R.string.addon_manager_empty_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+        items(categoryOptions, key = { it.first?.name ?: "ALL" }) { (category, title) ->
+            val count = if (category == null) totalCount else (categoryCounts[category] ?: 0)
+            FilterChip(
+                selected = selectedCategory == category,
+                onClick = { onSelectCategory(category) },
+                label = {
+                    Text(
+                        text = stringResource(R.string.addon_category_chip_count, title, count),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                },
+                shape = NexusTheme.shapes.chip,
             )
-            Text(
-                text = stringResource(R.string.addon_manager_empty_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(spacing.sm))
-            Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-                NexusOutlinedButton(onClick = onAddCinemeta) {
-                    Text(stringResource(R.string.addon_manager_add_cinemeta))
-                }
-                NexusButton(onClick = onAddAddon) {
-                    Text(stringResource(R.string.addon_manager_add_fab))
-                }
-            }
         }
     }
 }
@@ -429,25 +456,6 @@ internal fun AddonManagerScreenEmptyPreview() {
                 AddonManagerUiState(
                     addons = emptyList(),
                     capabilities = AddonCapabilities(hasCatalogs = false, hasStreams = false),
-                ),
-            onEvent = {},
-            snackbarHostState = remember { SnackbarHostState() },
-            onOpenUrl = {},
-            onNavigateUp = {},
-        )
-    }
-}
-
-@Preview(name = "AddonManagerScreen - SeedFailed")
-@Composable
-internal fun AddonManagerScreenSeedFailedPreview() {
-    NexusTheme {
-        AddonManagerContent(
-            uiState =
-                AddonManagerUiState(
-                    addons = emptyList(),
-                    capabilities = AddonCapabilities(hasCatalogs = false, hasStreams = false),
-                    seedFailed = true,
                 ),
             onEvent = {},
             snackbarHostState = remember { SnackbarHostState() },

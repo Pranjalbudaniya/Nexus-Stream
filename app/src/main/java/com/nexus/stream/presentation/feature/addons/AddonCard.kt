@@ -109,6 +109,7 @@ fun AddonCard(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
     isFamilyMode: Boolean = false,
+    failedRefresh: Boolean = false,
 ) {
     val spacing = NexusTheme.spacing
     var menuExpanded by remember { mutableStateOf(false) }
@@ -156,6 +157,13 @@ fun AddonCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (failedRefresh) {
+                        Text(
+                            text = stringResource(R.string.addon_refresh_failed_label),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
 
