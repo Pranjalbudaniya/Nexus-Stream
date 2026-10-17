@@ -4,15 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.stream.R
 import com.nexus.stream.di.DefaultDispatcher
+import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSource
+import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
+import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.MagnetLink
+import com.nexus.stream.domain.usecase.StreamMatching
 import com.nexus.stream.domain.usecase.StreamOrdering
 import com.nexus.stream.presentation.common.PlaybackRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +34,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+data class AddonFilterOption(
+    val transportUrl: String,
+    val displayName: String,
+    val count: Int,
+    val failed: Boolean = false,
+)
+
 data class StreamsUiState(
     val request: PlaybackRequest? = null,
     val isLoading: Boolean = false,
@@ -40,6 +51,10 @@ data class StreamsUiState(
     val availableResolutions: List<Int> = emptyList(),
     val resolutionCounts: Map<Int, Int> = emptyMap(),
     val selectedResolution: Int? = null,
+    val availableAddons: List<AddonFilterOption> = emptyList(),
+    val selectedAddon: String? = null,
+    val showAddonFilter: Boolean = false,
+    val detailsStream: ParsedStream? = null,
     val failures: List<AddonFailure> = emptyList(),
     val isDone: Boolean = false,
     val quickPlayHandled: Boolean = false,
@@ -87,6 +102,22 @@ sealed interface StreamsEvent {
         val resolution: Int?,
     ) : StreamsEvent
 
+    data class SelectAddon(
+        val addonKey: String?,
+    ) : StreamsEvent
+
+    data object ClearFilters : StreamsEvent
+
+    data class ShowDetails(
+        val stream: ParsedStream,
+    ) : StreamsEvent
+
+    data object DismissDetails : StreamsEvent
+
+    data class CopyFileName(
+        val fileName: String,
+    ) : StreamsEvent
+
     data object Refresh : StreamsEvent
 
     data object RetryFailed : StreamsEvent
@@ -121,6 +152,7 @@ class StreamsViewModel
     @Inject
     constructor(
         private val streamRepository: StreamRepository,
+        private val addonRepository: AddonRepository,
         private val playerPrefsRepository: PlayerPrefsRepository,
         private val playbackCapabilities: PlaybackCapabilities,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
@@ -132,8 +164,12 @@ class StreamsViewModel
         val effects: SharedFlow<StreamsEffect> = _effects.asSharedFlow()
 
         private var loadingJob: Job? = null
+        private var addonJob: Job? = null
+        private var cachedActiveAddons: List<Addon> = emptyList()
 
         fun onEvent(event: StreamsEvent) {
+            if (handleStreamActionEvent(event)) return
+            if (handleFilterEvent(event)) return
             when (event) {
                 is StreamsEvent.SetRequest -> {
                     handleSetRequest(event.request)
@@ -143,46 +179,27 @@ class StreamsViewModel
                     handleClearRequest()
                 }
 
-                is StreamsEvent.SelectResolution -> {
-                    _uiState.update { state ->
-                        val filtered = StreamOrdering.filterByResolution(state.allStreams, event.resolution)
-                        state.copy(selectedResolution = event.resolution, filteredStreams = filtered)
+                is StreamsEvent.ShowDetails -> {
+                    _uiState.update { it.copy(detailsStream = event.stream) }
+                }
+
+                StreamsEvent.DismissDetails -> {
+                    _uiState.update { it.copy(detailsStream = null) }
+                }
+
+                is StreamsEvent.CopyFileName -> {
+                    viewModelScope.launch {
+                        _effects.emit(StreamsEffect.CopyText(event.fileName))
+                        _effects.emit(StreamsEffect.ShowMessage(R.string.streams_filename_copied))
                     }
                 }
 
                 StreamsEvent.Refresh -> {
-                    val req = _uiState.value.request ?: return
-                    loadingJob?.cancel()
-                    _uiState.update { it.copy(isLoading = true, quickPlayHandled = false) }
-                    startLoading(request = req, forceRefresh = true, onlyAddons = null, mergeExisting = false)
+                    reload(failedOnly = false)
                 }
 
                 StreamsEvent.RetryFailed -> {
-                    val req = _uiState.value.request ?: return
-                    val failedUrls =
-                        _uiState.value.failures
-                            .map { it.transportUrl }
-                            .filter { it.isNotBlank() }
-                            .toSet()
-                    if (failedUrls.isNotEmpty()) {
-                        loadingJob?.cancel()
-                        _uiState.update { it.copy(isLoading = true) }
-                        startLoading(request = req, forceRefresh = true, onlyAddons = failedUrls, mergeExisting = true)
-                    }
-                }
-
-                is StreamsEvent.PlayStream -> {
-                    viewModelScope.launch {
-                        playStream(event.stream)
-                    }
-                }
-
-                is StreamsEvent.CopyLink,
-                is StreamsEvent.CopyMagnet,
-                is StreamsEvent.OpenMagnetExternal,
-                is StreamsEvent.OpenLinkExternal,
-                -> {
-                    handleStreamAction(event)
+                    reload(failedOnly = true)
                 }
 
                 StreamsEvent.FindStreams -> {
@@ -198,26 +215,118 @@ class StreamsViewModel
                         _effects.emit(StreamsEffect.DismissSheet)
                     }
                 }
+
+                else -> {}
             }
         }
 
+        private fun handleFilterEvent(event: StreamsEvent): Boolean =
+            when (event) {
+                is StreamsEvent.SelectResolution -> {
+                    _uiState.update { StreamsFilterReducer.selectResolution(it, event.resolution) }
+                    true
+                }
+
+                is StreamsEvent.SelectAddon -> {
+                    _uiState.update { StreamsFilterReducer.selectAddon(it, event.addonKey) }
+                    true
+                }
+
+                StreamsEvent.ClearFilters -> {
+                    _uiState.update { StreamsFilterReducer.clearFilters(it) }
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
+
+        private fun handleStreamActionEvent(event: StreamsEvent): Boolean =
+            when (event) {
+                is StreamsEvent.PlayStream -> {
+                    viewModelScope.launch { playStream(event.stream) }
+                    true
+                }
+
+                is StreamsEvent.CopyLink,
+                is StreamsEvent.CopyMagnet,
+                is StreamsEvent.OpenMagnetExternal,
+                is StreamsEvent.OpenLinkExternal,
+                -> {
+                    handleStreamAction(event)
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
+
         private fun handleSetRequest(request: PlaybackRequest) {
             loadingJob?.cancel()
+            addonJob?.cancel()
             _uiState.update {
                 StreamsUiState(
                     request = request,
                     isLoading = true,
                     selectedResolution = null,
+                    selectedAddon = null,
                     quickPlayHandled = false,
                 )
             }
+            observeActiveAddons(request)
             startLoading(request = request, forceRefresh = false, onlyAddons = null, mergeExisting = false)
         }
 
         private fun handleClearRequest() {
             loadingJob?.cancel()
             loadingJob = null
+            addonJob?.cancel()
+            addonJob = null
             _uiState.update { StreamsUiState() }
+        }
+
+        private fun observeActiveAddons(request: PlaybackRequest) {
+            addonJob =
+                viewModelScope.launch {
+                    addonRepository.observeActive().collect { activeList ->
+                        val matching =
+                            activeList.filter {
+                                it.manifest.supports("stream", request.type, request.videoId)
+                            }
+                        cachedActiveAddons = matching
+                        _uiState.update { StreamsFilterReducer.updateActiveAddons(it, matching) }
+                    }
+                }
+        }
+
+        private fun reload(failedOnly: Boolean) {
+            val req = _uiState.value.request ?: return
+            val failedUrls =
+                if (failedOnly) {
+                    _uiState.value.failures
+                        .map { it.transportUrl }
+                        .filter { it.isNotBlank() }
+                        .toSet()
+                } else {
+                    null
+                }
+            if (!failedOnly || !failedUrls.isNullOrEmpty()) {
+                loadingJob?.cancel()
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        quickPlayHandled = if (!failedOnly) false else it.quickPlayHandled,
+                    )
+                }
+                startLoading(
+                    request = req,
+                    forceRefresh = true,
+                    onlyAddons = failedUrls,
+                    mergeExisting = failedOnly,
+                )
+            }
         }
 
         private fun startLoading(
@@ -236,56 +345,53 @@ class StreamsViewModel
                             forceRefresh = forceRefresh,
                             onlyAddons = onlyAddons,
                         ).collect { emission ->
-                            processEmission(emission, initialItems)
+                            processEmission(request, emission, initialItems)
                         }
                 }
         }
 
         private suspend fun processEmission(
+            request: PlaybackRequest,
             emission: StreamsState,
             initialItems: List<ParsedStream>,
         ) {
             val combined =
                 withContext(defaultDispatcher) {
+                    val enriched =
+                        emission.items.map {
+                            val match =
+                                StreamMatching.matchOf(
+                                    it.fileName,
+                                    request.season,
+                                    request.episode,
+                                    request.year,
+                                )
+                            it.copy(match = match)
+                        }
                     if (initialItems.isEmpty()) {
-                        emission.items
+                        StreamOrdering.sort(StreamOrdering.dedupe(enriched))
                     } else {
-                        StreamOrdering.sort(StreamOrdering.dedupe(initialItems + emission.items))
+                        StreamOrdering.sort(StreamOrdering.dedupe(initialItems + enriched))
                     }
                 }
-            val resolutions = StreamOrdering.availableResolutions(combined)
-            val counts = resolutions.associateWith { res -> combined.count { it.resolution == res } }
-            val currentRes = _uiState.value.selectedResolution
-            val filtered = StreamOrdering.filterByResolution(combined, currentRes)
 
             _uiState.update {
-                it.copy(
-                    isLoading = !emission.done,
-                    answered = emission.answered,
-                    total = emission.total,
-                    allStreams = combined,
-                    filteredStreams = filtered,
-                    availableResolutions = resolutions,
-                    resolutionCounts = counts,
-                    failures = emission.failures,
-                    isDone = emission.done,
+                StreamsFilterReducer.buildEmissionState(
+                    state = it,
+                    emission = emission,
+                    combined = combined,
+                    matching = cachedActiveAddons,
                 )
             }
 
-            if (emission.done) {
-                checkQuickPlay(combined)
-            }
-        }
-
-        private suspend fun checkQuickPlay(streams: List<ParsedStream>) {
-            if (_uiState.value.quickPlayHandled) return
-            val quickPlayEnabled = playerPrefsRepository.quickPlay.first()
-            _uiState.update { it.copy(quickPlayHandled = true) }
-            if (quickPlayEnabled) {
-                val best = StreamOrdering.bestPlayable(streams, playbackCapabilities)
-                if (best != null) {
-                    playStream(best)
-                    _effects.emit(StreamsEffect.DismissSheet)
+            if (emission.done && !_uiState.value.quickPlayHandled) {
+                _uiState.update { it.copy(quickPlayHandled = true) }
+                if (playerPrefsRepository.quickPlay.first()) {
+                    val candidate = StreamOrdering.bestPlayable(combined, playbackCapabilities)
+                    if (candidate != null) {
+                        playStream(candidate)
+                        _effects.emit(StreamsEffect.DismissSheet)
+                    }
                 }
             }
         }

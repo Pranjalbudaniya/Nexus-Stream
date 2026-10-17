@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -171,6 +174,13 @@ fun StreamsSheet(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+
+            uiState.detailsStream?.let { stream ->
+                StreamDetailsDialog(
+                    stream = stream,
+                    onDismiss = { viewModel.onEvent(StreamsEvent.DismissDetails) },
+                )
+            }
         }
     }
 }
@@ -207,6 +217,15 @@ private fun StreamsSheetContent(
                 resolutionCounts = uiState.resolutionCounts,
                 totalCount = uiState.allStreams.size,
                 onSelectResolution = { onEvent(StreamsEvent.SelectResolution(it)) },
+            )
+        }
+
+        if (uiState.showAddonFilter) {
+            StreamsAddonChipsRow(
+                selectedAddon = uiState.selectedAddon,
+                availableAddons = uiState.availableAddons,
+                totalCount = uiState.allStreams.size,
+                onSelectAddon = { onEvent(StreamsEvent.SelectAddon(it)) },
             )
         }
 
@@ -324,6 +343,7 @@ private fun StreamsResolutionChipsRow(
                     )
                 },
                 shape = NexusTheme.shapes.chip,
+                modifier = Modifier.heightIn(min = 48.dp),
             )
         }
         items(availableResolutions, key = { it }) { res ->
@@ -338,6 +358,71 @@ private fun StreamsResolutionChipsRow(
                     )
                 },
                 shape = NexusTheme.shapes.chip,
+                modifier = Modifier.heightIn(min = 48.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StreamsAddonChipsRow(
+    selectedAddon: String?,
+    availableAddons: List<AddonFilterOption>,
+    totalCount: Int,
+    onSelectAddon: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
+    ) {
+        item {
+            FilterChip(
+                selected = selectedAddon == null,
+                onClick = { onSelectAddon(null) },
+                label = {
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.streams_quality_chip,
+                                stringResource(R.string.streams_addon_all),
+                                totalCount,
+                            ),
+                    )
+                },
+                shape = NexusTheme.shapes.chip,
+                modifier = Modifier.heightIn(min = 48.dp),
+            )
+        }
+        items(availableAddons, key = { it.transportUrl }) { addon ->
+            FilterChip(
+                selected = selectedAddon == addon.transportUrl,
+                onClick = { onSelectAddon(addon.transportUrl) },
+                label = {
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.streams_quality_chip,
+                                addon.displayName,
+                                addon.count,
+                            ),
+                    )
+                },
+                leadingIcon =
+                    if (addon.failed) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                shape = NexusTheme.shapes.chip,
+                modifier = Modifier.heightIn(min = 48.dp),
             )
         }
     }
@@ -365,15 +450,19 @@ private fun StreamsListContent(
     } else if (uiState.allStreams.isEmpty() && uiState.isDone) {
         StreamsEmptyNoStreams(onRetry = { onEvent(StreamsEvent.Refresh) }, modifier = modifier)
     } else if (uiState.filteredStreams.isEmpty() && uiState.allStreams.isNotEmpty()) {
-        Box(
+        Column(
             modifier = modifier.fillMaxSize().padding(top = spacing.xl),
-            contentAlignment = Alignment.TopCenter,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
             Text(
-                text = stringResource(R.string.streams_empty_no_quality_match),
+                text = stringResource(R.string.streams_empty_filtered),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            NexusButton(onClick = { onEvent(StreamsEvent.ClearFilters) }) {
+                Text(stringResource(R.string.streams_clear_filters))
+            }
         }
     } else {
         LazyColumn(
@@ -385,6 +474,8 @@ private fun StreamsListContent(
                 StreamRow(
                     stream = stream,
                     onClick = { onEvent(StreamsEvent.PlayStream(stream)) },
+                    onShowDetails = { onEvent(StreamsEvent.ShowDetails(stream)) },
+                    onCopyFileName = { onEvent(StreamsEvent.CopyFileName(it)) },
                     onCopyLink = { onEvent(StreamsEvent.CopyLink(stream)) },
                     onCopyMagnet = { onEvent(StreamsEvent.CopyMagnet(stream)) },
                     onOpenMagnet = { onEvent(StreamsEvent.OpenMagnetExternal(stream)) },

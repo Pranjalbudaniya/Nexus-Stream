@@ -1,13 +1,20 @@
 package com.nexus.stream.presentation.feature.streams
 
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.AddonManifest
+import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
+import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.StreamKind
+import com.nexus.stream.domain.model.StreamMatch
 import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.repository.AddonFailure
+import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
@@ -38,9 +45,11 @@ import org.junit.Test
 class StreamsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val streamRepository = mockk<StreamRepository>()
+    private val addonRepository = mockk<AddonRepository>()
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
 
     private val quickPlayFlow = MutableStateFlow(false)
+    private val activeAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
     private val defaultCapabilities = PlaybackCapabilities(supportsTorrent = false)
 
     private val sampleRequest =
@@ -51,18 +60,64 @@ class StreamsViewModelTest {
             title = "Test Movie",
         )
 
+    private fun createTestAddon(
+        id: String,
+        name: String,
+        transportUrl: String = "https://$id.com/manifest.json",
+        types: List<String> = listOf("movie", "series"),
+    ): Addon =
+        Addon(
+            transportUrl = transportUrl,
+            manifest =
+                AddonManifest(
+                    id = id,
+                    version = "1.0.0",
+                    name = name,
+                    description = "desc",
+                    logo = null,
+                    background = null,
+                    types = types,
+                    idPrefixes = null,
+                    resources = listOf(ResourceSpec(name = "stream", types = types, idPrefixes = null)),
+                    catalogs = emptyList(),
+                    behaviorHints =
+                        ManifestHints(
+                            adult = false,
+                            p2p = false,
+                            configurable = false,
+                            configurationRequired = false,
+                        ),
+                ),
+            enabled = true,
+            position = 0,
+            source = AddonSource.LOCAL,
+            installedAt = 0L,
+        )
+
     private fun createParsedStream(
         key: String,
         kind: StreamKind = StreamKind.Direct,
         resolution: Int? = 1080,
-        url: String = "https://example.com/video.mp4",
-        infoHash: String = "0123456789abcdef0123456789abcdef01234567",
+        fileName: String? = null,
+        addonKeys: List<String> = listOf("https://addon1.com/manifest.json"),
     ): ParsedStream {
         val source =
             when (kind) {
-                StreamKind.Direct -> StreamSource.Url(url, emptyMap())
-                StreamKind.Torrent -> StreamSource.Torrent(infoHash, 0, listOf("udp://tracker.opentrackr.org:1337"))
-                StreamKind.ExternalLink -> StreamSource.External(url)
+                StreamKind.Direct -> {
+                    StreamSource.Url("https://example.com/video.mp4", emptyMap())
+                }
+
+                StreamKind.Torrent -> {
+                    StreamSource.Torrent(
+                        "0123456789abcdef0123456789abcdef01234567",
+                        0,
+                        listOf("udp://tracker.opentrackr.org:1337"),
+                    )
+                }
+
+                StreamKind.ExternalLink -> {
+                    StreamSource.External("https://example.com/video.mp4")
+                }
             }
         return ParsedStream(
             key = key,
@@ -79,6 +134,7 @@ class StreamsViewModelTest {
                     videoHash = null,
                 ),
             addonNames = listOf("Addon 1"),
+            addonKeys = addonKeys,
             resolution = resolution,
             hdr = emptySet(),
             codec = null,
@@ -87,6 +143,7 @@ class StreamsViewModelTest {
             kind = kind,
             needsHeaders = false,
             displayName = "Stream $key",
+            fileName = fileName,
         )
     }
 
@@ -94,6 +151,7 @@ class StreamsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { playerPrefsRepository.quickPlay } returns quickPlayFlow
+        every { addonRepository.observeActive() } returns activeAddonsFlow
     }
 
     @After
@@ -104,6 +162,7 @@ class StreamsViewModelTest {
     private fun createViewModel(capabilities: PlaybackCapabilities = defaultCapabilities): StreamsViewModel =
         StreamsViewModel(
             streamRepository = streamRepository,
+            addonRepository = addonRepository,
             playerPrefsRepository = playerPrefsRepository,
             playbackCapabilities = capabilities,
             defaultDispatcher = testDispatcher,
@@ -189,6 +248,191 @@ class StreamsViewModelTest {
             advanceUntilIdle()
 
             assertNull(viewModel.uiState.value.selectedResolution)
+        }
+
+    @Test
+    fun addonFilter_hiddenWithOneAddon_shownWithTwoAddons() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("a1", "Torrentio"))
+            val streamFlow = MutableStateFlow(StreamsState(emptyList(), 1, 1, emptyList(), true))
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.showAddonFilter)
+
+            // Add a second active stream addon
+            activeAddonsFlow.value =
+                listOf(
+                    createTestAddon("a1", "Torrentio"),
+                    createTestAddon("a2", "MediaFusion"),
+                )
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.showAddonFilter)
+            assertEquals(2, viewModel.uiState.value.availableAddons.size)
+        }
+
+    @Test
+    fun duplicateAddonNames_receiveSuffixes() =
+        runTest {
+            activeAddonsFlow.value =
+                listOf(
+                    createTestAddon("a1", "Torrentio", "https://a1.com/manifest.json"),
+                    createTestAddon("a2", "Torrentio", "https://a2.com/manifest.json"),
+                    createTestAddon("a3", "Torrentio", "https://a3.com/manifest.json"),
+                )
+            val streamFlow = MutableStateFlow(StreamsState(emptyList(), 3, 3, emptyList(), true))
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            val names =
+                viewModel.uiState.value.availableAddons
+                    .map { it.displayName }
+            assertEquals(listOf("Torrentio", "Torrentio (2)", "Torrentio (3)"), names)
+        }
+
+    @Test
+    fun addonFilter_resetsWhenAddonDisappears() =
+        runTest {
+            val a1 = createTestAddon("a1", "Torrentio", "https://a1.com/manifest.json")
+            val a2 = createTestAddon("a2", "MediaFusion", "https://a2.com/manifest.json")
+            activeAddonsFlow.value = listOf(a1, a2)
+
+            val s1 = createParsedStream("s1", addonKeys = listOf(a1.transportUrl))
+            val s2 = createParsedStream("s2", addonKeys = listOf(a2.transportUrl))
+            val streamFlow = MutableStateFlow(StreamsState(listOf(s1, s2), 2, 2, emptyList(), true))
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            viewModel.onEvent(StreamsEvent.SelectAddon(a2.transportUrl))
+            advanceUntilIdle()
+            assertEquals(a2.transportUrl, viewModel.uiState.value.selectedAddon)
+            assertEquals(1, viewModel.uiState.value.filteredStreams.size)
+
+            // a2 is disabled and disappears from active addons
+            activeAddonsFlow.value = listOf(a1)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.selectedAddon)
+            assertFalse(viewModel.uiState.value.showAddonFilter)
+        }
+
+    @Test
+    fun clearFilters_resetsBothResolutionAndAddonFilters() =
+        runTest {
+            val a1 = createTestAddon("a1", "Torrentio", "https://a1.com/manifest.json")
+            val a2 = createTestAddon("a2", "MediaFusion", "https://a2.com/manifest.json")
+            activeAddonsFlow.value = listOf(a1, a2)
+
+            val s1 = createParsedStream("s1", resolution = 1080, addonKeys = listOf(a1.transportUrl))
+            val s2 = createParsedStream("s2", resolution = 2160, addonKeys = listOf(a2.transportUrl))
+            val streamFlow = MutableStateFlow(StreamsState(listOf(s1, s2), 2, 2, emptyList(), true))
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            viewModel.onEvent(StreamsEvent.SelectResolution(1080))
+            viewModel.onEvent(StreamsEvent.SelectAddon(a1.transportUrl))
+            advanceUntilIdle()
+
+            assertEquals(1080, viewModel.uiState.value.selectedResolution)
+            assertEquals(a1.transportUrl, viewModel.uiState.value.selectedAddon)
+
+            viewModel.onEvent(StreamsEvent.ClearFilters)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.selectedResolution)
+            assertNull(viewModel.uiState.value.selectedAddon)
+            assertEquals(2, viewModel.uiState.value.filteredStreams.size)
+        }
+
+    @Test
+    fun showDetails_populatesDetailsStream_andDismissClearsIt() =
+        runTest {
+            val stream = createParsedStream("s1", fileName = "test.mkv")
+            val viewModel = createViewModel()
+
+            viewModel.onEvent(StreamsEvent.ShowDetails(stream))
+            advanceUntilIdle()
+
+            assertEquals(stream, viewModel.uiState.value.detailsStream)
+
+            viewModel.onEvent(StreamsEvent.DismissDetails)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.detailsStream)
+        }
+
+    @Test
+    fun copyFileName_emitsCopyEffectAndSnackbar() =
+        runTest {
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.CopyFileName("Movie.2024.1080p.mkv"))
+            advanceUntilIdle()
+
+            assertEquals(2, effects.size)
+            assertEquals(StreamsEffect.CopyText("Movie.2024.1080p.mkv"), effects[0])
+            assertEquals(StreamsEffect.ShowMessage(R.string.streams_filename_copied), effects[1])
+
+            job.cancel()
+        }
+
+    @Test
+    fun playbackRequest_paramsReachMatcher_andPenalizesMismatch() =
+        runTest {
+            val seriesRequest =
+                PlaybackRequest(
+                    type = "series",
+                    metaId = "ttSeries",
+                    videoId = "ttSeries:1:1",
+                    title = "Test Series",
+                    season = 1,
+                    episode = 1,
+                )
+            // Stream 1 matches S01E01 (OK)
+            val s1 =
+                createParsedStream(
+                    key = "s1",
+                    resolution = 1080,
+                    fileName = "Test.Series.S01E01.1080p.mkv",
+                )
+            // Stream 2 matches S01E02 (WRONG_EPISODE) with 4K resolution
+            val s2 =
+                createParsedStream(
+                    key = "s2",
+                    resolution = 2160,
+                    fileName = "Test.Series.S01E02.2160p.mkv",
+                )
+
+            val streamFlow = MutableStateFlow(StreamsState(listOf(s1, s2), 1, 1, emptyList(), true))
+            every { streamRepository.streams(seriesRequest.type, seriesRequest.videoId, false, null) } returns
+                streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(seriesRequest))
+            advanceUntilIdle()
+
+            val streams = viewModel.uiState.value.allStreams
+            assertEquals(2, streams.size)
+            // S01E01 (s1) is OK and sorts ahead despite s2 having 2160p resolution
+            assertEquals("s1", streams[0].key)
+            assertEquals(StreamMatch.OK, streams[0].match)
+            assertEquals("s2", streams[1].key)
+            assertEquals(StreamMatch.WRONG_EPISODE, streams[1].match)
         }
 
     @Test
@@ -278,9 +522,15 @@ class StreamsViewModelTest {
     @Test
     fun menuActions_emitExpectedEffects() =
         runTest {
-            val directStream = createParsedStream("s1", kind = StreamKind.Direct, url = "https://direct.url/v.mp4")
+            val directStream =
+                createParsedStream("s1", kind = StreamKind.Direct).let {
+                    it.copy(stream = it.stream.copy(source = StreamSource.Url("https://direct.url/v.mp4", emptyMap())))
+                }
             val torrentStream = createParsedStream("s2", kind = StreamKind.Torrent)
-            val invalidTorrent = createParsedStream("s3", kind = StreamKind.Torrent, infoHash = "invalidHash")
+            val invalidTorrent =
+                createParsedStream("s3", kind = StreamKind.Torrent).let {
+                    it.copy(stream = it.stream.copy(source = StreamSource.Torrent("invalidHash", 0, emptyList())))
+                }
 
             val viewModel = createViewModel()
             val effects = mutableListOf<StreamsEffect>()

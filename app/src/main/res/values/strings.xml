@@ -338,5 +338,49 @@
     <string name="settings_player_title">Player</string>
     <string name="settings_quick_play_title">Quick play</string>
     <string name="settings_quick_play_subtitle">Plays the best stream automatically once all addons have answered.</string>
+
+    <!-- Streams P07.fix1 strings -->
+    <string name="streams_addon_all">All addons</string>
+    <string name="streams_clear_filters">Clear filters</string>
+    <string name="streams_empty_filtered">No streams match these filters.</string>
+    <string name="streams_badge_wrong_episode">Different episode?</string>
+    <string name="streams_badge_wrong_season">Different season?</string>
+    <string name="streams_badge_wrong_year">Different year?</string>
+    <string name="streams_badge_cam">Low quality (CAM)</string>
+    <string name="streams_badge_special_headers">Needs special headers</string>
+    <string name="streams_badge_cached">Cached (%1$s)</string>
+    <string name="streams_badge_pack">Pack</string>
+    <string name="streams_seeders_count">%1$d seeders</string>
+    <string name="streams_via_addons">via %1$s (+%2$d)</string>
+    <string name="streams_via_addon">via %1$s</string>
+    <string name="streams_menu_details">Details</string>
+    <string name="streams_menu_copy_filename">Copy file name</string>
+    <string name="streams_filename_copied">File name copied</string>
+    <string name="streams_details_title">Stream details</string>
+    <string name="streams_details_addons">Addon(s)</string>
+    <string name="streams_details_quality">Quality</string>
+    <string name="streams_details_release_type">Release type</string>
+    <string name="streams_details_filename">File name</string>
+    <string name="streams_details_size">Size</string>
+    <string name="streams_details_seeders">Seeders</string>
+    <string name="streams_details_source_site">Source site</string>
+    <string name="streams_details_languages">Languages</string>
+    <string name="streams_details_audio">Audio and channels</string>
+    <string name="streams_details_codec_hdr">Codec and HDR</string>
+    <string name="streams_details_type">Type</string>
+    <string name="streams_details_cached">Cached status</string>
+    <string name="streams_details_pack">Pack</string>
+    <string name="streams_details_match">Match</string>
+    <string name="streams_details_special_headers">Needs special headers</string>
+    <string name="streams_details_special_headers_explanation">Some addons protect their links: the link only works if the app sends extra information with the request (a browser name, a referring site, a cookie). We pass that information to the built-in player later; an external player cannot always receive it, so such a link may fail there.</string>
+    <string name="streams_details_raw_info">Raw addon text</string>
+    <string name="streams_details_yes">Yes</string>
+    <string name="streams_details_no">No</string>
+    <string name="streams_details_close">Close</string>
+    <string name="streams_match_ok">Matches request cleanly</string>
+    <string name="streams_match_wrong_episode">Looks like %1$s, you asked for %2$s</string>
+    <string name="streams_match_wrong_season">Different season from requested</string>
+    <string name="streams_match_wrong_year">Different release year from requested</string>
+    <string name="streams_match_unknown">Unknown (cannot verify from file name)</string>
 </resources>
 
