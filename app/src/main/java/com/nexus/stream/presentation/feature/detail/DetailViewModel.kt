@@ -161,6 +161,7 @@ class DetailViewModel(
     val effects: SharedFlow<DetailEffect> = _effects.asSharedFlow()
 
     private var userSelectedSeason: Int? = null
+    private var currentListStatus: ListStatus? = null
 
     @Inject
     constructor(
@@ -487,7 +488,8 @@ class DetailViewModel(
         val trailerUrl = meta.trailers.firstNotNullOfOrNull { youtubeWatchUrlOrNull(it) }
 
         val currentContent = _uiState.value as? DetailUiState.Content
-        val inWatchlist = currentContent?.inWatchlist ?: false
+        val status = currentListStatus ?: currentContent?.listStatus
+        val inWatchlist = status != null
         val progress = currentContent?.episodeProgress.orEmpty()
         val synopsisExpanded = currentContent?.isSynopsisExpanded ?: false
 
@@ -499,6 +501,7 @@ class DetailViewModel(
                 meta = meta,
                 source = result.source,
                 inWatchlist = inWatchlist,
+                listStatus = status,
                 isSynopsisExpanded = synopsisExpanded,
                 seasons = seasons,
                 selectedSeason = selectedSeason,
@@ -521,12 +524,27 @@ class DetailViewModel(
                 val inWatchlist = listStatus != null
                 Triple(inWatchlist, listStatus, progressMap)
             }.collect { (inWatchlist, listStatus, progressMap) ->
+                currentListStatus = listStatus
                 _uiState.update { current ->
                     if (current !is DetailUiState.Content) return@update current
                     val selectedSeason =
                         userSelectedSeason
                             ?: calculateDefaultSeason(current.seasons, progressMap)
                     val playState = calculatePlayState(current.meta, progressMap, clock())
+                    val actions =
+                        if (current.showWatchOptionsSheet) {
+                            watchActions(
+                                type = current.meta.type,
+                                videos = current.meta.videos,
+                                progress = progressMap,
+                                metaId = current.meta.id,
+                                inWatchlist = inWatchlist,
+                                selectedSeason = selectedSeason,
+                                now = clock(),
+                            )
+                        } else {
+                            current.watchActions
+                        }
 
                     current.copy(
                         inWatchlist = inWatchlist,
@@ -536,6 +554,7 @@ class DetailViewModel(
                         playActionTitle = playState.title,
                         isPlayEnabled = playState.isEnabled,
                         activeVideoId = playState.videoId,
+                        watchActions = actions,
                     )
                 }
             }

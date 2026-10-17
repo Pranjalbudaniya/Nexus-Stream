@@ -8,10 +8,15 @@ import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.repository.LibraryRepository
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -19,7 +24,8 @@ class LibraryRepositoryImpl(
     private val libraryDao: LibraryDao,
     private val transactionRunner: TransactionRunner,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
-    private val clock: () -> Long,
+    scope: CoroutineScope = CoroutineScope(dispatcher + SupervisorJob()),
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) : LibraryRepository {
     @Inject
     constructor(
@@ -30,10 +36,11 @@ class LibraryRepositoryImpl(
         libraryDao = libraryDao,
         transactionRunner = transactionRunner,
         dispatcher = dispatcher,
+        scope = CoroutineScope(dispatcher + SupervisorJob()),
         clock = { System.currentTimeMillis() },
     )
 
-    override fun observeListStatuses(): Flow<Map<String, ListStatus>> =
+    private val sharedStatuses: StateFlow<Map<String, ListStatus>> =
         libraryDao
             .observeListStatuses()
             .map { list ->
@@ -46,6 +53,13 @@ class LibraryRepositoryImpl(
                 }
             }.distinctUntilChanged()
             .flowOn(dispatcher)
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyMap(),
+            )
+
+    override fun observeListStatuses(): Flow<Map<String, ListStatus>> = sharedStatuses
 
     override suspend fun setStatus(
         item: MetaPreview,
