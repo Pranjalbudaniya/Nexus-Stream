@@ -57,7 +57,18 @@ class StreamRepositoryImpl(
         clock = System::currentTimeMillis,
     )
 
-    private val cache = ConcurrentHashMap<String, CacheEntry>()
+    private data class AddonCacheKey(
+        val transportUrl: String,
+        val type: String,
+        val videoId: String,
+    )
+
+    private data class AddonCacheEntry(
+        val items: List<ParsedStream>,
+        val timestamp: Long,
+    )
+
+    private val addonCache = ConcurrentHashMap<AddonCacheKey, AddonCacheEntry>()
 
     override fun streams(
         type: String,
@@ -66,15 +77,6 @@ class StreamRepositoryImpl(
         onlyAddons: Set<String>?,
     ): Flow<StreamsState> =
         channelFlow {
-            val cacheKey = "$type:$videoId"
-            if (!forceRefresh && onlyAddons == null) {
-                val cached = cache[cacheKey]
-                if (cached != null && (clock() - cached.timestamp < CACHE_DURATION_MS)) {
-                    send(cached.state)
-                    return@channelFlow
-                }
-            }
-
             val matching = resolveMatchingAddons(type, videoId, onlyAddons)
             if (matching.isEmpty()) {
                 send(StreamsState(emptyList(), answered = 0, total = 0, failures = emptyList(), done = true))
@@ -85,7 +87,8 @@ class StreamRepositoryImpl(
                 matching = matching,
                 type = type,
                 videoId = videoId,
-                cacheKey = cacheKey,
+                forceRefresh = forceRefresh,
+                onlyAddons = onlyAddons,
             )
         }
 
@@ -105,7 +108,8 @@ class StreamRepositoryImpl(
         matching: List<Addon>,
         type: String,
         videoId: String,
-        cacheKey: String,
+        forceRefresh: Boolean,
+        onlyAddons: Set<String>?,
     ) {
         val familyMode = withContext(ioDispatcher) { contentPrefsRepository.familyMode.first() }
         val total = matching.size
@@ -113,23 +117,47 @@ class StreamRepositoryImpl(
         val mutex = Mutex()
         val accumulator = StreamAccumulator(total = total, familyMode = familyMode)
 
-        send(StreamsState(emptyList(), answered = 0, total = total, failures = emptyList(), done = false))
+        val cachedItems = mutableListOf<List<ParsedStream>>()
+        val toQuery = mutableListOf<Addon>()
 
+        val now = clock()
         for (addon in matching) {
+            val shouldBypass = forceRefresh || (onlyAddons != null && addon.transportUrl in onlyAddons)
+            val entry = if (!shouldBypass) addonCache[AddonCacheKey(addon.transportUrl, type, videoId)] else null
+            if (entry != null && (now - entry.timestamp < CACHE_DURATION_MS)) {
+                cachedItems.add(entry.items)
+            } else {
+                toQuery.add(addon)
+            }
+        }
+
+        for (items in cachedItems) {
+            accumulator.recordCached(items)
+        }
+
+        if (toQuery.isEmpty()) {
+            send(accumulator.buildState())
+            return
+        }
+
+        send(accumulator.buildState())
+
+        for (addon in toQuery) {
             launch(ioDispatcher) {
                 val result = queryAddonWithTimeout(addon.transportUrl, type, videoId, semaphore)
                 val updatedState =
                     mutex.withLock {
                         withContext(defaultDispatcher) {
-                            accumulator.recordResult(addon.manifest.name, addon.transportUrl, result)
+                            val parsed = accumulator.recordResult(addon.manifest.name, addon.transportUrl, result)
+                            if (parsed.isNotEmpty()) {
+                                addonCache[AddonCacheKey(addon.transportUrl, type, videoId)] =
+                                    AddonCacheEntry(parsed, clock())
+                            }
                             accumulator.buildState()
                         }
                     }
 
                 send(updatedState)
-                if (updatedState.done && updatedState.items.isNotEmpty()) {
-                    cache[cacheKey] = CacheEntry(updatedState, clock())
-                }
             }
         }
     }
@@ -154,23 +182,31 @@ class StreamRepositoryImpl(
         private val allItems = mutableListOf<ParsedStream>()
         private val allFailures = mutableListOf<AddonFailure>()
 
+        fun recordCached(items: List<ParsedStream>) {
+            answeredCount++
+            val filtered = if (familyMode) items.filter { StreamOrdering.isFamilySafe(it.stream) } else items
+            allItems.addAll(filtered)
+        }
+
         fun recordResult(
             addonName: String,
             transportUrl: String,
             result: Outcome<List<com.nexus.stream.domain.model.Stream>>,
-        ) {
+        ): List<ParsedStream> {
             answeredCount++
             when (result) {
                 is Outcome.Success -> {
                     val parsed =
                         result.value
                             .filter { if (familyMode) StreamOrdering.isFamilySafe(it) else true }
-                            .mapNotNull { StreamParsing.parse(it, addonName) }
+                            .mapNotNull { StreamParsing.parse(it, addonName, transportUrl) }
                     allItems.addAll(parsed)
+                    return parsed
                 }
 
                 is Outcome.Failure -> {
                     allFailures.add(AddonFailure(addonName, result.error, transportUrl))
+                    return emptyList()
                 }
             }
         }
@@ -186,11 +222,6 @@ class StreamRepositoryImpl(
             )
         }
     }
-
-    private data class CacheEntry(
-        val state: StreamsState,
-        val timestamp: Long,
-    )
 
     companion object {
         private const val ADDON_TIMEOUT_MS = 15_000L

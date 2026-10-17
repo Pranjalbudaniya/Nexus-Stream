@@ -14,7 +14,8 @@ object StreamOrdering {
                 map[item.key] = item
             } else {
                 val mergedAddons = (existing.addonNames + item.addonNames).distinct()
-                map[item.key] = existing.copy(addonNames = mergedAddons)
+                val mergedKeys = (existing.addonKeys + item.addonKeys).distinct()
+                map[item.key] = existing.copy(addonNames = mergedAddons, addonKeys = mergedKeys)
             }
         }
         return map.values.toList()

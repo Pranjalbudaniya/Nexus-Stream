@@ -36,6 +36,7 @@ object StreamParsing {
     fun parse(
         stream: Stream,
         addonName: String,
+        addonKey: String = "",
     ): ParsedStream? {
         val (kind, key) = resolveKindAndKey(stream.source) ?: return null
         val text = buildText(stream)
@@ -46,6 +47,7 @@ object StreamParsing {
             key = key,
             stream = stream,
             addonNames = listOf(addonName),
+            addonKeys = if (addonKey.isNotBlank()) listOf(addonKey) else emptyList(),
             resolution = parseResolution(text),
             hdr = parseHdr(text),
             codec = parseCodec(text),

@@ -394,4 +394,31 @@ class StreamsViewModelTest {
 
             job.cancel()
         }
+
+    @Test
+    fun setRequest_reopeningSameRequest_discardsPreviousStateAndStartsFreshFlow() =
+        runTest {
+            val s1 = createParsedStream("s1", resolution = 1080)
+            val streamFlow1 = MutableStateFlow(StreamsState(listOf(s1), 1, 1, emptyList(), true))
+            val streamFlow2 = MutableStateFlow(StreamsState(emptyList(), 0, 1, emptyList(), false))
+
+            every { streamRepository.streams(sampleRequest.type, sampleRequest.videoId, false, null) } returnsMany
+                listOf(streamFlow1, streamFlow2)
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.allStreams.size)
+            assertTrue(viewModel.uiState.value.isDone)
+
+            // Reopen the exact same request
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            // Discards previous items, shows fresh loading flow
+            assertEquals(0, viewModel.uiState.value.allStreams.size)
+            assertFalse(viewModel.uiState.value.isDone)
+            assertTrue(viewModel.uiState.value.isLoading)
+        }
 }

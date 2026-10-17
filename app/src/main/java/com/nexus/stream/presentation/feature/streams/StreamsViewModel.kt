@@ -202,9 +202,6 @@ class StreamsViewModel
         }
 
         private fun handleSetRequest(request: PlaybackRequest) {
-            if (_uiState.value.request?.type == request.type && _uiState.value.request?.videoId == request.videoId) {
-                return
-            }
             loadingJob?.cancel()
             _uiState.update {
                 StreamsUiState(

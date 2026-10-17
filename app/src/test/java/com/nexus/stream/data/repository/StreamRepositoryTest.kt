@@ -332,4 +332,63 @@ class StreamRepositoryTest {
 
             assertTrue(wasCancelled)
         }
+
+    @Test
+    fun disablingAddon_removesItsRowsImmediately_andReenablingRestoresFromCache() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon("https://addon1.stream/", "Addon One")
+            val addon2 = createAddon("https://addon2.stream/", "Addon Two")
+            activeAddonsFlow.value = listOf(addon1, addon2)
+
+            coEvery { remoteDataSource.streams(addon1.transportUrl, "movie", "tt123456") } returns
+                Outcome.Success(listOf(createStream("StreamOne", "1080p")))
+            coEvery { remoteDataSource.streams(addon2.transportUrl, "movie", "tt123456") } returns
+                Outcome.Success(listOf(createStream("StreamTwo", "720p")))
+
+            // First call -> both are queried and cached
+            val states1 = mutableListOf<StreamsState>()
+            val job1 = launch { repository.streams("movie", "tt123456").toList(states1) }
+            advanceUntilIdle()
+            job1.join()
+
+            assertEquals(2, states1.last().items.size)
+            coVerify(exactly = 1) { remoteDataSource.streams(addon1.transportUrl, "movie", "tt123456") }
+            coVerify(exactly = 1) { remoteDataSource.streams(addon2.transportUrl, "movie", "tt123456") }
+
+            // Disable addon2 within TTL
+            currentTime += 30_000L
+            activeAddonsFlow.value = listOf(addon1)
+
+            val states2 = mutableListOf<StreamsState>()
+            val job2 = launch { repository.streams("movie", "tt123456").toList(states2) }
+            advanceUntilIdle()
+            job2.join()
+
+            // Only addon1 rows appear; addon2 rows are gone immediately
+            val lastState2 = states2.last()
+            assertEquals(1, lastState2.total)
+            assertEquals(1, lastState2.answered)
+            assertEquals(1, lastState2.items.size)
+            assertEquals(listOf("Addon One"), lastState2.items[0].addonNames)
+            // No new network calls made because addon1 was cached
+            coVerify(exactly = 1) { remoteDataSource.streams(addon1.transportUrl, "movie", "tt123456") }
+            coVerify(exactly = 1) { remoteDataSource.streams(addon2.transportUrl, "movie", "tt123456") }
+
+            // Re-enable addon2 within TTL
+            currentTime += 30_000L
+            activeAddonsFlow.value = listOf(addon1, addon2)
+
+            val states3 = mutableListOf<StreamsState>()
+            val job3 = launch { repository.streams("movie", "tt123456").toList(states3) }
+            advanceUntilIdle()
+            job3.join()
+
+            // Both addons appear again immediately from cache
+            val lastState3 = states3.last()
+            assertEquals(2, lastState3.total)
+            assertEquals(2, lastState3.answered)
+            assertEquals(2, lastState3.items.size)
+            coVerify(exactly = 1) { remoteDataSource.streams(addon1.transportUrl, "movie", "tt123456") }
+            coVerify(exactly = 1) { remoteDataSource.streams(addon2.transportUrl, "movie", "tt123456") }
+        }
 }

@@ -25,6 +25,7 @@ data class ParsedStream(
     val key: String,
     val stream: Stream,
     val addonNames: List<String>,
+    val addonKeys: List<String> = emptyList(),
     val resolution: Int?,
     val hdr: Set<HdrKind>,
     val codec: Codec?,
