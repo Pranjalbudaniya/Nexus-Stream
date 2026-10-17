@@ -17,6 +17,9 @@ data class SettingsUiState(
     val familyMode: Boolean = true,
     val hiddenAdultAddonsCount: Int = 0,
     val quickPlay: Boolean = false,
+    val preferredLanguage: String? = null,
+    val preferredQuality: Int? = null,
+    val hideCam: Boolean = false,
 )
 
 sealed interface SettingsEvent {
@@ -27,7 +30,26 @@ sealed interface SettingsEvent {
     data class SetQuickPlay(
         val enabled: Boolean,
     ) : SettingsEvent
+
+    data class SetPreferredLanguage(
+        val code: String?,
+    ) : SettingsEvent
+
+    data class SetPreferredQuality(
+        val quality: Int?,
+    ) : SettingsEvent
+
+    data class SetHideCam(
+        val enabled: Boolean,
+    ) : SettingsEvent
 }
+
+private data class PlayerSettings(
+    val quickPlay: Boolean,
+    val preferredLanguage: String?,
+    val preferredQuality: Int?,
+    val hideCam: Boolean,
+)
 
 @HiltViewModel
 class SettingsViewModel
@@ -37,17 +59,30 @@ class SettingsViewModel
         private val playerPrefsRepository: PlayerPrefsRepository,
         addonRepository: AddonRepository,
     ) : ViewModel() {
+        private val playerSettingsFlow =
+            combine(
+                playerPrefsRepository.quickPlay,
+                playerPrefsRepository.preferredLanguage,
+                playerPrefsRepository.preferredQuality,
+                playerPrefsRepository.hideCam,
+            ) { quickPlay, lang, quality, hideCam ->
+                PlayerSettings(quickPlay, lang, quality, hideCam)
+            }
+
         val uiState: StateFlow<SettingsUiState> =
             combine(
                 contentPrefsRepository.familyMode,
                 addonRepository.observeAll(),
-                playerPrefsRepository.quickPlay,
-            ) { familyMode, allAddons, quickPlay ->
+                playerSettingsFlow,
+            ) { familyMode, allAddons, player ->
                 val hiddenCount = if (familyMode) allAddons.count { it.isAdult } else 0
                 SettingsUiState(
                     familyMode = familyMode,
                     hiddenAdultAddonsCount = hiddenCount,
-                    quickPlay = quickPlay,
+                    quickPlay = player.quickPlay,
+                    preferredLanguage = player.preferredLanguage,
+                    preferredQuality = player.preferredQuality,
+                    hideCam = player.hideCam,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -66,6 +101,24 @@ class SettingsViewModel
                 is SettingsEvent.SetQuickPlay -> {
                     viewModelScope.launch {
                         playerPrefsRepository.setQuickPlay(event.enabled)
+                    }
+                }
+
+                is SettingsEvent.SetPreferredLanguage -> {
+                    viewModelScope.launch {
+                        playerPrefsRepository.setPreferredLanguage(event.code)
+                    }
+                }
+
+                is SettingsEvent.SetPreferredQuality -> {
+                    viewModelScope.launch {
+                        playerPrefsRepository.setPreferredQuality(event.quality)
+                    }
+                }
+
+                is SettingsEvent.SetHideCam -> {
+                    viewModelScope.launch {
+                        playerPrefsRepository.setHideCam(event.enabled)
                     }
                 }
             }

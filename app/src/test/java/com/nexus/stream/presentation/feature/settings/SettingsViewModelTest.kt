@@ -34,6 +34,9 @@ class SettingsViewModelTest {
 
     private val familyModeFlow = MutableStateFlow(true)
     private val quickPlayFlow = MutableStateFlow(false)
+    private val preferredLanguageFlow = MutableStateFlow<String?>(null)
+    private val preferredQualityFlow = MutableStateFlow<Int?>(null)
+    private val hideCamFlow = MutableStateFlow(false)
     private val addonsFlow = MutableStateFlow<List<Addon>>(emptyList())
 
     private val adultAddon =
@@ -99,6 +102,9 @@ class SettingsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { contentPrefsRepository.familyMode } returns familyModeFlow
         every { playerPrefsRepository.quickPlay } returns quickPlayFlow
+        every { playerPrefsRepository.preferredLanguage } returns preferredLanguageFlow
+        every { playerPrefsRepository.preferredQuality } returns preferredQualityFlow
+        every { playerPrefsRepository.hideCam } returns hideCamFlow
         every { addonRepository.observeAll() } returns addonsFlow
     }
 
@@ -163,5 +169,50 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             coVerify { playerPrefsRepository.setQuickPlay(true) }
+        }
+
+    @Test
+    fun `preferredLanguage reflects repository and updates on SetPreferredLanguage`() =
+        runTest {
+            preferredLanguageFlow.value = "fr"
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertEquals("fr", viewModel.uiState.value.preferredLanguage)
+
+            viewModel.onEvent(SettingsEvent.SetPreferredLanguage("en"))
+            advanceUntilIdle()
+
+            coVerify { playerPrefsRepository.setPreferredLanguage("en") }
+        }
+
+    @Test
+    fun `preferredQuality reflects repository and updates on SetPreferredQuality`() =
+        runTest {
+            preferredQualityFlow.value = 1080
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertEquals(1080, viewModel.uiState.value.preferredQuality)
+
+            viewModel.onEvent(SettingsEvent.SetPreferredQuality(2160))
+            advanceUntilIdle()
+
+            coVerify { playerPrefsRepository.setPreferredQuality(2160) }
+        }
+
+    @Test
+    fun `hideCam reflects repository and updates on SetHideCam`() =
+        runTest {
+            hideCamFlow.value = true
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.hideCam)
+
+            viewModel.onEvent(SettingsEvent.SetHideCam(false))
+            advanceUntilIdle()
+
+            coVerify { playerPrefsRepository.setHideCam(false) }
         }
 }

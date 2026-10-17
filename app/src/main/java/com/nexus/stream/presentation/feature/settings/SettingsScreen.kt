@@ -7,9 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,12 +32,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.stream.R
+import com.nexus.stream.domain.usecase.LanguageCodes
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
-import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 
 private const val DISABLED_ALPHA = 0.5f
+private const val RES_4K = 2160
+private const val RES_1080P = 1080
+private const val RES_720P = 720
+private const val RES_SD = 480
 
 @Composable
 fun SettingsScreen(
@@ -67,6 +72,8 @@ internal fun SettingsContent(
 ) {
     val spacing = NexusTheme.spacing
     var showDisableDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showQualityDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -94,187 +101,312 @@ internal fun SettingsContent(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = spacing.md, vertical = spacing.sm),
             verticalArrangement = Arrangement.spacedBy(spacing.sm),
         ) {
-            NexusCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToAddons,
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_addons_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
-            NexusCard(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f).padding(end = spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_family_mode_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        val subtitle =
-                            if (uiState.familyMode && uiState.hiddenAdultAddonsCount > 0) {
-                                if (uiState.hiddenAdultAddonsCount == 1) {
-                                    stringResource(
-                                        R.string.settings_family_mode_subtitle_hidden,
-                                        uiState.hiddenAdultAddonsCount,
-                                    )
-                                } else {
-                                    stringResource(
-                                        R.string.settings_family_mode_subtitle_hidden_plural,
-                                        uiState.hiddenAdultAddonsCount,
-                                    )
-                                }
-                            } else {
-                                stringResource(R.string.settings_family_mode_subtitle)
-                            }
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            AddonsNavigationCard(onNavigateToAddons = onNavigateToAddons)
+            FamilyModeCard(
+                uiState = uiState,
+                onToggle = { checked ->
+                    if (checked) {
+                        onEvent(SettingsEvent.SetFamilyMode(true))
+                    } else {
+                        showDisableDialog = true
                     }
-                    Switch(
-                        checked = uiState.familyMode,
-                        onCheckedChange = { checked ->
-                            if (checked) {
-                                onEvent(SettingsEvent.SetFamilyMode(true))
-                            } else {
-                                showDisableDialog = true
-                            }
-                        },
-                    )
-                }
-            }
-
+                },
+            )
             Text(
                 text = stringResource(R.string.settings_player_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = spacing.xs),
             )
-
-            NexusCard(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f).padding(end = spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_quick_play_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_quick_play_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = uiState.quickPlay,
-                        onCheckedChange = { checked ->
-                            onEvent(SettingsEvent.SetQuickPlay(checked))
-                        },
-                    )
-                }
-            }
-
-            NexusCard(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .alpha(DISABLED_ALPHA),
-            ) {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_appearance_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_appearance_coming_soon),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            QuickPlayCard(
+                quickPlay = uiState.quickPlay,
+                onToggle = { onEvent(SettingsEvent.SetQuickPlay(it)) },
+            )
+            PreferredLanguageCard(
+                preferredLanguage = uiState.preferredLanguage,
+                onClick = { showLanguageDialog = true },
+            )
+            PreferredQualityCard(
+                preferredQuality = uiState.preferredQuality,
+                onClick = { showQualityDialog = true },
+            )
+            HideCamCard(
+                hideCam = uiState.hideCam,
+                onToggle = { onEvent(SettingsEvent.SetHideCam(it)) },
+            )
+            AppearanceComingSoonCard()
         }
 
-        if (showDisableDialog) {
-            AlertDialog(
-                onDismissRequest = { showDisableDialog = false },
-                title = {
-                    Text(
-                        text = stringResource(R.string.settings_family_mode_disable_confirm_title),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                },
-                text = {
-                    Text(
-                        text = stringResource(R.string.settings_family_mode_disable_confirm_message),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                confirmButton = {
-                    NexusTextButton(
-                        onClick = {
-                            showDisableDialog = false
-                            onEvent(SettingsEvent.SetFamilyMode(false))
-                        },
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_family_mode_turn_off),
-                            color = MaterialTheme.colorScheme.error,
-                        )
+        SettingsDialogs(
+            showDisableDialog = showDisableDialog,
+            showLanguageDialog = showLanguageDialog,
+            showQualityDialog = showQualityDialog,
+            uiState = uiState,
+            onEvent = onEvent,
+            onDismissDisable = { showDisableDialog = false },
+            onDismissLanguage = { showLanguageDialog = false },
+            onDismissQuality = { showQualityDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun AddonsNavigationCard(onNavigateToAddons: () -> Unit) {
+    NexusCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onNavigateToAddons,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(NexusTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.settings_addons_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FamilyModeCard(
+    uiState: SettingsUiState,
+    onToggle: (Boolean) -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_family_mode_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                val subtitle =
+                    if (uiState.familyMode && uiState.hiddenAdultAddonsCount > 0) {
+                        if (uiState.hiddenAdultAddonsCount == 1) {
+                            stringResource(
+                                R.string.settings_family_mode_subtitle_hidden,
+                                uiState.hiddenAdultAddonsCount,
+                            )
+                        } else {
+                            stringResource(
+                                R.string.settings_family_mode_subtitle_hidden_plural,
+                                uiState.hiddenAdultAddonsCount,
+                            )
+                        }
+                    } else {
+                        stringResource(R.string.settings_family_mode_subtitle)
                     }
-                },
-                dismissButton = {
-                    NexusTextButton(
-                        onClick = { showDisableDialog = false },
-                    ) {
-                        Text(text = stringResource(R.string.btn_cancel))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = uiState.familyMode, onCheckedChange = onToggle)
+        }
+    }
+}
+
+@Composable
+private fun QuickPlayCard(
+    quickPlay: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_quick_play_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_quick_play_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = quickPlay, onCheckedChange = onToggle)
+        }
+    }
+}
+
+@Composable
+private fun PreferredLanguageCard(
+    preferredLanguage: String?,
+    onClick: () -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_player_preferred_language_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                val label =
+                    preferredLanguage?.let { LanguageCodes.languageDisplayName(it) }
+                        ?: stringResource(R.string.settings_player_preferred_language_none)
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreferredQualityCard(
+    preferredQuality: Int?,
+    onClick: () -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_player_preferred_quality_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                val label =
+                    when (preferredQuality) {
+                        RES_4K -> stringResource(R.string.settings_player_preferred_quality_4k)
+                        RES_1080P -> stringResource(R.string.settings_player_preferred_quality_1080p)
+                        RES_720P -> stringResource(R.string.settings_player_preferred_quality_720p)
+                        RES_SD -> stringResource(R.string.settings_player_preferred_quality_sd)
+                        else -> stringResource(R.string.settings_player_preferred_quality_auto)
                     }
-                },
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HideCamCard(
+    hideCam: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_player_hide_cam_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_player_hide_cam_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = hideCam, onCheckedChange = onToggle)
+        }
+    }
+}
+
+@Composable
+private fun AppearanceComingSoonCard() {
+    val spacing = NexusTheme.spacing
+    NexusCard(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .alpha(DISABLED_ALPHA),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.md),
+            verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_appearance_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.settings_appearance_coming_soon),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -285,7 +417,15 @@ internal fun SettingsContent(
 internal fun SettingsScreenLightPreview() {
     NexusTheme {
         SettingsContent(
-            uiState = SettingsUiState(familyMode = true, hiddenAdultAddonsCount = 2, quickPlay = false),
+            uiState =
+                SettingsUiState(
+                    familyMode = true,
+                    hiddenAdultAddonsCount = 2,
+                    quickPlay = false,
+                    preferredLanguage = "en",
+                    preferredQuality = 1080,
+                    hideCam = false,
+                ),
             onEvent = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
@@ -298,7 +438,15 @@ internal fun SettingsScreenLightPreview() {
 internal fun SettingsScreenDarkPreview() {
     NexusTheme {
         SettingsContent(
-            uiState = SettingsUiState(familyMode = false, hiddenAdultAddonsCount = 0, quickPlay = true),
+            uiState =
+                SettingsUiState(
+                    familyMode = false,
+                    hiddenAdultAddonsCount = 0,
+                    quickPlay = true,
+                    preferredLanguage = null,
+                    preferredQuality = null,
+                    hideCam = true,
+                ),
             onEvent = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
