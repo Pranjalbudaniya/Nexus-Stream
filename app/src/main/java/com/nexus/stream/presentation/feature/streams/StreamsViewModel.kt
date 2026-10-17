@@ -7,8 +7,11 @@ import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
+import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamKind
+import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
+import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
@@ -50,15 +53,45 @@ data class StreamsUiState(
     val filteredStreams: List<ParsedStream> = emptyList(),
     val availableResolutions: List<Int> = emptyList(),
     val resolutionCounts: Map<Int, Int> = emptyMap(),
+    val allResolutionsCount: Int = 0,
     val selectedResolution: Int? = null,
     val availableAddons: List<AddonFilterOption> = emptyList(),
+    val allAddonsCount: Int = 0,
     val selectedAddon: String? = null,
     val showAddonFilter: Boolean = false,
+    val availableLanguages: List<String> = emptyList(),
+    val languageCounts: Map<String, Int> = emptyMap(),
+    val anyLanguageCount: Int = 0,
+    val selectedLanguage: String? = null,
+    val typeDirectCount: Int = 0,
+    val typeTorrentCount: Int = 0,
+    val allTypesCount: Int = 0,
+    val selectedType: TypeFilter = TypeFilter.ALL,
+    val cachedCount: Int = 0,
+    val cachedOnly: Boolean = false,
+    val sort: StreamSort = StreamSort.BEST,
+    val preferredLanguage: String? = null,
+    val preferredQuality: Int? = null,
+    val hideCam: Boolean = false,
+    val showResolutionFilter: Boolean = false,
+    val showLanguageFilter: Boolean = false,
+    val showTypeFilter: Boolean = false,
+    val showCachedFilter: Boolean = false,
     val detailsStream: ParsedStream? = null,
     val failures: List<AddonFailure> = emptyList(),
     val isDone: Boolean = false,
     val quickPlayHandled: Boolean = false,
-)
+) {
+    val filters: StreamFilters
+        get() =
+            StreamFilters(
+                resolution = selectedResolution,
+                addonKey = selectedAddon,
+                language = selectedLanguage,
+                type = selectedType,
+                cachedOnly = cachedOnly,
+            )
+}
 
 sealed interface StreamsEffect {
     data class OpenVideo(

@@ -213,13 +213,13 @@ class StreamOrderingTest {
         assertEquals(emptyList<ParsedStream>(), StreamOrdering.filter(all, resolution = 720, addonKey = "addon2"))
 
         // resolutionCounts when addon1 is selected
-        val resCounts = StreamOrdering.resolutionCounts(all, selectedAddon = "addon1")
+        val resCounts = StreamFiltering.resolutionCounts(all, selectedAddon = "addon1")
         assertEquals(1, resCounts[1080])
         assertEquals(1, resCounts[720])
 
         // addonCounts when resolution 1080 is selected
         val addonCounts =
-            StreamOrdering.addonCounts(
+            StreamFiltering.addonCounts(
                 list = all,
                 selectedResolution = 1080,
                 allAddonIdentifiers = listOf("addon1", "addon2"),

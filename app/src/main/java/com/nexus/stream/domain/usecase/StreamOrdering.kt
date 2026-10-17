@@ -4,8 +4,9 @@ import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.model.ReleaseType
 import com.nexus.stream.domain.model.Stream
-import com.nexus.stream.domain.model.StreamKind
+import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamMatch
+import com.nexus.stream.domain.model.StreamSort
 
 object StreamOrdering {
     fun dedupe(list: List<ParsedStream>): List<ParsedStream> {
@@ -27,23 +28,44 @@ object StreamOrdering {
         item.match in setOf(StreamMatch.WRONG_SEASON, StreamMatch.WRONG_EPISODE, StreamMatch.WRONG_YEAR) ||
             item.releaseType == ReleaseType.CAM
 
-    fun sort(list: List<ParsedStream>): List<ParsedStream> =
+    fun sort(
+        list: List<ParsedStream>,
+        sort: StreamSort = StreamSort.BEST,
+        preferredLanguage: String? = null,
+        preferredQuality: Int? = null,
+    ): List<ParsedStream> =
         list.sortedWith { a, b ->
             val penA = if (isPenalized(a)) 1 else 0
             val penB = if (isPenalized(b)) 1 else 0
             val penCompare = penA.compareTo(penB)
             if (penCompare != 0) return@sortedWith penCompare
 
-            val resCompare = compareNullableDescending(a.resolution, b.resolution)
-            if (resCompare != 0) return@sortedWith resCompare
+            when (sort) {
+                StreamSort.BEST -> StreamSorting.compareBest(a, b, preferredLanguage, preferredQuality)
+                StreamSort.QUALITY -> StreamSorting.compareQuality(a, b)
+                StreamSort.SEEDERS -> StreamSorting.compareSeeders(a, b)
+                StreamSort.SIZE -> StreamSorting.compareSize(a, b)
+            }
+        }
 
-            val seedCompare = compareNullableDescending(a.seeders, b.seeders)
-            if (seedCompare != 0) return@sortedWith seedCompare
+    fun sortWith(
+        list: List<ParsedStream>,
+        sort: StreamSort = StreamSort.BEST,
+        preferredLanguage: String? = null,
+        preferredQuality: Int? = null,
+    ): List<ParsedStream> = sort(list, sort, preferredLanguage, preferredQuality)
 
-            val sizeCompare = compareNullableDescending(a.sizeBytes, b.sizeBytes)
-            if (sizeCompare != 0) return@sortedWith sizeCompare
-
-            0
+    fun applyFilters(
+        items: List<ParsedStream>,
+        filters: StreamFilters,
+        hideCam: Boolean = false,
+    ): List<ParsedStream> =
+        items.filter { item ->
+            if (hideCam && item.releaseType == ReleaseType.CAM) {
+                false
+            } else {
+                StreamFiltering.matchesFilters(item, filters)
+            }
         }
 
     fun filterByResolution(
@@ -82,36 +104,16 @@ object StreamOrdering {
             .distinct()
             .sortedDescending()
 
-    fun resolutionCounts(
-        list: List<ParsedStream>,
-        selectedAddon: String?,
-    ): Map<Int, Int> {
-        val filteredByAddon = filterByAddon(list, selectedAddon)
-        val resolutions = availableResolutions(list)
-        return resolutions.associateWith { res ->
-            filteredByAddon.count { it.resolution == res }
-        }
-    }
-
-    fun addonCounts(
-        list: List<ParsedStream>,
-        selectedResolution: Int?,
-        allAddonIdentifiers: List<String>,
-    ): Map<String, Int> {
-        val filteredByRes = filterByResolution(list, selectedResolution)
-        return allAddonIdentifiers.associateWith { id ->
-            filteredByRes.count { id in it.addonKeys || id in it.addonNames }
-        }
-    }
-
     fun bestPlayable(
         list: List<ParsedStream>,
         capabilities: PlaybackCapabilities,
+        preferredLanguage: String? = null,
+        preferredQuality: Int? = null,
     ): ParsedStream? {
-        val nonPenalized = list.filterNot { isPenalized(it) }
-        val candidate = nonPenalized.firstOrNull { canPlay(it, capabilities) }
-        if (candidate != null) return candidate
-        return list.firstOrNull { canPlay(it, capabilities) }
+        val sorted = sort(list, StreamSort.BEST, preferredLanguage, preferredQuality)
+        val nonPenalized = sorted.filterNot { isPenalized(it) }
+        val candidate = nonPenalized.firstOrNull { StreamSorting.canPlay(it, capabilities) }
+        return candidate ?: sorted.firstOrNull { StreamSorting.canPlay(it, capabilities) }
     }
 
     fun isFamilySafe(stream: Stream): Boolean {
@@ -126,24 +128,3 @@ object StreamOrdering {
         return !isAdultText(text)
     }
 }
-
-private fun canPlay(
-    item: ParsedStream,
-    capabilities: PlaybackCapabilities,
-): Boolean =
-    when (item.kind) {
-        StreamKind.Direct -> true
-        StreamKind.Torrent -> capabilities.supportsTorrent
-        StreamKind.ExternalLink -> false
-    }
-
-private fun <T : Comparable<T>> compareNullableDescending(
-    a: T?,
-    b: T?,
-): Int =
-    when {
-        a != null && b != null -> b.compareTo(a)
-        a != null -> -1
-        b != null -> 1
-        else -> 0
-    }

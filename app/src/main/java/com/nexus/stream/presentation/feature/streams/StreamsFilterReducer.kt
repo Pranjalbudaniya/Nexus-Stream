@@ -2,8 +2,12 @@ package com.nexus.stream.presentation.feature.streams
 
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.ParsedStream
-import com.nexus.stream.domain.repository.AddonFailure
+import com.nexus.stream.domain.model.StreamFilters
+import com.nexus.stream.domain.model.StreamKind
+import com.nexus.stream.domain.model.StreamSort
+import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.domain.repository.StreamsState
+import com.nexus.stream.domain.usecase.LanguageCodes
 import com.nexus.stream.domain.usecase.StreamOrdering
 
 internal object StreamsFilterReducer {
@@ -15,136 +19,90 @@ internal object StreamsFilterReducer {
         combined: List<ParsedStream>,
         matching: List<Addon>,
     ): StreamsUiState {
-        val resolutions = StreamOrdering.availableResolutions(combined)
-        val currentRes = state.selectedResolution
-        val currentAddon = state.selectedAddon
-        val resCounts = StreamOrdering.resolutionCounts(combined, selectedAddon = currentAddon)
-        val filtered = StreamOrdering.filter(combined, resolution = currentRes, addonKey = currentAddon)
-
-        val disambiguated = disambiguateAddons(matching)
-        val showRow = matching.size >= MIN_ACTIVE_FOR_FILTER
-        val addonOptions =
-            buildAddonOptions(
-                addons = disambiguated,
-                streams = combined,
-                selectedResolution = currentRes,
+        val baseState =
+            state.copy(
+                isLoading = !emission.done,
+                answered = emission.answered,
+                total = emission.total,
+                allStreams = combined,
                 failures = emission.failures,
+                isDone = emission.done,
             )
+        return recalculate(baseState, matching)
+    }
 
-        return state.copy(
-            isLoading = !emission.done,
-            answered = emission.answered,
-            total = emission.total,
-            allStreams = combined,
-            filteredStreams = filtered,
-            availableResolutions = resolutions,
-            resolutionCounts = resCounts,
-            availableAddons = addonOptions,
-            showAddonFilter = showRow,
-            failures = emission.failures,
-            isDone = emission.done,
-        )
+    fun updateFilters(
+        state: StreamsUiState,
+        matching: List<Addon>,
+        filters: StreamFilters,
+    ): StreamsUiState {
+        val baseState =
+            state.copy(
+                selectedResolution = filters.resolution,
+                selectedAddon = filters.addonKey,
+                selectedLanguage = filters.language,
+                selectedType = filters.type,
+                cachedOnly = filters.cachedOnly,
+            )
+        return recalculate(baseState, matching)
+    }
+
+    fun updateSort(
+        state: StreamsUiState,
+        matching: List<Addon>,
+        sort: StreamSort,
+    ): StreamsUiState {
+        val baseState = state.copy(sort = sort)
+        return recalculate(baseState, matching)
+    }
+
+    fun updatePreferences(
+        state: StreamsUiState,
+        matching: List<Addon>,
+        preferredLanguage: String?,
+        preferredQuality: Int?,
+        hideCam: Boolean,
+    ): StreamsUiState {
+        val baseState =
+            state.copy(
+                preferredLanguage = preferredLanguage,
+                preferredQuality = preferredQuality,
+                hideCam = hideCam,
+            )
+        return recalculate(baseState, matching)
     }
 
     fun selectResolution(
         state: StreamsUiState,
         resolution: Int?,
-    ): StreamsUiState {
-        val filtered =
-            StreamOrdering.filter(
-                state.allStreams,
-                resolution = resolution,
-                addonKey = state.selectedAddon,
-            )
-        val options =
-            updateAddonCounts(
-                options = state.availableAddons,
-                streams = state.allStreams,
-                selectedResolution = resolution,
-            )
-        return state.copy(
-            selectedResolution = resolution,
-            filteredStreams = filtered,
-            availableAddons = options,
-        )
-    }
+        matching: List<Addon> = emptyList(),
+    ): StreamsUiState = updateFilters(state, matching, state.filters.copy(resolution = resolution))
 
     fun selectAddon(
         state: StreamsUiState,
         addonKey: String?,
-    ): StreamsUiState {
-        val filtered =
-            StreamOrdering.filter(
-                state.allStreams,
-                resolution = state.selectedResolution,
-                addonKey = addonKey,
-            )
-        val resCounts =
-            StreamOrdering.resolutionCounts(
-                state.allStreams,
-                selectedAddon = addonKey,
-            )
-        return state.copy(
-            selectedAddon = addonKey,
-            filteredStreams = filtered,
-            resolutionCounts = resCounts,
-        )
-    }
+        matching: List<Addon> = emptyList(),
+    ): StreamsUiState = updateFilters(state, matching, state.filters.copy(addonKey = addonKey))
 
-    fun clearFilters(state: StreamsUiState): StreamsUiState {
-        val resCounts = StreamOrdering.resolutionCounts(state.allStreams, selectedAddon = null)
-        val options = updateAddonCounts(state.availableAddons, state.allStreams, selectedResolution = null)
-        return state.copy(
-            selectedResolution = null,
-            selectedAddon = null,
-            filteredStreams = state.allStreams,
-            resolutionCounts = resCounts,
-            availableAddons = options,
-        )
+    fun clearFilters(
+        state: StreamsUiState,
+        matching: List<Addon> = emptyList(),
+    ): StreamsUiState {
+        val baseState =
+            state.copy(
+                selectedResolution = null,
+                selectedAddon = null,
+                selectedLanguage = null,
+                selectedType = TypeFilter.ALL,
+                cachedOnly = false,
+            )
+        return recalculate(baseState, matching)
     }
 
     fun updateActiveAddons(
         state: StreamsUiState,
         matching: List<Addon>,
-    ): StreamsUiState {
-        val disambiguated = disambiguateAddons(matching)
-        val showRow = matching.size >= MIN_ACTIVE_FOR_FILTER
-        val activeUrls = matching.map { it.transportUrl }.toSet()
-        val validSelectedAddon =
-            if (state.selectedAddon != null && state.selectedAddon in activeUrls) {
-                state.selectedAddon
-            } else {
-                null
-            }
-
-        val options =
-            buildAddonOptions(
-                addons = disambiguated,
-                streams = state.allStreams,
-                selectedResolution = state.selectedResolution,
-                failures = state.failures,
-            )
-
-        val filtered =
-            StreamOrdering.filter(
-                state.allStreams,
-                resolution = state.selectedResolution,
-                addonKey = validSelectedAddon,
-            )
-        val resCounts =
-            StreamOrdering.resolutionCounts(
-                state.allStreams,
-                selectedAddon = validSelectedAddon,
-            )
-
-        return state.copy(
-            availableAddons = options,
-            showAddonFilter = showRow,
-            selectedAddon = validSelectedAddon,
-            filteredStreams = filtered,
-            resolutionCounts = resCounts,
-        )
-    }
+    ): StreamsUiState = recalculate(state, matching)
 
     fun disambiguateAddons(addons: List<Addon>): List<Pair<Addon, String>> {
         val counts = mutableMapOf<String, Int>()
@@ -166,47 +124,58 @@ internal object StreamsFilterReducer {
         return result
     }
 
-    fun buildAddonOptions(
-        addons: List<Pair<Addon, String>>,
-        streams: List<ParsedStream>,
-        selectedResolution: Int?,
-        failures: List<AddonFailure>,
-    ): List<AddonFilterOption> {
-        val failedUrls = failures.map { it.transportUrl }.toSet()
-        val identifiers = addons.map { it.first.transportUrl }
-        val counts =
-            StreamOrdering.addonCounts(
-                streams,
-                selectedResolution = selectedResolution,
-                allAddonIdentifiers = identifiers,
+    private fun recalculate(
+        state: StreamsUiState,
+        matching: List<Addon>,
+    ): StreamsUiState {
+        val all = state.allStreams
+        val availableResolutions = StreamOrdering.availableResolutions(all)
+        val activeUrls = StreamsFilterComputer.extractActiveUrls(matching, state.availableAddons)
+        val presentLanguages = all.flatMap { LanguageCodes.codes(it.languages) }.distinct()
+        val currentFilters =
+            StreamsFilterComputer.sanitizeFilters(
+                state,
+                all,
+                availableResolutions,
+                activeUrls,
+                presentLanguages,
             )
 
-        return addons.map { (addon, label) ->
-            val count = counts[addon.transportUrl] ?: 0
-            val isFailed = addon.transportUrl in failedUrls
-            AddonFilterOption(
-                transportUrl = addon.transportUrl,
-                displayName = label,
-                count = count,
-                failed = isFailed,
+        val params =
+            CrossCountParams(all, currentFilters, availableResolutions, activeUrls, presentLanguages, state.hideCam)
+        val crossCounts = StreamsFilterComputer.computeCrossCounts(params)
+        val failedUrls = state.failures.map { it.transportUrl }.toSet()
+        val addonOptions =
+            StreamsFilterComputer.buildAddonOptionsList(
+                matching,
+                state.availableAddons,
+                crossCounts.addonCounts,
+                failedUrls,
             )
-        }
-    }
 
-    fun updateAddonCounts(
-        options: List<AddonFilterOption>,
-        streams: List<ParsedStream>,
-        selectedResolution: Int?,
-    ): List<AddonFilterOption> {
-        val identifiers = options.map { it.transportUrl }
-        val counts =
-            StreamOrdering.addonCounts(
-                streams,
-                selectedResolution = selectedResolution,
-                allAddonIdentifiers = identifiers,
+        val sortedLanguages =
+            presentLanguages.sortedWith(
+                compareByDescending<String> { crossCounts.langCounts[it] ?: 0 }
+                    .thenBy { LanguageCodes.languageDisplayName(it) },
             )
-        return options.map { opt ->
-            opt.copy(count = counts[opt.transportUrl] ?: 0)
-        }
+
+        val filtered = StreamOrdering.applyFilters(all, currentFilters, state.hideCam)
+        val sortedFiltered = StreamOrdering.sort(filtered, state.sort, state.preferredLanguage, state.preferredQuality)
+        val showAddon = if (matching.isNotEmpty()) matching.size >= MIN_ACTIVE_FOR_FILTER else state.showAddonFilter
+
+        val bundle =
+            FilteredStateBundle(
+                filters = currentFilters,
+                sortedFiltered = sortedFiltered,
+                resolutions = availableResolutions,
+                crossCounts = crossCounts,
+                addonOptions = addonOptions,
+                languages = sortedLanguages,
+                showAddon = showAddon,
+                hasDirect = all.any { it.kind == StreamKind.Direct },
+                hasTorrent = all.any { it.kind == StreamKind.Torrent },
+                hasCached = all.any { it.debrid?.cached == true },
+            )
+        return StreamsFilterComputer.assembleState(state, bundle)
     }
 }
