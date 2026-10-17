@@ -123,7 +123,13 @@ object LanguageCodes {
         val result = LinkedHashSet<String>()
 
         for (name in languages.names) {
-            NAME_TO_CODE[name.lowercase(Locale.ROOT)]?.let { result.add(it) }
+            val lower = name.lowercase(Locale.ROOT)
+            val mapped = NAME_TO_CODE[lower]
+            if (mapped != null) {
+                result.add(mapped)
+            } else if (lower in SUPPORTED_LANGUAGE_CODES) {
+                result.add(lower)
+            }
         }
 
         for (flag in languages.flags) {

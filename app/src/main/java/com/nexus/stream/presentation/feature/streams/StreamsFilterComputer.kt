@@ -61,8 +61,17 @@ internal object StreamsFilterComputer {
         activeUrls: Set<String>,
         presentLanguages: List<String>,
     ): StreamFilters {
-        val validRes = if (state.selectedResolution in availableResolutions) state.selectedResolution else null
         val validAddon = if (state.selectedAddon in activeUrls) state.selectedAddon else null
+        if (all.isEmpty()) {
+            return StreamFilters(
+                resolution = state.selectedResolution,
+                addonKey = validAddon,
+                language = state.selectedLanguage,
+                type = state.selectedType,
+                cachedOnly = state.cachedOnly,
+            )
+        }
+        val validRes = if (state.selectedResolution in availableResolutions) state.selectedResolution else null
         val validLang = if (state.selectedLanguage in presentLanguages) state.selectedLanguage else null
 
         val hasDirect = all.any { it.kind == StreamKind.Direct }
@@ -180,7 +189,7 @@ internal object StreamsFilterComputer {
             allTypesCount = b.crossCounts.allTypeCount,
             cachedCount = b.crossCounts.cachedCount,
             showResolutionFilter = b.resolutions.size >= 2,
-            showLanguageFilter = b.languages.isNotEmpty(),
+            showLanguageFilter = b.languages.size >= 2,
             showTypeFilter = b.hasDirect && b.hasTorrent,
             showCachedFilter = b.hasCached,
         )

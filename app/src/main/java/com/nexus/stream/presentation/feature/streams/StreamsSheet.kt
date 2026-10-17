@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -44,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
@@ -55,7 +53,6 @@ import kotlinx.coroutines.launch
 const val STREAMS_SHEET_GESTURES_ENABLED = true
 private const val SKELETON_COUNT = 4
 private const val SHEET_MAX_HEIGHT_FRACTION = 0.9f
-private const val RES_4K = 2160
 private const val SERIES_EPISODE_PARTS_MIN = 3
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -208,26 +205,16 @@ private fun StreamsSheetContent(
             onDismiss = onDismiss,
         )
 
-        StreamsStatusRow(uiState = uiState, onRetryFailed = { onEvent(StreamsEvent.RetryFailed) })
+        StreamsStatusRow(
+            uiState = uiState,
+            onRetryFailed = { onEvent(StreamsEvent.RetryFailed) },
+            onClearFilters = { onEvent(StreamsEvent.ClearFilters) },
+        )
 
-        if (uiState.availableResolutions.isNotEmpty()) {
-            StreamsResolutionChipsRow(
-                selectedResolution = uiState.selectedResolution,
-                availableResolutions = uiState.availableResolutions,
-                resolutionCounts = uiState.resolutionCounts,
-                totalCount = uiState.allStreams.size,
-                onSelectResolution = { onEvent(StreamsEvent.SelectResolution(it)) },
-            )
-        }
-
-        if (uiState.showAddonFilter) {
-            StreamsAddonChipsRow(
-                selectedAddon = uiState.selectedAddon,
-                availableAddons = uiState.availableAddons,
-                totalCount = uiState.allStreams.size,
-                onSelectAddon = { onEvent(StreamsEvent.SelectAddon(it)) },
-            )
-        }
+        FilterBar(
+            uiState = uiState,
+            onEvent = onEvent,
+        )
 
         StreamsListContent(uiState = uiState, onEvent = onEvent)
     }
@@ -283,9 +270,20 @@ private fun StreamsSheetHeader(
 private fun StreamsStatusRow(
     uiState: StreamsUiState,
     onRetryFailed: () -> Unit,
+    onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (uiState.total == 0) return
+
+    val isFilterActive =
+        uiState.allStreams.isNotEmpty() &&
+            (
+                uiState.selectedResolution != null ||
+                    uiState.selectedAddon != null ||
+                    uiState.selectedLanguage != null ||
+                    uiState.selectedType != TypeFilter.ALL ||
+                    uiState.cachedOnly
+            )
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -293,7 +291,13 @@ private fun StreamsStatusRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val statusText =
-            if (!uiState.isDone) {
+            if (isFilterActive) {
+                stringResource(
+                    R.string.streams_showing_count,
+                    uiState.filteredStreams.size,
+                    uiState.allStreams.size,
+                )
+            } else if (!uiState.isDone) {
                 stringResource(R.string.streams_searching_progress, uiState.answered, uiState.total)
             } else if (uiState.failures.isNotEmpty()) {
                 stringResource(R.string.streams_answered_with_failures, uiState.answered, uiState.failures.size)
@@ -307,123 +311,17 @@ private fun StreamsStatusRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        if (uiState.isDone && uiState.failures.isNotEmpty()) {
-            NexusTextButton(onClick = onRetryFailed) {
-                Text(stringResource(R.string.streams_retry_failed))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isFilterActive) {
+                NexusTextButton(onClick = onClearFilters) {
+                    Text(stringResource(R.string.streams_clear_filters))
+                }
             }
-        }
-    }
-}
-
-@Composable
-private fun StreamsResolutionChipsRow(
-    selectedResolution: Int?,
-    availableResolutions: List<Int>,
-    resolutionCounts: Map<Int, Int>,
-    totalCount: Int,
-    onSelectResolution: (Int?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
-    ) {
-        item {
-            FilterChip(
-                selected = selectedResolution == null,
-                onClick = { onSelectResolution(null) },
-                label = {
-                    Text(
-                        text =
-                            stringResource(
-                                R.string.streams_quality_chip,
-                                stringResource(R.string.streams_quality_all),
-                                totalCount,
-                            ),
-                    )
-                },
-                shape = NexusTheme.shapes.chip,
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
-        }
-        items(availableResolutions, key = { it }) { res ->
-            val count = resolutionCounts[res] ?: 0
-            val label = if (res == RES_4K) "4K" else "${res}p"
-            FilterChip(
-                selected = selectedResolution == res,
-                onClick = { onSelectResolution(res) },
-                label = {
-                    Text(
-                        text = stringResource(R.string.streams_quality_chip, label, count),
-                    )
-                },
-                shape = NexusTheme.shapes.chip,
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StreamsAddonChipsRow(
-    selectedAddon: String?,
-    availableAddons: List<AddonFilterOption>,
-    totalCount: Int,
-    onSelectAddon: (String?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
-    ) {
-        item {
-            FilterChip(
-                selected = selectedAddon == null,
-                onClick = { onSelectAddon(null) },
-                label = {
-                    Text(
-                        text =
-                            stringResource(
-                                R.string.streams_quality_chip,
-                                stringResource(R.string.streams_addon_all),
-                                totalCount,
-                            ),
-                    )
-                },
-                shape = NexusTheme.shapes.chip,
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
-        }
-        items(availableAddons, key = { it.transportUrl }) { addon ->
-            FilterChip(
-                selected = selectedAddon == addon.transportUrl,
-                onClick = { onSelectAddon(addon.transportUrl) },
-                label = {
-                    Text(
-                        text =
-                            stringResource(
-                                R.string.streams_quality_chip,
-                                addon.displayName,
-                                addon.count,
-                            ),
-                    )
-                },
-                leadingIcon =
-                    if (addon.failed) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                shape = NexusTheme.shapes.chip,
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
+            if (uiState.isDone && uiState.failures.isNotEmpty()) {
+                NexusTextButton(onClick = onRetryFailed) {
+                    Text(stringResource(R.string.streams_retry_failed))
+                }
+            }
         }
     }
 }

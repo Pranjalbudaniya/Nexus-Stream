@@ -72,18 +72,6 @@ internal object StreamsFilterReducer {
         return recalculate(baseState, matching)
     }
 
-    fun selectResolution(
-        state: StreamsUiState,
-        resolution: Int?,
-        matching: List<Addon> = emptyList(),
-    ): StreamsUiState = updateFilters(state, matching, state.filters.copy(resolution = resolution))
-
-    fun selectAddon(
-        state: StreamsUiState,
-        addonKey: String?,
-        matching: List<Addon> = emptyList(),
-    ): StreamsUiState = updateFilters(state, matching, state.filters.copy(addonKey = addonKey))
-
     fun clearFilters(
         state: StreamsUiState,
         matching: List<Addon> = emptyList(),

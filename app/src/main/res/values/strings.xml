@@ -343,6 +343,36 @@
     <string name="streams_addon_all">All addons</string>
     <string name="streams_clear_filters">Clear filters</string>
     <string name="streams_empty_filtered">No streams match these filters.</string>
+    <string name="streams_filter_resolution_title">Resolution</string>
+    <string name="streams_filter_all_resolutions">All resolutions</string>
+    <string name="streams_filter_addon_title">Addon</string>
+    <string name="streams_filter_language_title">Language</string>
+    <string name="streams_filter_any_language">Any language</string>
+    <string name="streams_filter_type_title">Type</string>
+    <string name="streams_filter_all_types">All types</string>
+    <string name="streams_filter_type_direct">Direct</string>
+    <string name="streams_filter_type_torrent">Torrents</string>
+    <string name="streams_filter_cached">Cached</string>
+    <string name="streams_filter_sort_title">Sort</string>
+    <string name="streams_filter_sort_label">Sort: %1$s</string>
+    <string name="streams_filter_sort_best">Best</string>
+    <string name="streams_filter_sort_quality">Quality</string>
+    <string name="streams_filter_sort_seeders">Seeders</string>
+    <string name="streams_filter_sort_size">Size</string>
+    <string name="streams_showing_count">Showing %1$d of %2$d streams</string>
+    <string name="streams_details_language_codes">Language codes</string>
+
+    <!-- Player settings P07.2 -->
+    <string name="settings_player_preferred_language_title">Preferred language</string>
+    <string name="settings_player_preferred_language_none">None</string>
+    <string name="settings_player_preferred_quality_title">Preferred quality</string>
+    <string name="settings_player_preferred_quality_auto">Auto</string>
+    <string name="settings_player_preferred_quality_4k">4K</string>
+    <string name="settings_player_preferred_quality_1080p">1080p</string>
+    <string name="settings_player_preferred_quality_720p">720p</string>
+    <string name="settings_player_preferred_quality_sd">SD</string>
+    <string name="settings_player_hide_cam_title">Hide CAM streams</string>
+    <string name="settings_player_hide_cam_subtitle">Camera recordings are hidden instead of shown last.</string>
     <string name="streams_badge_wrong_episode">Different episode?</string>
     <string name="streams_badge_wrong_season">Different season?</string>
     <string name="streams_badge_wrong_year">Different year?</string>

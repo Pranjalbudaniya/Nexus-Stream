@@ -5,20 +5,26 @@ import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.DebridMark
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.StreamKind
+import com.nexus.stream.domain.model.StreamLanguages
 import com.nexus.stream.domain.model.StreamMatch
+import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
+import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.presentation.common.PlaybackRequest
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +55,10 @@ class StreamsViewModelTest {
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
 
     private val quickPlayFlow = MutableStateFlow(false)
+    private val sortFlow = MutableStateFlow(StreamSort.BEST)
+    private val preferredLanguageFlow = MutableStateFlow<String?>(null)
+    private val preferredQualityFlow = MutableStateFlow<Int?>(null)
+    private val hideCamFlow = MutableStateFlow(false)
     private val activeAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
     private val defaultCapabilities = PlaybackCapabilities(supportsTorrent = false)
 
@@ -151,12 +161,20 @@ class StreamsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         every { playerPrefsRepository.quickPlay } returns quickPlayFlow
+        every { playerPrefsRepository.sort } returns sortFlow
+        every { playerPrefsRepository.preferredLanguage } returns preferredLanguageFlow
+        every { playerPrefsRepository.preferredQuality } returns preferredQualityFlow
+        every { playerPrefsRepository.hideCam } returns hideCamFlow
+        coEvery { playerPrefsRepository.setSort(any()) } coAnswers {
+            sortFlow.value = firstArg()
+        }
         every { addonRepository.observeActive() } returns activeAddonsFlow
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        StreamFilterMemory.reset()
     }
 
     private fun createViewModel(capabilities: PlaybackCapabilities = defaultCapabilities): StreamsViewModel =
@@ -242,12 +260,12 @@ class StreamsViewModelTest {
                     .key,
             )
 
-            // New request resets selectedResolution
+            // New request preserves in-session selectedResolution
             val newRequest = sampleRequest.copy(videoId = "tt999999")
             viewModel.onEvent(StreamsEvent.SetRequest(newRequest))
             advanceUntilIdle()
 
-            assertNull(viewModel.uiState.value.selectedResolution)
+            assertEquals(2160, viewModel.uiState.value.selectedResolution)
         }
 
     @Test

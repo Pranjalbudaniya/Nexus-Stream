@@ -23,6 +23,7 @@ import com.nexus.stream.R
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamMatch
+import com.nexus.stream.domain.usecase.LanguageCodes
 import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -83,6 +84,10 @@ fun StreamDetailsDialog(
                 DetailRow(
                     label = stringResource(R.string.streams_details_languages),
                     value = formatLanguages(stream),
+                )
+                DetailRow(
+                    label = stringResource(R.string.streams_details_language_codes),
+                    value = formatLanguageCodes(stream),
                 )
                 DetailRow(
                     label = stringResource(R.string.streams_details_audio),
@@ -238,6 +243,15 @@ private fun formatLanguages(stream: ParsedStream): String {
     if (stream.languages.dubbed) parts.add("Dubbed")
     if (stream.languages.multi) parts.add("Multi")
     return if (parts.isEmpty()) "-" else parts.joinToString(" · ")
+}
+
+private fun formatLanguageCodes(stream: ParsedStream): String {
+    val codes = LanguageCodes.codes(stream.languages)
+    return if (codes.isEmpty()) {
+        "-"
+    } else {
+        codes.joinToString(", ") { LanguageCodes.languageDisplayName(it) }
+    }
 }
 
 private fun formatAudio(stream: ParsedStream): String {

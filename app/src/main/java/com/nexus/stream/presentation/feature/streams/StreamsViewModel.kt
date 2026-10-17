@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -139,6 +140,20 @@ sealed interface StreamsEvent {
         val addonKey: String?,
     ) : StreamsEvent
 
+    data class SelectLanguage(
+        val language: String?,
+    ) : StreamsEvent
+
+    data class SelectType(
+        val type: TypeFilter,
+    ) : StreamsEvent
+
+    data object ToggleCached : StreamsEvent
+
+    data class SelectSort(
+        val sort: StreamSort,
+    ) : StreamsEvent
+
     data object ClearFilters : StreamsEvent
 
     data class ShowDetails(
@@ -200,6 +215,30 @@ class StreamsViewModel
         private var addonJob: Job? = null
         private var cachedActiveAddons: List<Addon> = emptyList()
 
+        init {
+            viewModelScope.launch {
+                combine(
+                    playerPrefsRepository.sort,
+                    playerPrefsRepository.preferredLanguage,
+                    playerPrefsRepository.preferredQuality,
+                    playerPrefsRepository.hideCam,
+                ) { sort, lang, quality, hideCam ->
+                    PrefSettings(sort, lang, quality, hideCam)
+                }.collect { prefs ->
+                    _uiState.update { state ->
+                        val sorted = StreamsFilterReducer.updateSort(state, cachedActiveAddons, prefs.sort)
+                        StreamsFilterReducer.updatePreferences(
+                            sorted,
+                            cachedActiveAddons,
+                            prefs.preferredLanguage,
+                            prefs.preferredQuality,
+                            prefs.hideCam,
+                        )
+                    }
+                }
+            }
+        }
+
         fun onEvent(event: StreamsEvent) {
             if (handleStreamActionEvent(event)) return
             if (handleFilterEvent(event)) return
@@ -253,20 +292,54 @@ class StreamsViewModel
             }
         }
 
-        private fun handleFilterEvent(event: StreamsEvent): Boolean =
-            when (event) {
-                is StreamsEvent.SelectResolution -> {
-                    _uiState.update { StreamsFilterReducer.selectResolution(it, event.resolution) }
+        private fun handleFilterEvent(event: StreamsEvent): Boolean {
+            val filters = _uiState.value.filters
+            val updated =
+                when (event) {
+                    is StreamsEvent.SelectResolution -> {
+                        StreamFilterMemory.resolution = event.resolution
+                        filters.copy(resolution = event.resolution)
+                    }
+
+                    is StreamsEvent.SelectAddon -> {
+                        filters.copy(addonKey = event.addonKey)
+                    }
+
+                    is StreamsEvent.SelectLanguage -> {
+                        StreamFilterMemory.language = event.language
+                        filters.copy(language = event.language)
+                    }
+
+                    is StreamsEvent.SelectType -> {
+                        StreamFilterMemory.type = event.type
+                        filters.copy(type = event.type)
+                    }
+
+                    StreamsEvent.ToggleCached -> {
+                        val toggled = !_uiState.value.cachedOnly
+                        StreamFilterMemory.cachedOnly = toggled
+                        filters.copy(cachedOnly = toggled)
+                    }
+
+                    else -> {
+                        null
+                    }
+                }
+            return when {
+                updated != null -> {
+                    _uiState.update { StreamsFilterReducer.updateFilters(it, cachedActiveAddons, updated) }
                     true
                 }
 
-                is StreamsEvent.SelectAddon -> {
-                    _uiState.update { StreamsFilterReducer.selectAddon(it, event.addonKey) }
+                event is StreamsEvent.SelectSort -> {
+                    viewModelScope.launch { playerPrefsRepository.setSort(event.sort) }
+                    _uiState.update { StreamsFilterReducer.updateSort(it, cachedActiveAddons, event.sort) }
                     true
                 }
 
-                StreamsEvent.ClearFilters -> {
-                    _uiState.update { StreamsFilterReducer.clearFilters(it) }
+                event is StreamsEvent.ClearFilters -> {
+                    StreamFilterMemory.reset()
+                    _uiState.update { StreamsFilterReducer.clearFilters(it, cachedActiveAddons) }
                     true
                 }
 
@@ -274,6 +347,7 @@ class StreamsViewModel
                     false
                 }
             }
+        }
 
         private fun handleStreamActionEvent(event: StreamsEvent): Boolean =
             when (event) {
@@ -303,8 +377,15 @@ class StreamsViewModel
                 StreamsUiState(
                     request = request,
                     isLoading = true,
-                    selectedResolution = null,
+                    selectedResolution = StreamFilterMemory.resolution,
+                    selectedLanguage = StreamFilterMemory.language,
+                    selectedType = StreamFilterMemory.type,
+                    cachedOnly = StreamFilterMemory.cachedOnly,
                     selectedAddon = null,
+                    sort = it.sort,
+                    preferredLanguage = it.preferredLanguage,
+                    preferredQuality = it.preferredQuality,
+                    hideCam = it.hideCam,
                     quickPlayHandled = false,
                 )
             }
@@ -383,6 +464,13 @@ class StreamsViewModel
                 }
         }
 
+        private data class PrefSettings(
+            val sort: StreamSort,
+            val preferredLanguage: String?,
+            val preferredQuality: Int?,
+            val hideCam: Boolean,
+        )
+
         private suspend fun processEmission(
             request: PlaybackRequest,
             emission: StreamsState,
@@ -420,7 +508,13 @@ class StreamsViewModel
             if (emission.done && !_uiState.value.quickPlayHandled) {
                 _uiState.update { it.copy(quickPlayHandled = true) }
                 if (playerPrefsRepository.quickPlay.first()) {
-                    val candidate = StreamOrdering.bestPlayable(combined, playbackCapabilities)
+                    val candidate =
+                        StreamOrdering.bestPlayable(
+                            list = combined,
+                            capabilities = playbackCapabilities,
+                            preferredLanguage = _uiState.value.preferredLanguage,
+                            preferredQuality = _uiState.value.preferredQuality,
+                        )
                     if (candidate != null) {
                         playStream(candidate)
                         _effects.emit(StreamsEffect.DismissSheet)
