@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 data class AddonFailure(
     val addonName: String,
     val error: AppError,
+    val transportUrl: String = "",
 )
 
 data class StreamsState(

@@ -303,4 +303,40 @@
     <string name="settings_family_mode_turn_off">Turn off</string>
     <string name="addon_hidden_by_family_mode">Hidden by Family mode</string>
     <string name="addon_url_adult_blocked">This addon is for adults and Family mode is on.</string>
+
+    <!-- Streams sheet -->
+    <string name="streams_title">Streams · %1$s</string>
+    <string name="streams_series_episode">S%1$d E%2$d</string>
+    <string name="streams_searching_progress">Searching %1$d of %2$d addons…</string>
+    <string name="streams_answered_summary">%1$d addons answered</string>
+    <string name="streams_answered_with_failures">%1$d addons answered, %2$d failed</string>
+    <string name="streams_retry_failed">Retry failed</string>
+    <string name="streams_quality_all">All</string>
+    <string name="streams_quality_chip">%1$s (%2$d)</string>
+    <string name="streams_badge_direct">Direct</string>
+    <string name="streams_badge_torrent">Torrent</string>
+    <string name="streams_badge_headers">Needs headers</string>
+    <string name="streams_badge_link">Link</string>
+    <string name="streams_seeders">Seeders %1$d</string>
+    <string name="streams_menu_open_external">Open in external player</string>
+    <string name="streams_menu_copy_link">Copy link</string>
+    <string name="streams_menu_copy_magnet">Copy magnet link</string>
+    <string name="streams_menu_open_magnet">Open magnet link in another app</string>
+    <string name="streams_menu_open_link">Open link</string>
+    <string name="streams_torrent_engine_notice">Torrent streams need the torrent engine (coming next). You can copy the magnet link from the menu.</string>
+    <string name="streams_copied">Copied</string>
+    <string name="streams_no_video_player">No video player found. Install VLC or MX Player.</string>
+    <string name="streams_no_magnet_app">No app can open magnet links.</string>
+    <string name="streams_no_browser">No app found to open link.</string>
+    <string name="streams_empty_no_addons">None of your addons provides streams for this title.</string>
+    <string name="streams_empty_find_streams">Find streams</string>
+    <string name="streams_empty_no_streams">No streams found.</string>
+    <string name="streams_empty_no_quality_match">No streams in this quality.</string>
+    <string name="streams_more_options">More options for %1$s</string>
+
+    <!-- Player settings -->
+    <string name="settings_player_title">Player</string>
+    <string name="settings_quick_play_title">Quick play</string>
+    <string name="settings_quick_play_subtitle">Plays the best stream automatically once all addons have answered.</string>
 </resources>
+

@@ -121,7 +121,7 @@ class StreamRepositoryImpl(
                 val updatedState =
                     mutex.withLock {
                         withContext(defaultDispatcher) {
-                            accumulator.recordResult(addon.manifest.name, result)
+                            accumulator.recordResult(addon.manifest.name, addon.transportUrl, result)
                             accumulator.buildState()
                         }
                     }
@@ -156,6 +156,7 @@ class StreamRepositoryImpl(
 
         fun recordResult(
             addonName: String,
+            transportUrl: String,
             result: Outcome<List<com.nexus.stream.domain.model.Stream>>,
         ) {
             answeredCount++
@@ -169,7 +170,7 @@ class StreamRepositoryImpl(
                 }
 
                 is Outcome.Failure -> {
-                    allFailures.add(AddonFailure(addonName, result.error))
+                    allFailures.add(AddonFailure(addonName, result.error, transportUrl))
                 }
             }
         }
