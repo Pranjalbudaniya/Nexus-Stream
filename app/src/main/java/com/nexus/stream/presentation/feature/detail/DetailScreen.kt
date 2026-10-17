@@ -64,6 +64,7 @@ import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.common.PlaybackRequest
+import com.nexus.stream.presentation.common.buildPlaybackRequest
 import com.nexus.stream.presentation.common.toUserMessage
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -163,9 +164,8 @@ fun DetailScreenContent(
                                 onPlayMain = {
                                     state.activeVideoId?.let { targetId ->
                                         playbackLauncher.open(
-                                            PlaybackRequest(
-                                                type = state.meta.type,
-                                                metaId = state.meta.id,
+                                            buildPlaybackRequest(
+                                                meta = state.meta,
                                                 videoId = targetId,
                                                 title = state.meta.name,
                                             ),
@@ -207,9 +207,8 @@ fun DetailScreenContent(
                                             onEvent(DetailEvent.PlayEpisode(videoId))
                                         } else if (video != null) {
                                             playbackLauncher.open(
-                                                PlaybackRequest(
-                                                    type = state.meta.type,
-                                                    metaId = state.meta.id,
+                                                buildPlaybackRequest(
+                                                    meta = state.meta,
                                                     videoId = video.id,
                                                     title = "${state.meta.name} - ${video.title}",
                                                 ),

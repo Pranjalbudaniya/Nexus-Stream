@@ -35,6 +35,7 @@ class StreamOrderingTest {
                     videoHash = null,
                 ),
             addonNames = listOf("A"),
+            addonKeys = emptyList(),
             resolution = resolution,
             hdr = emptySet(),
             codec = null,
@@ -43,6 +44,8 @@ class StreamOrderingTest {
             kind = kind,
             needsHeaders = false,
             displayName = "Test Stream",
+            releaseType = null,
+            match = com.nexus.stream.domain.model.StreamMatch.OK,
         )
 
     @Test
@@ -154,5 +157,74 @@ class StreamOrderingTest {
 
         val adultStream = safeStream.copy(name = "Adult XXX Video 1080p")
         assertFalse(StreamOrdering.isFamilySafe(adultStream))
+    }
+
+    @Test
+    fun sort_penalizedItemsSortAfterCleanMatches() {
+        val clean1080 = createParsedStream("clean1080", resolution = 1080)
+        val clean720 = createParsedStream("clean720", resolution = 720)
+        val wrongSeason2160 =
+            createParsedStream("wrongSeason2160", resolution = 2160)
+                .copy(match = com.nexus.stream.domain.model.StreamMatch.WRONG_SEASON)
+        val cam2160 =
+            createParsedStream("cam2160", resolution = 2160)
+                .copy(releaseType = com.nexus.stream.domain.model.ReleaseType.CAM)
+
+        val sorted = StreamOrdering.sort(listOf(wrongSeason2160, cam2160, clean1080, clean720))
+
+        assertEquals("clean1080", sorted[0].key)
+        assertEquals("clean720", sorted[1].key)
+        // Next are penalized, sorted by resolution
+        assertEquals(2160, sorted[2].resolution)
+        assertEquals(2160, sorted[3].resolution)
+    }
+
+    @Test
+    fun bestPlayable_skipsPenalizedItems_unlessNothingElse() {
+        val caps = PlaybackCapabilities(supportsTorrent = true)
+        val clean720 = createParsedStream("clean720", resolution = 720)
+        val cam1080 =
+            createParsedStream("cam1080", resolution = 1080)
+                .copy(releaseType = com.nexus.stream.domain.model.ReleaseType.CAM)
+
+        // Given both, clean720 is chosen despite lower resolution
+        val bestWithBoth = StreamOrdering.bestPlayable(listOf(cam1080, clean720), caps)
+        assertEquals("clean720", bestWithBoth?.key)
+
+        // When only penalized is available, it is chosen as fallback
+        val bestOnlyCam = StreamOrdering.bestPlayable(listOf(cam1080), caps)
+        assertEquals("cam1080", bestOnlyCam?.key)
+    }
+
+    @Test
+    fun crossFilterCounts_andFilterByAddon() {
+        val s1 = createParsedStream("s1", resolution = 1080).copy(addonKeys = listOf("addon1"))
+        val s2 = createParsedStream("s2", resolution = 720).copy(addonKeys = listOf("addon1"))
+        val s3 = createParsedStream("s3", resolution = 1080).copy(addonKeys = listOf("addon2"))
+        val all = listOf(s1, s2, s3)
+
+        // filterByAddon
+        assertEquals(listOf(s1, s2), StreamOrdering.filterByAddon(all, "addon1"))
+        assertEquals(listOf(s3), StreamOrdering.filterByAddon(all, "addon2"))
+        assertEquals(all, StreamOrdering.filterByAddon(all, null))
+
+        // combined filter
+        assertEquals(listOf(s1), StreamOrdering.filter(all, resolution = 1080, addonKey = "addon1"))
+        assertEquals(emptyList<ParsedStream>(), StreamOrdering.filter(all, resolution = 720, addonKey = "addon2"))
+
+        // resolutionCounts when addon1 is selected
+        val resCounts = StreamOrdering.resolutionCounts(all, selectedAddon = "addon1")
+        assertEquals(1, resCounts[1080])
+        assertEquals(1, resCounts[720])
+
+        // addonCounts when resolution 1080 is selected
+        val addonCounts =
+            StreamOrdering.addonCounts(
+                list = all,
+                selectedResolution = 1080,
+                allAddonIdentifiers = listOf("addon1", "addon2"),
+            )
+        assertEquals(1, addonCounts["addon1"])
+        assertEquals(1, addonCounts["addon2"])
     }
 }

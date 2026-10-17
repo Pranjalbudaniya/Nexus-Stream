@@ -1,7 +1,9 @@
 package com.nexus.stream.domain.usecase
 
+import com.nexus.stream.domain.model.AudioTag
 import com.nexus.stream.domain.model.Codec
 import com.nexus.stream.domain.model.HdrKind
+import com.nexus.stream.domain.model.ReleaseType
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSource
@@ -183,5 +185,120 @@ class StreamParsingTest {
 
         val unsupportedStream = ytStream.copy(source = StreamSource.Unsupported("nzb"))
         assertNull(StreamParsing.parse(unsupportedStream, "Usenet Addon"))
+    }
+
+    @Test
+    fun parse_torrentioSample_extractsAllRichFields() {
+        val stream =
+            Stream(
+                source =
+                    StreamSource.Torrent(
+                        infoHash = "0123456789abcdef0123456789abcdef01234567",
+                        fileIdx = 0,
+                        trackers = emptyList(),
+                    ),
+                name = "Torrentio\n1080p",
+                description =
+                    "One.Piece.S01E01.1080p.mkv\n" +
+                        "👤 527 💾 359.77 MB ⚙️ NyaaSi\n" +
+                        "🇬🇧 / 🇯🇵 | 💬 🇬🇧 / 🇯🇵 | DUAL-AUDIO / DUB",
+                subtitles = emptyList(),
+                bingeGroup = null,
+                notWebReady = false,
+                videoSize = null,
+                filename = null,
+                videoHash = null,
+            )
+
+        val parsed = StreamParsing.parse(stream, "Torrentio")
+        assertNotNull(parsed)
+        assertEquals("One.Piece.S01E01.1080p.mkv", parsed!!.fileName)
+        assertEquals(527, parsed.seeders)
+        assertEquals(377246187L, parsed.sizeBytes)
+        assertEquals("NyaaSi", parsed.sourceSite)
+        assertTrue(parsed.languages.flags.contains("🇬🇧"))
+        assertTrue(parsed.languages.flags.contains("🇯🇵"))
+        assertTrue(parsed.languages.dubbed)
+        assertTrue(parsed.languages.dualAudio)
+        assertEquals(5, parsed.infoLines.size)
+        assertEquals("Torrentio", parsed.infoLines[0])
+        assertEquals("1080p", parsed.infoLines[1])
+        assertEquals("One.Piece.S01E01.1080p.mkv", parsed.infoLines[2])
+    }
+
+    @Test
+    fun resolveFileName_filenameFieldTakesPrecedence() {
+        val stream =
+            Stream(
+                source = StreamSource.Url("https://nexus.stream/video.mp4", emptyMap()),
+                name = "Movie.Name.2023.1080p.mkv",
+                description = "Some.Other.File.mkv",
+                subtitles = emptyList(),
+                bingeGroup = null,
+                notWebReady = false,
+                videoSize = null,
+                filename = "Explicit.File.Name.mkv",
+                videoHash = null,
+            )
+        assertEquals("Explicit.File.Name.mkv", StreamParsing.resolveFileName(stream))
+    }
+
+    @Test
+    fun parseAudio_andChannels() {
+        val audio1 = StreamParsing.parseAudio("Movie 1080p DDP5.1 Atmos")
+        assertTrue(audio1.contains(com.nexus.stream.domain.model.AudioTag.DDP))
+        assertTrue(audio1.contains(com.nexus.stream.domain.model.AudioTag.ATMOS))
+        assertEquals("5.1", StreamParsing.parseChannels("Movie 1080p DDP5.1 Atmos"))
+
+        val audio2 = StreamParsing.parseAudio("Movie TrueHD 7.1")
+        assertTrue(audio2.contains(com.nexus.stream.domain.model.AudioTag.TRUEHD))
+        assertEquals("7.1", StreamParsing.parseChannels("Movie TrueHD 7.1"))
+
+        assertEquals("2.0", StreamParsing.parseChannels("Movie AAC 2.0 Stereo"))
+        assertEquals("2.0", StreamParsing.parseChannels("Movie AAC Stereo"))
+    }
+
+    @Test
+    fun parseReleaseType_matchesExpectedTokens() {
+        assertEquals(ReleaseType.WEBRIP, StreamParsing.parseReleaseType("Movie.1080p.WEBRip.x264"))
+        assertEquals(ReleaseType.BLURAY, StreamParsing.parseReleaseType("Movie.1080p.BluRay.x264"))
+        assertEquals(ReleaseType.REMUX, StreamParsing.parseReleaseType("Movie.2160p.UHD.Remux"))
+        assertEquals(ReleaseType.CAM, StreamParsing.parseReleaseType("Movie.CAM.Rip"))
+        assertEquals(ReleaseType.CAM, StreamParsing.parseReleaseType("Movie.TeleSync.TC"))
+    }
+
+    @Test
+    fun parseDebridMark_matchesExpectedTokens() {
+        val rd = StreamParsing.parseDebridMark("[RD+] Movie 1080p")
+        assertNotNull(rd)
+        assertEquals("RD", rd!!.service)
+        assertTrue(rd.cached)
+
+        val dl = StreamParsing.parseDebridMark("[RD download] Movie 1080p")
+        assertNotNull(dl)
+        assertEquals("RD", dl!!.service)
+        assertFalse(dl.cached)
+
+        val ad = StreamParsing.parseDebridMark("[AD+] Movie 1080p")
+        assertNotNull(ad)
+        assertEquals("AD", ad!!.service)
+        assertTrue(ad.cached)
+
+        val tb = StreamParsing.parseDebridMark("[TB+] Movie 1080p")
+        assertNotNull(tb)
+        assertEquals("TB", tb!!.service)
+        assertTrue(tb.cached)
+
+        val oc = StreamParsing.parseDebridMark("[OC+] Movie 1080p")
+        assertNotNull(oc)
+        assertEquals("OC", oc!!.service)
+        assertTrue(oc.cached)
+    }
+
+    @Test
+    fun parseIsPack_detectsPackKeywords() {
+        assertTrue(StreamParsing.parseIsPack("One Piece (Pack) 1080p"))
+        assertTrue(StreamParsing.parseIsPack("Breaking Bad Complete Season 1"))
+        assertFalse(StreamParsing.parseIsPack("One Piece S01E01 1080p"))
     }
 }

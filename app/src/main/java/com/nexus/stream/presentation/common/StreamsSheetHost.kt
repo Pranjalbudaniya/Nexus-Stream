@@ -14,7 +14,34 @@ data class PlaybackRequest(
     val metaId: String,
     val videoId: String,
     val title: String,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val year: Int? = null,
 )
+
+fun buildPlaybackRequest(
+    meta: com.nexus.stream.domain.model.MetaDetail,
+    videoId: String,
+    title: String,
+): PlaybackRequest {
+    val activeVideo = meta.videos.find { it.id == videoId }
+    val parts = videoId.split(":")
+    val fallbackSeason = if (parts.size >= 3) parts[1].toIntOrNull() else null
+    val fallbackEpisode = if (parts.size >= 3) parts[2].toIntOrNull() else null
+    val season = activeVideo?.season ?: fallbackSeason
+    val episode = activeVideo?.episode ?: fallbackEpisode
+    val year = if (meta.type != "series") meta.releaseInfo?.take(4)?.toIntOrNull() else null
+
+    return PlaybackRequest(
+        type = meta.type,
+        metaId = meta.id,
+        videoId = videoId,
+        title = title,
+        season = season,
+        episode = episode,
+        year = year,
+    )
+}
 
 interface PlaybackLauncher {
     fun open(request: PlaybackRequest)

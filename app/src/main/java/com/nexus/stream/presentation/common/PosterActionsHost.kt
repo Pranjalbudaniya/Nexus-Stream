@@ -224,12 +224,14 @@ fun PosterActionsHost(
                 onDismiss = { viewModel.dismiss() },
                 onPlay = {
                     viewModel.dismiss()
+                    val year = item.releaseInfo?.take(4)?.toIntOrNull()
                     playbackLauncher.open(
                         PlaybackRequest(
                             type = item.type,
                             metaId = item.id,
                             videoId = item.id,
                             title = item.name,
+                            year = year,
                         ),
                     )
                 },
