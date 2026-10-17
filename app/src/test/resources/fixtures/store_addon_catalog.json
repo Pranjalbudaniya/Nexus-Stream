@@ -1,0 +1,5431 @@
+{
+  "addons": [
+    {
+      "transportUrl": "https://stremio-ruido.vercel.app/manifest.json",
+      "manifest": {
+        "id": "pt.personal.ruido",
+        "name": "Ru\u00eddo \u00b7 PT",
+        "types": [
+          "series"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "ruido",
+            "name": "Ru\u00eddo \u00b7 PT",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          {
+            "name": "stream",
+            "types": [
+              "series"
+            ],
+            "idPrefixes": [
+              "tt36601237"
+            ]
+          }
+        ],
+        "description": "Ru\u00eddo em portugu\u00eas, com reprodu\u00e7\u00e3o direta. Depende da disponibilidade dos leitores externos.",
+        "behaviorHints": {
+          "p2p": false,
+          "adult": false,
+          "configurable": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://tr-altyazi.altyazi.workers.dev/manifest.json",
+      "manifest": {
+        "id": "com.eternal.tr-altyazi",
+        "logo": "https://tr-altyazi.altyazi.workers.dev/logo.png",
+        "name": "TR Altyaz\u0131",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.0.1",
+        "catalogs": [],
+        "resources": [
+          "subtitles"
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "T\u00fcrk\u00e7e altyaz\u0131lar\u0131 AltyaziTR (turkcealtyazi.org), YIFY ve OpenSubtitles'tan tek listede toplar. Bulunan her altyaz\u0131 ortak veritaban\u0131na kaydedilir; bir kez bulunan altyaz\u0131 herkese an\u0131nda gelir."
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://catalogo-iptv-production.up.railway.app/manifest.json",
+      "manifest": {
+        "id": "org.personal.iptvlocal",
+        "logo": "https://catalogo-iptv-production.up.railway.app/icon.png",
+        "name": "Minha IPTV \u2022 CanaisBR02",
+        "types": [
+          "tv",
+          "movie",
+          "series"
+        ],
+        "version": "1.2.0",
+        "catalogs": [
+          {
+            "id": "local-tv",
+            "name": "Minha IPTV \u2022 Canais",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "A FAZENDA 18 \u26a1",
+                  "CANAIS: 24 HORAS \u2728",
+                  "CANAIS: 4K \u2b50",
+                  "CANAIS: ABERTOS \u2728",
+                  "CANAIS: BAND \u2728",
+                  "CANAIS: CINE SKY \u2728",
+                  "CANAIS: DISCOVERY \u2728",
+                  "CANAIS: DISNEY + S\u00c9RIE B \u26bd",
+                  "CANAIS: DOCUMENT\u00c1RIOS \u2728",
+                  "CANAIS: ESPN \u26bd",
+                  "CANAIS: ESPORTES \u26bd",
+                  "CANAIS: FILMES E S\u00c9RIES \u2728",
+                  "CANAIS: GLOBO CAPITAIS  - \u2728",
+                  "CANAIS: GLOBO REGIONAIS - \u2728",
+                  "CANAIS: HBO \u2728",
+                  "CANAIS: INFANTIS \u2728",
+                  "CANAIS: MAX - CHAMPIONS LEAGUE \u26bd",
+                  "CANAIS: M\u00daSICA \u2728",
+                  "CANAIS: NBA / PPV \u26f9\ufe0f",
+                  "CANAIS: NOT\u00cdCIAS \u2728",
+                  "CANAIS: NOVELAS GLOBOPLAY \u2728",
+                  "CANAIS: PARAMOUNT + LIBERTADORES \u26bd",
+                  "CANAIS: PPV / ESPORTES \u26bd",
+                  "CANAIS: PREMIERE \u26bd",
+                  "CANAIS: PRIME VIDEO \u26bd",
+                  "CANAIS: RECORD \u2728",
+                  "CANAIS: REDETV \u2728",
+                  "CANAIS: RELIGIOSOS \u2b50",
+                  "CANAIS: SBT \u2728",
+                  "CANAIS: SPORTV \u26bd",
+                  "CANAIS: TELECINE \u2728",
+                  "CANAIS: UFC FIGHT \u26a1",
+                  "CANAIS: VARIEDADES \u2728",
+                  "ELEI\u00c7\u00d5ES 05/10 \u2714\ufe0f",
+                  "JOGOS DE HOJE \u26bd",
+                  "R\u00c1DIOS FM \u2728",
+                  "S\u00c9RIES / DISCOVERY + \u2714\ufe0f",
+                  "Z - CANAIS: ADULTOS \u26d4"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "local-movie",
+            "name": "Minha IPTV \u2022 Filmes",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "COLET\u00c2NEA /  HELLRAISER \u2622\ufe0f",
+                  "COLET\u00c2NEA /  SEXTA FEIRA 13 \u26d4",
+                  "COLET\u00c2NEA / AMERICAN PIE \u2666\ufe0f",
+                  "COLET\u00c2NEA / ARNOLD SCHWARZENEGGER \u26a1",
+                  "COLET\u00c2NEA / AURORA TEAGARDEN \u2665\ufe0f",
+                  "COLET\u00c2NEA / BRUCE WILLIS \u2694\ufe0f",
+                  "COLET\u00c2NEA / CAVALEIROS DO ZODIACO \u2694\ufe0f",
+                  "COLET\u00c2NEA / CHALES BRONSON \u2705",
+                  "COLET\u00c2NEA / CHUCK NORRIS \u2694\ufe0f",
+                  "COLET\u00c2NEA / DC COMICS \u26a1",
+                  "COLET\u00c2NEA / ESPECIAL DE NATAL \u2764\ufe0f",
+                  "COLET\u00c2NEA / HALLOWEN \u2693",
+                  "COLET\u00c2NEA / HARRY POTTER \u267b\ufe0f",
+                  "COLET\u00c2NEA / JACKIE CHAN \u2b50",
+                  "COLET\u00c2NEA / JET LI \u2695\ufe0f",
+                  "COLET\u00c2NEA / JIM CARREY \u2764\ufe0f",
+                  "COLET\u00c2NEA / JOGOS MORTAIS \u274c",
+                  "COLET\u00c2NEA / LOUCA ACADEMIA DE POL\u00cdCIA \u260e\ufe0f",
+                  "COLET\u00c2NEA / MARVEL COMICS \u26a1",
+                  "COLET\u00c2NEA / MAZZAROPI \u303d\ufe0f",
+                  "COLET\u00c2NEA / O GRANDE MESTRE \u2699\ufe0f",
+                  "COLET\u00c2NEA / O SENHOR DOS AN\u00c9IS \u2623\ufe0f",
+                  "COLET\u00c2NEA / OS TRAPALH\u00d5ES \u2764\ufe0f",
+                  "COLET\u00c2NEA / PREMONI\u00c7\u00c3O \u274c",
+                  "COLET\u00c2NEA / P\u00c2NICO NA FLORESTA \u26d4",
+                  "COLET\u00c2NEA / P\u00c2NICO NO LAGO \u2695\ufe0f",
+                  "COLET\u00c2NEA / RESIDENT EVIL \u2622\ufe0f",
+                  "COLET\u00c2NEA / STAR WARS \u2694\ufe0f",
+                  "COLET\u00c2NEA / VAN DAMME \u26a1",
+                  "COLET\u00c2NEA / VELOZES & FURIOSOS \u2694\ufe0f",
+                  "COLET\u00c2NEA / VERMES MALDITOS \u2622\ufe0f",
+                  "FILMES / ADULTOS \u26d4",
+                  "FILMES / ANIMA\u00c7\u00c3O \u2708\ufe0f",
+                  "FILMES / AVENTURA \u269b\ufe0f",
+                  "FILMES / A\u00c7\u00c3O \u26a1",
+                  "FILMES / COM\u00c9DIA \u2665\ufe0f",
+                  "FILMES / CRIME \u274c",
+                  "FILMES / DOCUMENT\u00c1RIOS \u2623\ufe0f",
+                  "FILMES / DRAMA \u2665\ufe0f",
+                  "FILMES / FAM\u00cdLIA \u2665\ufe0f",
+                  "FILMES / FANTASIA \u2728",
+                  "FILMES / FAROESTE \u269c\ufe0f",
+                  "FILMES / GUERRA \u2694\ufe0f",
+                  "FILMES / INFANTIS \u2764\ufe0f",
+                  "FILMES / LAN\u00c7AMENTOS \u26a1",
+                  "FILMES / LEGENDADOS \u2709\ufe0f",
+                  "FILMES / NACIONAIS \u2705",
+                  "FILMES / RELIGIOSOS \u2b50",
+                  "FILMES / ROMANCE \u2665\ufe0f",
+                  "FILMES / SUSPENSE \u2622\ufe0f",
+                  "FILMES / TERROR \u26a0\ufe0f",
+                  "FILMES : PEDIDOS",
+                  "Filmes | Cinema",
+                  "Filmes | Novidades"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "local-series",
+            "name": "Minha IPTV \u2022 S\u00e9ries",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "MALHA\u00c7\u00c3O \u2764\ufe0f",
+                  "NOVELAS \u2764\ufe0f",
+                  "S\u00c9RIES / AMAZON PRIME \u25b6\ufe0f",
+                  "S\u00c9RIES / AMC PLUS \u2747\ufe0f",
+                  "S\u00c9RIES / ANIMADAS \u26fa",
+                  "S\u00c9RIES / APPLE PLUS \u26a1",
+                  "S\u00c9RIES / BRASIL PARALELO \u2b50",
+                  "S\u00c9RIES / CLARO VIDEO \u2666\ufe0f",
+                  "S\u00c9RIES / CRUNCHOROLL \u2694\ufe0f",
+                  "S\u00c9RIES / DIRECTV \u26a1",
+                  "S\u00c9RIES / DISCOVERY + \u2714\ufe0f",
+                  "S\u00c9RIES / DISNEY + \u2708\ufe0f",
+                  "S\u00c9RIES / DORAMAS \u2764\ufe0f",
+                  "S\u00c9RIES / GLOBOPLAY \u2b50",
+                  "S\u00c9RIES / LEGENDADAS \u26a1",
+                  "S\u00c9RIES / LIONSGASTE \u2705",
+                  "S\u00c9RIES / MAX \u24c2\ufe0f",
+                  "S\u00c9RIES / NETFLIX \u26a1",
+                  "S\u00c9RIES / OUTRAS PRODUTORAS \u267b\ufe0f",
+                  "S\u00c9RIES / PARAMOUNT \u25b6\ufe0f",
+                  "S\u00c9RIES / PEDIDOS CLIENTES \u2764\ufe0f",
+                  "S\u00c9RIES / PLUTO TV \u2694\ufe0f",
+                  "S\u00c9RIES / SBT \u26fa",
+                  "S\u00c9RIES / SHORTS \u2122\ufe0f",
+                  "S\u00c9RIES / SHOW GOSPEL \u26fa",
+                  "S\u00c9RIES / SHOW PAGODE \u2693",
+                  "S\u00c9RIES / SHOW SERTANEJO \u269c\ufe0f",
+                  "S\u00c9RIES / SHOWS MUSICAS \u2747\ufe0f",
+                  "S\u00c9RIES / STAR PLUS \u2728",
+                  "S\u00c9RIES / TURCAS \u2615",
+                  "S\u00c9RIES / UNIVER \u2600\ufe0f"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "idPrefixes": [
+          "iptvlocal-"
+        ],
+        "description": "Cat\u00e1logos de canais, filmes e s\u00e9ries com temporadas e epis\u00f3dios."
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://api.cinesenseai.com/stremio/manifest.json",
+      "manifest": {
+        "id": "com.cinesenseai.addon",
+        "logo": "https://cinesenseai.com/apple-icon.png",
+        "name": "CineSenseAI",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "csai-mood",
+            "name": "Mood of the day",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-fresh",
+            "name": "Fresh analyses",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-top",
+            "name": "Top of the last 6 months",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-mood",
+            "name": "Mood of the day",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-fresh",
+            "name": "Fresh analyses",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-top",
+            "name": "Top of the last 6 months",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-profiles",
+            "name": "CineSenseAI profiles",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "Top 2026",
+                  "Top 2025",
+                  "Mind-benders",
+                  "Slow cinema",
+                  "Nothing grim",
+                  "Feel-good",
+                  "Funny and strange",
+                  "Non-stop",
+                  "Pure absurdity",
+                  "Genuinely scary",
+                  "Visually daring",
+                  "Pitch black",
+                  "Time travel",
+                  "Time loop",
+                  "Neo-noir",
+                  "In the courtroom",
+                  "Found footage",
+                  "Mother against evil",
+                  "About food",
+                  "Just life",
+                  "Survival games",
+                  "All in one day",
+                  "Unreliable narrator",
+                  "After the end",
+                  "Teacher and a tough class",
+                  "Danger on board",
+                  "Vacation gone wrong",
+                  "Trust no one",
+                  "Anime",
+                  "Superheroes",
+                  "Fantasy epics",
+                  "Sci-fi blockbusters",
+                  "Crime and capers",
+                  "Spies and action",
+                  "Psychological thrillers",
+                  "Eerie mysteries",
+                  "Historical epics",
+                  "Family animation",
+                  "Fairy tales",
+                  "Sitcoms",
+                  "Romantic comedies",
+                  "Love stories",
+                  "Coming of age",
+                  "Inspiring dramas",
+                  "Comedy classics",
+                  "Popcorn horror"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-profiles",
+            "name": "CineSenseAI profiles",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "Top 2026",
+                  "Top 2025",
+                  "Mind-benders",
+                  "Slow cinema",
+                  "Nothing grim",
+                  "Feel-good",
+                  "Funny and strange",
+                  "Non-stop",
+                  "Pure absurdity",
+                  "Genuinely scary",
+                  "Visually daring",
+                  "Pitch black",
+                  "Time travel",
+                  "Time loop",
+                  "Neo-noir",
+                  "In the courtroom",
+                  "About food",
+                  "Just life",
+                  "Survival games",
+                  "All in one day",
+                  "Unreliable narrator",
+                  "After the end",
+                  "Teacher and a tough class",
+                  "Vacation gone wrong",
+                  "Anime",
+                  "Superheroes",
+                  "Fantasy epics",
+                  "Sci-fi blockbusters",
+                  "Crime and capers",
+                  "Spies and action",
+                  "Psychological thrillers",
+                  "Eerie mysteries",
+                  "Family animation",
+                  "Kids series",
+                  "Fairy tales",
+                  "Sitcoms",
+                  "Binge-worthy series",
+                  "Romantic comedies",
+                  "Inspiring dramas",
+                  "Popcorn horror"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-meaning",
+            "name": "Similar by meaning",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-meaning",
+            "name": "Similar by meaning",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-tags",
+            "name": "Similar by themes",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-tags",
+            "name": "Similar by themes",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-analysis",
+            "name": "Similar by tone & content",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "csai-similar-analysis",
+            "name": "Similar by tone & content",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt"
+            ]
+          }
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Under every film and series: the age with its reason, the mood in a few words and what else may bother you. Rows of the day and ready-made shelves by content. Opens the title on CineSenseAI."
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://combo.day-one-gear.com/manifest.json",
+      "manifest": {
+        "id": "com.dayonegear.easynews-torrentclaw-combo",
+        "logo": "https://combo.day-one-gear.com/static/logo.png",
+        "name": "Easynews + TorrentClaw Combo",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "config": [
+          {
+            "key": "en_username",
+            "type": "text",
+            "title": "Easynews username (your usenet account \u2014 leave blank if unused)"
+          },
+          {
+            "key": "en_password",
+            "type": "password",
+            "title": "Easynews password"
+          },
+          {
+            "key": "tc_url",
+            "type": "text",
+            "title": "TorrentClaw addon URL \u2014 copy it on torrentclaw.com (leave blank if unused)"
+          },
+          {
+            "key": "qualities",
+            "type": "text",
+            "title": "Qualities to show: 2160p,1080p,720p,sd (blank = all)"
+          },
+          {
+            "key": "minSizeGb",
+            "type": "number",
+            "title": "Min file size in GB (0 = no minimum)",
+            "default": "0"
+          },
+          {
+            "key": "maxSizeGb",
+            "type": "number",
+            "title": "Max file size in GB (0 = unlimited)",
+            "default": "0"
+          },
+          {
+            "key": "prefLang",
+            "type": "text",
+            "title": "Preferred audio language (e.g. english \u2014 floats matching streams up)"
+          },
+          {
+            "key": "strictMatch",
+            "type": "checkbox",
+            "title": "Strict title matching (drop off-title results)",
+            "default": "true"
+          },
+          {
+            "key": "subdlKey",
+            "type": "password",
+            "title": "SubDL API key for automatic subtitles (free at subdl.com/panel/api)"
+          },
+          {
+            "key": "subLangs",
+            "type": "text",
+            "title": "Subtitle languages: english,spanish,\u2026 (blank = off)",
+            "default": "english"
+          },
+          {
+            "key": "sort",
+            "type": "select",
+            "title": "Sort order",
+            "default": "quality_then_size",
+            "options": [
+              "quality_then_size",
+              "size_first"
+            ]
+          },
+          {
+            "key": "maxPerQuality",
+            "type": "number",
+            "title": "Max results per quality tier (0 = all)",
+            "default": "0"
+          },
+          {
+            "key": "preferOnDuplicate",
+            "type": "select",
+            "title": "When the same file exists in both sources",
+            "default": "easynews",
+            "options": [
+              "easynews",
+              "torrentclaw"
+            ]
+          }
+        ],
+        "version": "1.2.2",
+        "catalogs": [],
+        "resources": [
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt"
+            ]
+          },
+          {
+            "name": "subtitles",
+            "types": [
+              "movie",
+              "series"
+            ]
+          }
+        ],
+        "background": "https://combo.day-one-gear.com/static/background.png",
+        "description": "Usenet, torrents and debrid in one ranked stream list \u2014 best links first. Combines Easynews with TorrentClaw (30+ sources + bring your own RealDebrid / AllDebrid / TorBox / Premiumize): merged, deduplicated and ranked by quality then size. Quality/size/language filters, strict title matching and release-matched subtitles built in. Your config lives in your install URL and is never stored.",
+        "contactEmail": "easynewstorrentclaw@gmail.com",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..Mgo5VtQh-OZnCnzPJVJHng.tTrya9nk3H1mp0idwM69YJiCmOK1JvYx3FpeYen-A-lNhxWf0zjSMmbQSWbwXXIOdKeDEKMZ17T9GmnjfyFP6_g6iFQiA3pWh3zYrF5GN4XpyNYamsCFJrioQ9OLZErL.i4b11jxtl0kV71RDznNzfQ"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://streamvault.fly.dev/manifest.json",
+      "manifest": {
+        "id": "community.streamvault.addon",
+        "logo": "https://streamvault.fly.dev/public/img/logo.png",
+        "name": "StreamVault IPTV",
+        "types": [
+          "tv"
+        ],
+        "config": [
+          {
+            "key": "sourceType",
+            "type": "select",
+            "title": "Source Type",
+            "options": [
+              "xtream",
+              "m3u"
+            ],
+            "required": true
+          },
+          {
+            "key": "server",
+            "type": "text",
+            "title": "Server URL (Xtream Codes only)",
+            "default": ""
+          },
+          {
+            "key": "username",
+            "type": "text",
+            "title": "Username (Xtream Codes only)",
+            "default": ""
+          },
+          {
+            "key": "password",
+            "type": "password",
+            "title": "Password (Xtream Codes only)",
+            "default": ""
+          },
+          {
+            "key": "m3uUrl",
+            "type": "text",
+            "title": "M3U Playlist URL (M3U only)",
+            "default": ""
+          }
+        ],
+        "version": "1.1.0",
+        "catalogs": [
+          {
+            "id": "iptv_live",
+            "name": "StreamVault Live",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search"
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "idPrefixes": [
+          "iptv_"
+        ],
+        "description": "Stream live TV via Xtream Codes or M3U playlist. VLC player is required for live TV.",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://stremiostats.stream/manifest.json",
+      "manifest": {
+        "id": "community.estatisticas.filmes",
+        "logo": "https://stremiostats.stream/logo.png",
+        "name": "Stremio Stats",
+        "types": [
+          "movie"
+        ],
+        "version": "1.2.0",
+        "catalogs": [],
+        "resources": [
+          "catalog",
+          {
+            "name": "meta",
+            "types": [
+              "movie"
+            ],
+            "idPrefixes": [
+              "mvest:"
+            ]
+          }
+        ],
+        "background": "https://stremiostats.stream/fundo.jpg",
+        "idPrefixes": [
+          "mvest:"
+        ],
+        "description": "How many movies you\u2019ve watched on Stremio, how many hours, your favourite genres, directors, days and times, and the list of all of them. Open \"Configure\" for the full dashboard.",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://123456.vegettoson83.workers.dev/manifest.json",
+      "manifest": {
+        "id": "com.latanime.stremio",
+        "logo": "https://latanime.org/img/logito.png",
+        "name": "Latanime",
+        "types": [
+          "series"
+        ],
+        "version": "4.15.3",
+        "catalogs": [
+          {
+            "id": "latanime-latest",
+            "name": "Latanime \u2014 Recientes",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "latanime-airing",
+            "name": "Latanime \u2014 En Emisi\u00f3n",
+            "type": "series",
+            "extra": []
+          },
+          {
+            "id": "latanime-directory",
+            "name": "Latanime \u2014 Directorio",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Latino",
+                  "Castellano",
+                  "Pel\u00edcula",
+                  "OVA",
+                  "ONA",
+                  "Especial",
+                  "Donghua",
+                  "Live Action",
+                  "Acci\u00f3n",
+                  "Aventura",
+                  "Artes Marciales",
+                  "Carreras",
+                  "Ciencia Ficci\u00f3n",
+                  "Comedia",
+                  "Cyberpunk",
+                  "Demonios",
+                  "Deportes",
+                  "Drama",
+                  "Ecchi",
+                  "Escolares",
+                  "Espacial",
+                  "Fantas\u00eda",
+                  "Gore",
+                  "Harem",
+                  "Hist\u00f3rico",
+                  "Horror",
+                  "Isekai",
+                  "Josei",
+                  "Lucha",
+                  "Magia",
+                  "Mecha",
+                  "Militar",
+                  "Misterio",
+                  "Monogatari",
+                  "M\u00fasica",
+                  "Parodias",
+                  "Polic\u00eda",
+                  "Psicol\u00f3gico",
+                  "Recuerdos de la vida",
+                  "Romance",
+                  "Samurai",
+                  "Seinen",
+                  "Shojo",
+                  "Shonen",
+                  "Sobrenatural",
+                  "Suspenso",
+                  "Vampiros",
+                  "Yaoi",
+                  "Yuri"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "latanime-peliculas",
+            "name": "Latanime \u2014 Pel\u00edculas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "animefenix-directory",
+            "name": "AnimeF\u00e9nix \u2014 Directorio",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "aon-search",
+            "name": "Anime Online Ninja",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              }
+            ]
+          },
+          {
+            "id": "animeav1-directory",
+            "name": "AnimeAv1 \u2014 Directorio",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "doramaslat-directory",
+            "name": "Doramas Latino \u2014 Directorio",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "doramedplay-directory",
+            "name": "Doramas Sub \u2014 Directorio",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "idPrefixes": [
+          "latanime:",
+          "af:",
+          "aon:",
+          "av1:",
+          "dorama:",
+          "dsub:"
+        ],
+        "description": "Anime Latino y Castellano desde latanime.org",
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..4WDWvTnhGYchX9Rc1o9Bag.YHFC6ACCxdIpApiv6xLMfXvadBCCRXT9T-L2ZNgDylI-VeD8M4UW_MV3y_AQd-BxtLeykl62PeGMNweKlwfWOl_ax4-Z5ADECeZWWubCOcnbPtzGvkLrTifY_qkIi0I3.Muzmn0vmvz4BCEGDPE1OHg"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://lucky-term-218b.az51blog.workers.dev/manifest.json",
+      "manifest": {
+        "id": "org.streamplay.arvio",
+        "name": "StreamPlay (ARVIO Edition)",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.2.0",
+        "catalogs": [],
+        "resources": [
+          "stream",
+          "subtitles"
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "StreamPlay full scraper for ARVIO & Stremio. Multi-source direct streaming with Arabic subtitles."
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://plaviohd.edon.workers.dev/manifest.json",
+      "manifest": {
+        "id": "community.plaviohd",
+        "logo": "https://plaviohd.edon.workers.dev/logo.png",
+        "name": "PlavioHD",
+        "types": [
+          "movie",
+          "series",
+          "tv"
+        ],
+        "config": [
+          {
+            "key": "hdhub_plaviocloud",
+            "type": "checkbox",
+            "title": "HDHub via PlavioCloud",
+            "default": ""
+          },
+          {
+            "key": "multisource",
+            "type": "checkbox",
+            "title": "PlavioHD Streams",
+            "default": "checked"
+          },
+          {
+            "key": "livetv",
+            "type": "checkbox",
+            "title": "Live TV",
+            "default": "checked"
+          },
+          {
+            "key": "min_size_gb",
+            "type": "number",
+            "title": "Minimum size (GB, 0 = no limit)",
+            "default": ""
+          },
+          {
+            "key": "max_size_gb",
+            "type": "number",
+            "title": "Maximum size (GB, 0 = no limit)",
+            "default": ""
+          },
+          {
+            "key": "q_2160p",
+            "type": "checkbox",
+            "title": "Quality: 2160p",
+            "default": "checked"
+          },
+          {
+            "key": "q_1080p",
+            "type": "checkbox",
+            "title": "Quality: 1080p",
+            "default": "checked"
+          },
+          {
+            "key": "q_720p",
+            "type": "checkbox",
+            "title": "Quality: 720p",
+            "default": "checked"
+          },
+          {
+            "key": "q_480p",
+            "type": "checkbox",
+            "title": "Quality: 480p",
+            "default": "checked"
+          },
+          {
+            "key": "lang_English",
+            "type": "checkbox",
+            "title": "Language: English",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Hindi",
+            "type": "checkbox",
+            "title": "Language: Hindi",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Urdu",
+            "type": "checkbox",
+            "title": "Language: Urdu",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Tamil",
+            "type": "checkbox",
+            "title": "Language: Tamil",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Telugu",
+            "type": "checkbox",
+            "title": "Language: Telugu",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Arabic",
+            "type": "checkbox",
+            "title": "Language: Arabic",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Punjabi",
+            "type": "checkbox",
+            "title": "Language: Punjabi",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Malayalam",
+            "type": "checkbox",
+            "title": "Language: Malayalam",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Kannada",
+            "type": "checkbox",
+            "title": "Language: Kannada",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Bengali",
+            "type": "checkbox",
+            "title": "Language: Bengali",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Marathi",
+            "type": "checkbox",
+            "title": "Language: Marathi",
+            "default": "checked"
+          },
+          {
+            "key": "lang_Spanish",
+            "type": "checkbox",
+            "title": "Language: Spanish",
+            "default": "checked"
+          },
+          {
+            "key": "lang_French",
+            "type": "checkbox",
+            "title": "Language: French",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Hollywood",
+            "type": "checkbox",
+            "title": "Category: Hollywood",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Bollywood",
+            "type": "checkbox",
+            "title": "Category: Bollywood",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Anime",
+            "type": "checkbox",
+            "title": "Category: Anime",
+            "default": "checked"
+          },
+          {
+            "key": "cat_South Indian",
+            "type": "checkbox",
+            "title": "Category: South Indian",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Punjabi",
+            "type": "checkbox",
+            "title": "Category: Punjabi",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Pakistani",
+            "type": "checkbox",
+            "title": "Category: Pakistani",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Korean",
+            "type": "checkbox",
+            "title": "Category: Korean",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Chinese",
+            "type": "checkbox",
+            "title": "Category: Chinese",
+            "default": "checked"
+          },
+          {
+            "key": "cat_Turkish",
+            "type": "checkbox",
+            "title": "Category: Turkish",
+            "default": "checked"
+          },
+          {
+            "key": "tvregion_US",
+            "type": "checkbox",
+            "title": "Live TV: \ud83c\uddfa\ud83c\uddf8 US",
+            "default": "checked"
+          },
+          {
+            "key": "tvregion_UK",
+            "type": "checkbox",
+            "title": "Live TV: \ud83c\uddec\ud83c\udde7 UK",
+            "default": "checked"
+          },
+          {
+            "key": "tvregion_CA",
+            "type": "checkbox",
+            "title": "Live TV: \ud83c\udde8\ud83c\udde6 Canada",
+            "default": "checked"
+          },
+          {
+            "key": "tvregion_AU",
+            "type": "checkbox",
+            "title": "Live TV: \ud83c\udde6\ud83c\uddfa Australia",
+            "default": "checked"
+          },
+          {
+            "key": "tvregion_NZ",
+            "type": "checkbox",
+            "title": "Live TV: \ud83c\uddf3\ud83c\uddff New Zealand",
+            "default": "checked"
+          },
+          {
+            "key": "title_format",
+            "type": "select",
+            "title": "Stream title format",
+            "default": "default",
+            "options": [
+              "default",
+              "aiostreams",
+              "prism"
+            ]
+          },
+          {
+            "key": "healthcheck",
+            "type": "checkbox",
+            "title": "Verify streams are alive before showing (recommended)",
+            "default": "checked"
+          },
+          {
+            "key": "src_order",
+            "type": "text",
+            "title": "Source priority order (comma-separated, e.g. Cinezo,Vidzee,HDHub)",
+            "default": ""
+          },
+          {
+            "key": "tmdb",
+            "type": "text",
+            "title": "TMDB API key (optional)",
+            "default": ""
+          }
+        ],
+        "version": "1.9.10",
+        "catalogs": [
+          {
+            "id": "plaviohd-pkin",
+            "name": "\ud83d\udcfa PK & IN Channels",
+            "type": "tv"
+          },
+          {
+            "id": "plaviohd-live",
+            "name": "\u26bd Live Now",
+            "type": "tv"
+          },
+          {
+            "id": "plaviohd-cricket",
+            "name": "\ud83c\udfcf Cricket",
+            "type": "tv"
+          },
+          {
+            "id": "plaviohd-football",
+            "name": "\ud83e\udd45 Football",
+            "type": "tv"
+          },
+          {
+            "id": "plaviohd-networks",
+            "name": "\ud83d\udcfa 24/7 Sports Networks",
+            "type": "tv"
+          }
+        ],
+        "resources": [
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series",
+              "tv"
+            ],
+            "idPrefixes": [
+              "tt",
+              "plaviohdtv-"
+            ]
+          },
+          {
+            "name": "subtitles",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt"
+            ]
+          },
+          {
+            "name": "meta",
+            "types": [
+              "movie",
+              "series",
+              "tv"
+            ],
+            "idPrefixes": [
+              "tt",
+              "plaviohdtv-"
+            ]
+          },
+          {
+            "name": "catalog",
+            "types": [
+              "tv"
+            ],
+            "idPrefixes": [
+              "tt",
+              "plaviohdtv-"
+            ]
+          }
+        ],
+        "description": "Built for Plavio Media \u2014 works with Plavio and any other app that supports Stremio addons. HD movies, series and live sports over direct HTTPS, no torrents.",
+        "behaviorHints": {
+          "configurable": true
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://audioibook-addon.up.railway.app/%7B%22cat_free_public_domain%22%3Afalse%2C%22cat_short_stories%22%3Afalse%2C%22cat_drama%22%3Afalse%2C%22cat_full_cast%22%3Afalse%2C%22cat_series%22%3Afalse%2C%22hide_explicit%22%3Atrue%7D/manifest.json",
+      "manifest": {
+        "id": "community.audiobook.cinemeta",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Audiobook_icon.svg/1200px-Audiobook_icon.svg.png",
+        "name": "Cinemeta of Audiobooks",
+        "types": [
+          "movie"
+        ],
+        "version": "1.4.0",
+        "catalogs": [
+          {
+            "id": "bestsellers",
+            "name": "Bestsellers",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "novels",
+            "name": "Novels & Fiction",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "new_releases",
+            "name": "New Releases",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "trending",
+            "name": "Popular & Trending",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "top_rated",
+            "name": "Top Rated",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "award_winners",
+            "name": "Award Winners",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "by_narrator",
+            "name": "By Narrator",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "genre",
+            "name": "Genres",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "Science Fiction",
+                  "Fantasy",
+                  "Thriller",
+                  "Mystery",
+                  "Romance",
+                  "Biography",
+                  "History",
+                  "Self-Help",
+                  "Horror",
+                  "Classics"
+                ],
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "search",
+            "name": "Search",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "idPrefixes": [
+          "isbn:",
+          "asin:",
+          "olid:",
+          "slug:",
+          "librivox:",
+          "ia:",
+          "gb:",
+          "itunes:"
+        ],
+        "description": "Comprehensive audiobook discovery, cinema-grade metadata, and source-aggregation engine.",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://hentai-mama-stremio-addon.onrender.com/manifest.json",
+      "manifest": {
+        "id": "com.shadzop.anime",
+        "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1NV-WZmNsulKAR_2gdf0gzfygyNRlW9SL9tgbcLulhASgBbtBnEfpJZs&s=10",
+        "name": "Shadzop H_Anime",
+        "types": [
+          "hanime"
+        ],
+        "version": "26.10.12",
+        "catalogs": [
+          {
+            "id": "shadzop-h-anime",
+            "name": "Shadzop H_Anime",
+            "type": "hanime",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          {
+            "name": "meta",
+            "types": [
+              "hanime"
+            ],
+            "idPrefixes": [
+              "shadzop"
+            ]
+          },
+          {
+            "name": "stream",
+            "types": [
+              "hanime"
+            ],
+            "idPrefixes": [
+              "shadzop"
+            ]
+          }
+        ],
+        "idPrefixes": [
+          "shadzop"
+        ],
+        "description": "Watch your favourite H_Anime for Free in full HD.<br>Follow for more crazy content:<br><a href=\"https://youtube.com/@shadzop\" target=\"_blank\">YT</a> | <a href=\"https://youtube.com/@shadzop2\" target=\"_blank\">YT\u270c\ufe0f</a>"
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://simkl-watch-next.simkl-watch-next.workers.dev/manifest.json",
+      "manifest": {
+        "id": "community.stremio-next",
+        "logo": "https://simkl-watch-next.simkl-watch-next.workers.dev/logo.png",
+        "name": "Simkl Watch Next",
+        "types": [
+          "series",
+          "movie"
+        ],
+        "version": "0.5.0",
+        "catalogs": [
+          {
+            "id": "next",
+            "name": "Simkl",
+            "type": "series"
+          },
+          {
+            "id": "next",
+            "name": "Simkl",
+            "type": "movie"
+          }
+        ],
+        "resources": [
+          "catalog"
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Your Simkl at the top of Stremio: what to watch next, the most urgent first",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..F3nQs0RoB4AkxO4iVNo4fA.Hlwx_Y9GDTaoikP3hLkG6rXYhGKkaD0ecYorcAvoe8_GyCRV9Vj_I6juk879hBKYdXZOnAgS3bFf0eGA-HAdJqXwwZP-4hwQeCteyFOMBjn-deRHDYxksKC7DHm-DdTP.NEgr_q3FP5o4OmrZMyFP-w"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://plaviometa.vercel.app/manifest.json",
+      "manifest": {
+        "id": "community.plaviometa",
+        "logo": "https://plaviometa.vercel.app/logo.png",
+        "name": "PlavioMeta",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "2.1.0",
+        "catalogs": [
+          {
+            "id": "plaviometa-trending",
+            "name": "PlavioMeta: Trending Movies",
+            "type": "movie"
+          },
+          {
+            "id": "plaviometa-popular",
+            "name": "PlavioMeta: Popular Movies",
+            "type": "movie"
+          },
+          {
+            "id": "plaviometa-top",
+            "name": "PlavioMeta: Top Rated Movies",
+            "type": "movie"
+          },
+          {
+            "id": "plaviometa-trending",
+            "name": "PlavioMeta: Trending Series",
+            "type": "series"
+          },
+          {
+            "id": "plaviometa-popular",
+            "name": "PlavioMeta: Popular Series",
+            "type": "series"
+          },
+          {
+            "id": "plaviometa-top",
+            "name": "PlavioMeta: Top Rated Series",
+            "type": "series"
+          },
+          {
+            "id": "plaviometa-search",
+            "name": "PlavioMeta Search",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              }
+            ]
+          },
+          {
+            "id": "plaviometa-search",
+            "name": "PlavioMeta Search",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          {
+            "name": "meta",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt"
+            ]
+          }
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Free catalogs & metadata \u2014 works with Stremio, Plavio and any Stremio-protocol app \u00b7 add a free TMDB key on /configure to unlock filters, anime & more.",
+        "behaviorHints": {
+          "configurable": true
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..KrwIFAe1wE8mh8Ut8Dw_9w.M7YoX96thGSyqcvHaXTnzvZj8UWjKNjiRuZchKVPQxfsDFZYF2nKS89zVrhuT2netE3apa-JnxW_DtHEWLhSFMhwJ3tSSx2yL53mMlAMDRAqhyiE_O5jrSCTVDfX5ayg.khItrmUbuNXlMOhUGw2DFQ"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://stremio.titlovi.com/ZfvOm+R98DlU2X70zjN66g==/manifest.json",
+      "manifest": {
+        "id": "org.titlvoi.com",
+        "name": "Demo Titlovi.com Official",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.1.0",
+        "catalogs": [],
+        "resources": [
+          "subtitles"
+        ],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Demo Oficijalni addon za titlovi.com",
+        "behaviorHints": {
+          "configurable": false,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://hydra-torrent.noe359866.workers.dev/manifest.json",
+      "manifest": {
+        "id": "org.hydra.torrents",
+        "logo": "https://hydra-torrent.noe359866.workers.dev/logo-512.png",
+        "name": "Hydra Torrents",
+        "types": [
+          "movie",
+          "series",
+          "anime"
+        ],
+        "version": "1.7.7",
+        "catalogs": [],
+        "resources": [
+          "stream"
+        ],
+        "background": "https://hydra-torrent.noe359866.workers.dev/background.jpg",
+        "idPrefixes": [
+          "tt",
+          "kitsu",
+          "cs:",
+          "tmdb:"
+        ],
+        "description": "Tu torrent al instante",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": false
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..alXqU84NqzTZ6-R4pUu84Q.bHV3ibGjpH2GgLg4jt5xgE-pFMn7mlF51rt9pXMINZz-Qbd7_11H9RlajBqBl3-LkNtR94y3UFDL9DAqp0k3ja4_N38Iyv0fiT6HOsAeSVMxSHYLuOjLwGjNOCFJp2if.fVO0jW7xwy3x-XVvB8vBpw"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://muvikor.dipo.web.id/manifest.json",
+      "manifest": {
+        "id": "net.muvikor.free",
+        "logo": "https://cdn-icons-png.flaticon.com/128/2276/2276931.png",
+        "name": "Daebak Korean Drama",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "0.0.1",
+        "catalogs": [
+          {
+            "id": "mb_series_kor",
+            "name": "Trending",
+            "type": "series"
+          },
+          {
+            "id": "mb_series_romance",
+            "name": "Romance",
+            "type": "series"
+          },
+          {
+            "id": "mb_series_drama",
+            "name": "Drama",
+            "type": "series"
+          },
+          {
+            "id": "mb_series_action",
+            "name": "Action",
+            "type": "series"
+          },
+          {
+            "id": "mb_series_comedy",
+            "name": "Comedy",
+            "type": "series"
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream",
+          "subtitles"
+        ],
+        "idPrefixes": [
+          "mb:",
+          "tt"
+        ],
+        "description": "Korean Drama & Series for your long day.",
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..rMLMvKV9Tmo5v_cLgQ3Xpw.xbvT7TEHQAYf2cOJagKmgSk8Avl7b80Pn_MyFvdqtQVjjNnK42kD9XI6kaWVOtKroadw2aVDzdnqHHatvTKSU-GhBYIAHHZPwOcNYq3tRXz7qpFarGJCu_UInExbHgMV.DnqF-Hb4h2t-gbempt1TTQ"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://addex.duckdns.org/manifest.json",
+      "manifest": {
+        "id": "org.addex.index",
+        "logo": "https://addex.duckdns.org/static/logo.png",
+        "name": "Addex",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "0.2.0",
+        "catalogs": [],
+        "resources": [
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt",
+              "kitsu:",
+              "mal:"
+            ]
+          },
+          "addon_catalog"
+        ],
+        "background": "https://addex.duckdns.org/static/background.png",
+        "description": "Finds which addons have streams for what you're watching, and lists them with an install link. Browse the best addons under Addons > Addex. Addex itself hosts and returns no streams.",
+        "addonCatalogs": [
+          {
+            "id": "addex-top",
+            "name": "Addex: most coverage",
+            "type": "all"
+          },
+          {
+            "id": "addex-anime",
+            "name": "Addex: anime",
+            "type": "all"
+          }
+        ],
+        "behaviorHints": {
+          "configurable": true
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://noiro.tv/movieleaks/manifest.json",
+      "manifest": {
+        "id": "tv.noiro.movieleaks",
+        "logo": "https://noiro.tv/noiro-pwa-512.png",
+        "name": "MovieLeaks \u2014 Noiro.TV",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "3.2.1",
+        "catalogs": [],
+        "resources": [],
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Free Noiro.TV account required. Complete movie and series catalogs with standard artwork; optional Supporter RPDB posters. Register and install at https://noiro.tv/movieleaks/.",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://7d19e241349c-olemiss.baby-beamup.club/manifest.json",
+      "manifest": {
+        "id": "org.community.olemiss.allaccess",
+        "logo": "https://olemisssports.com/images/logos/site/site.png",
+        "name": "Ole Miss",
+        "types": [
+          "movie",
+          "series",
+          "channel"
+        ],
+        "version": "1.3.0",
+        "catalogs": [
+          {
+            "id": "om-ondemand",
+            "name": "Ole Miss On Demand",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "Athletics",
+                  "Baseball",
+                  "Cross Country",
+                  "Football",
+                  "Men's Basketball",
+                  "Men's Golf",
+                  "Men's Tennis",
+                  "Rifle",
+                  "Soccer",
+                  "Softball",
+                  "Track and Field",
+                  "Volleyball",
+                  "Women's Basketball",
+                  "Women's Golf",
+                  "Women's Tennis",
+                  "2026",
+                  "2025",
+                  "2024",
+                  "2023",
+                  "2022",
+                  "2021",
+                  "2020",
+                  "2019",
+                  "2018",
+                  "2017",
+                  "2016",
+                  "2015",
+                  "2014",
+                  "2013",
+                  "2012"
+                ],
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "om-live",
+            "name": "Ole Miss Live & Upcoming",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "om-series",
+            "name": "Ole Miss Series",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "om-youtube-videos",
+            "name": "Ole Miss on YouTube",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "Ole Miss Youtube",
+                  "ESPN",
+                  "Josh Pate",
+                  "PSC Highlights",
+                  "SEC"
+                ],
+                "isRequired": false
+              },
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "om-youtube",
+            "name": "Ole Miss YouTube Channel",
+            "type": "channel",
+            "extra": []
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "background": "https://s3.amazonaws.com/assets.sidearmsports.com/common/images/aa_default.jpg",
+        "idPrefixes": [
+          "om:"
+        ],
+        "description": "Live and on-demand audio/video from Ole Miss Athletics (olemisssports.com/watch) plus the Ole Miss Rebels YouTube channel, ESPN College Football, Josh Pate, PSC Highlights and SEC coverage on YouTube. Free, ad-supported, unofficial and community-built.",
+        "behaviorHints": {
+          "p2p": false,
+          "adult": false
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..3wXds4NlTZFp_rc8lvu_jw.LjwL16TbBhryIWIhil6P7Ol22quPcOy7EJGxS-qpfnz_gvIvQtJTieG0kQs5ydNYfkl3ttoUEBWle-WNp2oyWKd21yejrL7p13BLbjS99UA0Z6jGoDfNdcjGxlBpU61J.YHyNmVrWOQp54u77w_eqeg"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://hh3dkp.k-20.xyz/manifest.json",
+      "manifest": {
+        "id": "community.stremio.hoathinh3d",
+        "logo": "https://hh3dkp.k-20.xyz/logo.png",
+        "name": "Ho\u1ea1t H\u00ecnh 3D Trung Qu\u1ed1c",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.1.0",
+        "catalogs": [
+          {
+            "id": "hh3d-series",
+            "name": "HH3D \u2022 Phim B\u1ed9",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Danh m\u1ee5c: Phim L\u1ebb",
+                  "Danh m\u1ee5c: \u0110ang Chi\u1ebfu",
+                  "Danh m\u1ee5c: Ho\u00e0n Th\u00e0nh",
+                  "Danh m\u1ee5c: \u0110\u00e1nh Gi\u00e1 Cao",
+                  "Th\u1ec3 lo\u1ea1i: Tu Ti\u00ean",
+                  "Th\u1ec3 lo\u1ea1i: Huy\u1ec1n Huy\u1ec5n",
+                  "Th\u1ec3 lo\u1ea1i: Xuy\u00ean Kh\u00f4ng",
+                  "Th\u1ec3 lo\u1ea1i: Tr\u00f9ng Sinh",
+                  "Th\u1ec3 lo\u1ea1i: Ti\u00ean Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: C\u1ed5 Trang",
+                  "Th\u1ec3 lo\u1ea1i: H\u00e0i H\u01b0\u1edbc",
+                  "Th\u1ec3 lo\u1ea1i: Ki\u1ebfm Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: \u0110\u00f4 Th\u1ecb"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "hh3d-movie",
+            "name": "HH3D \u2022 Phim L\u1ebb",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Danh m\u1ee5c: Phim L\u1ebb",
+                  "Danh m\u1ee5c: \u0110ang Chi\u1ebfu",
+                  "Danh m\u1ee5c: Ho\u00e0n Th\u00e0nh",
+                  "Danh m\u1ee5c: \u0110\u00e1nh Gi\u00e1 Cao",
+                  "Th\u1ec3 lo\u1ea1i: Tu Ti\u00ean",
+                  "Th\u1ec3 lo\u1ea1i: Huy\u1ec1n Huy\u1ec5n",
+                  "Th\u1ec3 lo\u1ea1i: Xuy\u00ean Kh\u00f4ng",
+                  "Th\u1ec3 lo\u1ea1i: Tr\u00f9ng Sinh",
+                  "Th\u1ec3 lo\u1ea1i: Ti\u00ean Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: C\u1ed5 Trang",
+                  "Th\u1ec3 lo\u1ea1i: H\u00e0i H\u01b0\u1edbc",
+                  "Th\u1ec3 lo\u1ea1i: Ki\u1ebfm Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: \u0110\u00f4 Th\u1ecb"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "yan-series",
+            "name": "YAN \u2022 Ho\u1ea1t H\u00ecnh",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Danh m\u1ee5c: M\u1edbi C\u1eadp Nh\u1eadt",
+                  "Danh m\u1ee5c: \u0110ang Chi\u1ebfu",
+                  "Danh m\u1ee5c: Ho\u00e0n Th\u00e0nh",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 3D",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 2D",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 4K",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh AI",
+                  "Danh m\u1ee5c: Phim L\u1ebb",
+                  "Th\u1ec3 lo\u1ea1i: Huy\u1ec1n Huy\u1ec5n",
+                  "Th\u1ec3 lo\u1ea1i: Xuy\u00ean Kh\u00f4ng",
+                  "Th\u1ec3 lo\u1ea1i: Tr\u00f9ng Sinh",
+                  "Th\u1ec3 lo\u1ea1i: Ti\u00ean Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: C\u1ed5 Trang",
+                  "Th\u1ec3 lo\u1ea1i: H\u00e0i H\u01b0\u1edbc",
+                  "Th\u1ec3 lo\u1ea1i: Ki\u1ebfm Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: Hi\u1ec7n \u0110\u1ea1i",
+                  "Th\u1ec3 lo\u1ea1i: CN Animation"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "yan-movie",
+            "name": "YAN \u2022 Phim L\u1ebb",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Danh m\u1ee5c: M\u1edbi C\u1eadp Nh\u1eadt",
+                  "Danh m\u1ee5c: \u0110ang Chi\u1ebfu",
+                  "Danh m\u1ee5c: Ho\u00e0n Th\u00e0nh",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 3D",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 2D",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh 4K",
+                  "Danh m\u1ee5c: Ho\u1ea1t H\u00ecnh AI",
+                  "Danh m\u1ee5c: Phim L\u1ebb",
+                  "Th\u1ec3 lo\u1ea1i: Huy\u1ec1n Huy\u1ec5n",
+                  "Th\u1ec3 lo\u1ea1i: Xuy\u00ean Kh\u00f4ng",
+                  "Th\u1ec3 lo\u1ea1i: Tr\u00f9ng Sinh",
+                  "Th\u1ec3 lo\u1ea1i: Ti\u00ean Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: C\u1ed5 Trang",
+                  "Th\u1ec3 lo\u1ea1i: H\u00e0i H\u01b0\u1edbc",
+                  "Th\u1ec3 lo\u1ea1i: Ki\u1ebfm Hi\u1ec7p",
+                  "Th\u1ec3 lo\u1ea1i: Hi\u1ec7n \u0110\u1ea1i",
+                  "Th\u1ec3 lo\u1ea1i: CN Animation"
+                ],
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          {
+            "name": "meta",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "hh3d:",
+              "yan:"
+            ]
+          },
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "hh3d:",
+              "yan:"
+            ]
+          }
+        ],
+        "background": "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1920&q=80",
+        "idPrefixes": [
+          "hh3d:",
+          "yan:"
+        ],
+        "description": "Kho phim Ho\u1ea1t H\u00ecnh 3D & 2D Trung Qu\u1ed1c Vietsub & Thuy\u1ebft minh l\u1ed3ng ti\u1ebfng t\u1ed5ng h\u1ee3p t\u1eeb Ho\u1ea1t H\u00ecnh 3D (hoathinh3d.cv) v\u00e0 YanHH3D (yanhh3d.lol). H\u1ed7 tr\u1ee3 HLS Proxy, t\u1ef1 \u0111\u1ed9ng \u0111\u1ed5i ngu\u1ed3n khi l\u1ed7i.",
+        "behaviorHints": {
+          "p2p": false,
+          "adult": false,
+          "configurable": true,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://legendas.legendasbr.site/manifest.json",
+      "manifest": {
+        "id": "org.aquila.legendas.ptbr",
+        "logo": "https://legendas.legendasbr.site/logo.png",
+        "name": "LegendasBR",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "3.1.0",
+        "catalogs": [],
+        "resources": [
+          "subtitles"
+        ],
+        "description": "Legendas em Portugu\u00eas do Brasil com IA auto hospedada.",
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..4RqigSOVyVdAxx_0oQvnzw._b9frmaqyM8zg4GROjjv7W9OHTSY9DFACC_f6QlJpv_sr-v1BrSaOvlhSxx9w7EymyliW5VnSE8IPZ66q0Ooo6mqwaOripVJCtvCwG0egbWE7qOjGvdDrxpLYe56VmG0.FUrlPIw0FO5B14wNiMiQcA"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://zarranomma2996.alwaysdata.net/manifest.json",
+      "manifest": {
+        "id": "community.kick.live",
+        "logo": "https://raw.githubusercontent.com/Stremio/stremio-addons/master/images/kick.png",
+        "name": "Kick Streams & Videos",
+        "types": [
+          "kick"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "kick_channels",
+            "name": "Channels",
+            "type": "kick",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "stream",
+          "meta"
+        ],
+        "background": "https://images.kick.com/hero-bg.jpg",
+        "idPrefixes": [
+          "kick:",
+          "kicklive:",
+          "kickvod:"
+        ],
+        "description": "Watch Kick livestreams and seekable past VODs on PS5, Desktop, TV and Web"
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://watch-atlas.pages.dev/manifest.json",
+      "manifest": {
+        "id": "community.watchatlas",
+        "logo": "https://watch-atlas.pages.dev/logo.png",
+        "name": "Watch Atlas",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "wa-new-releases",
+            "name": "New Movie Releases \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-new-shows",
+            "name": "New Shows \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-fresh-episodes",
+            "name": "Fresh Episodes \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-new-digital",
+            "name": "New Digital Releases \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-tonight",
+            "name": "Tonight \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-tonight",
+            "name": "Tonight \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-hidden-gems",
+            "name": "Hidden Gems \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-hidden-gems",
+            "name": "Hidden Gems \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-short-series",
+            "name": "Short Series \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-comedy",
+            "name": "Comedy \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Romantic Comedy",
+                  "Dark Comedy",
+                  "Satire",
+                  "Slapstick",
+                  "Buddy Comedy",
+                  "Mockumentary",
+                  "Screwball",
+                  "Stand-up & Sketch"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-comedy",
+            "name": "Comedy \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Romantic Comedy",
+                  "Dark Comedy",
+                  "Satire",
+                  "Slapstick",
+                  "Buddy Comedy",
+                  "Mockumentary",
+                  "Screwball",
+                  "Stand-up & Sketch"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-action",
+            "name": "Action \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Martial Arts",
+                  "Espionage",
+                  "Heist",
+                  "Revenge",
+                  "Military",
+                  "Superhero",
+                  "Car Chases"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-action",
+            "name": "Action \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Martial Arts",
+                  "Espionage",
+                  "Heist",
+                  "Revenge",
+                  "Military",
+                  "Superhero",
+                  "Car Chases"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-drama",
+            "name": "Drama \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Courtroom",
+                  "Historical",
+                  "Family Drama",
+                  "Coming Of Age",
+                  "Medical",
+                  "Sports",
+                  "Biographical"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-drama",
+            "name": "Drama \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Courtroom",
+                  "Historical",
+                  "Family Drama",
+                  "Coming Of Age",
+                  "Medical",
+                  "Sports",
+                  "Biographical"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-thriller",
+            "name": "Thriller \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Psychological",
+                  "Conspiracy",
+                  "Political",
+                  "Legal",
+                  "Survival",
+                  "Techno Thriller"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-thriller",
+            "name": "Thriller \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Psychological",
+                  "Conspiracy",
+                  "Political",
+                  "Legal",
+                  "Survival",
+                  "Techno Thriller"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-horror",
+            "name": "Horror \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Slasher",
+                  "Supernatural",
+                  "Zombie",
+                  "Vampire",
+                  "Werewolf",
+                  "Found Footage",
+                  "Folk Horror",
+                  "Body Horror",
+                  "Gothic",
+                  "Creature",
+                  "Horror Comedy"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-horror",
+            "name": "Horror \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Slasher",
+                  "Supernatural",
+                  "Zombie",
+                  "Vampire",
+                  "Werewolf",
+                  "Found Footage",
+                  "Folk Horror",
+                  "Body Horror",
+                  "Gothic",
+                  "Creature",
+                  "Horror Comedy"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-family",
+            "name": "Family \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Family Comedy",
+                  "Family Adventure",
+                  "Fairy Tale"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-family",
+            "name": "Family \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Family Comedy",
+                  "Family Adventure",
+                  "Fairy Tale"
+                ]
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-all",
+            "name": "All Movies \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Comedy",
+                  "Action",
+                  "Adventure",
+                  "Thriller",
+                  "Science Fiction",
+                  "Fantasy",
+                  "Drama",
+                  "Mystery",
+                  "Romance",
+                  "Horror",
+                  "Documentaries",
+                  "Animation",
+                  "Family",
+                  "Reality & Competition",
+                  "Westerns",
+                  "Music & Performance",
+                  "War",
+                  "Crime",
+                  "Biographical",
+                  "Historical",
+                  "Musical",
+                  "Sports",
+                  "Romantic Comedy",
+                  "Dark Comedy",
+                  "Satire",
+                  "Slapstick",
+                  "Buddy Comedy",
+                  "Mockumentary",
+                  "Screwball",
+                  "Stand-up & Sketch",
+                  "Martial Arts",
+                  "Espionage",
+                  "Heist",
+                  "Revenge",
+                  "Military",
+                  "Superhero",
+                  "Car Chases",
+                  "Magical Adventure",
+                  "Family Adventure",
+                  "Animated Adventure",
+                  "Survival",
+                  "Psychological",
+                  "Conspiracy",
+                  "Political",
+                  "Legal",
+                  "Techno Thriller",
+                  "Space",
+                  "First Contact",
+                  "Time Travel",
+                  "Cyberpunk",
+                  "Dystopian",
+                  "Post Apocalyptic",
+                  "Epic Fantasy",
+                  "Urban Fantasy",
+                  "Fairy Tale",
+                  "Sword Sorcery",
+                  "Courtroom",
+                  "Family Drama",
+                  "Coming Of Age",
+                  "Medical",
+                  "Whodunit",
+                  "Detective",
+                  "Amateur Sleuth",
+                  "Cozy Mystery",
+                  "Noir",
+                  "Period Romance",
+                  "Romantic Drama",
+                  "LGBTQ+ Romance",
+                  "Slasher",
+                  "Supernatural",
+                  "Zombie",
+                  "Vampire",
+                  "Werewolf",
+                  "Found Footage",
+                  "Folk Horror",
+                  "Body Horror",
+                  "Gothic",
+                  "Creature",
+                  "Horror Comedy",
+                  "Nature",
+                  "Science",
+                  "History",
+                  "True Crime",
+                  "Society",
+                  "Anime",
+                  "Stop Motion",
+                  "Adult Animation",
+                  "Family Comedy",
+                  "Cooking",
+                  "Renovation",
+                  "Talent",
+                  "Dating",
+                  "Game Show",
+                  "Spaghetti Western",
+                  "Revisionist Western",
+                  "Concert",
+                  "Music Documentary",
+                  "Gangster"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-all",
+            "name": "All Shows \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Comedy",
+                  "Action",
+                  "Adventure",
+                  "Thriller",
+                  "Science Fiction",
+                  "Fantasy",
+                  "Drama",
+                  "Mystery",
+                  "Romance",
+                  "Horror",
+                  "Documentaries",
+                  "Animation",
+                  "Family",
+                  "Reality & Competition",
+                  "Westerns",
+                  "Music & Performance",
+                  "War",
+                  "Crime",
+                  "Biographical",
+                  "Historical",
+                  "Musical",
+                  "Sports",
+                  "Romantic Comedy",
+                  "Dark Comedy",
+                  "Satire",
+                  "Slapstick",
+                  "Buddy Comedy",
+                  "Mockumentary",
+                  "Screwball",
+                  "Stand-up & Sketch",
+                  "Martial Arts",
+                  "Espionage",
+                  "Heist",
+                  "Revenge",
+                  "Military",
+                  "Superhero",
+                  "Car Chases",
+                  "Magical Adventure",
+                  "Family Adventure",
+                  "Animated Adventure",
+                  "Survival",
+                  "Psychological",
+                  "Conspiracy",
+                  "Political",
+                  "Legal",
+                  "Techno Thriller",
+                  "Space",
+                  "First Contact",
+                  "Time Travel",
+                  "Cyberpunk",
+                  "Dystopian",
+                  "Post Apocalyptic",
+                  "Epic Fantasy",
+                  "Urban Fantasy",
+                  "Fairy Tale",
+                  "Sword Sorcery",
+                  "Courtroom",
+                  "Family Drama",
+                  "Coming Of Age",
+                  "Medical",
+                  "Whodunit",
+                  "Detective",
+                  "Amateur Sleuth",
+                  "Cozy Mystery",
+                  "Noir",
+                  "Period Romance",
+                  "Romantic Drama",
+                  "LGBTQ+ Romance",
+                  "Slasher",
+                  "Supernatural",
+                  "Zombie",
+                  "Vampire",
+                  "Werewolf",
+                  "Found Footage",
+                  "Folk Horror",
+                  "Body Horror",
+                  "Gothic",
+                  "Creature",
+                  "Horror Comedy",
+                  "Nature",
+                  "Science",
+                  "History",
+                  "True Crime",
+                  "Society",
+                  "Anime",
+                  "Stop Motion",
+                  "Adult Animation",
+                  "Family Comedy",
+                  "Cooking",
+                  "Renovation",
+                  "Talent",
+                  "Dating",
+                  "Game Show",
+                  "Spaghetti Western",
+                  "Revisionist Western",
+                  "Concert",
+                  "Music Documentary",
+                  "Gangster"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-adventure",
+            "name": "Adventure \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Magical Adventure",
+                  "Family Adventure",
+                  "Animated Adventure",
+                  "Survival",
+                  "Historical"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-adventure",
+            "name": "Adventure \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Magical Adventure",
+                  "Family Adventure",
+                  "Animated Adventure",
+                  "Survival",
+                  "Historical"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-sci-fi",
+            "name": "Science Fiction \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Space",
+                  "First Contact",
+                  "Time Travel",
+                  "Cyberpunk",
+                  "Dystopian",
+                  "Post Apocalyptic"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-sci-fi",
+            "name": "Science Fiction \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Space",
+                  "First Contact",
+                  "Time Travel",
+                  "Cyberpunk",
+                  "Dystopian",
+                  "Post Apocalyptic"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-fantasy",
+            "name": "Fantasy \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Epic Fantasy",
+                  "Urban Fantasy",
+                  "Fairy Tale",
+                  "Sword Sorcery",
+                  "Magical Adventure"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-fantasy",
+            "name": "Fantasy \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Epic Fantasy",
+                  "Urban Fantasy",
+                  "Fairy Tale",
+                  "Sword Sorcery",
+                  "Magical Adventure"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-mystery",
+            "name": "Mystery \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Whodunit",
+                  "Detective",
+                  "Amateur Sleuth",
+                  "Cozy Mystery",
+                  "Noir"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-mystery",
+            "name": "Mystery \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Whodunit",
+                  "Detective",
+                  "Amateur Sleuth",
+                  "Cozy Mystery",
+                  "Noir"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-romance",
+            "name": "Romance \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Romantic Comedy",
+                  "Period Romance",
+                  "Romantic Drama",
+                  "LGBTQ+ Romance"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-romance",
+            "name": "Romance \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Romantic Comedy",
+                  "Period Romance",
+                  "Romantic Drama",
+                  "LGBTQ+ Romance"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-documentary",
+            "name": "Documentaries \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Nature",
+                  "Science",
+                  "History",
+                  "True Crime",
+                  "Music",
+                  "Sports",
+                  "Society"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-documentary",
+            "name": "Documentaries \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Nature",
+                  "Science",
+                  "History",
+                  "True Crime",
+                  "Music",
+                  "Sports",
+                  "Society"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-animation",
+            "name": "Animation \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Anime",
+                  "Stop Motion",
+                  "Adult Animation",
+                  "Animated Adventure"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-animation",
+            "name": "Animation \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Anime",
+                  "Stop Motion",
+                  "Adult Animation",
+                  "Animated Adventure"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-reality",
+            "name": "Reality & Competition \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Cooking",
+                  "Renovation",
+                  "Survival",
+                  "Talent",
+                  "Dating",
+                  "Game Show"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-reality",
+            "name": "Reality & Competition \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Cooking",
+                  "Renovation",
+                  "Survival",
+                  "Talent",
+                  "Dating",
+                  "Game Show"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-western",
+            "name": "Westerns \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Spaghetti Western",
+                  "Revisionist Western"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-western",
+            "name": "Westerns \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Spaghetti Western",
+                  "Revisionist Western"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-music",
+            "name": "Music & Performance \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Concert",
+                  "Musical",
+                  "Music Documentary"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-music",
+            "name": "Music & Performance \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Concert",
+                  "Musical",
+                  "Music Documentary"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-war",
+            "name": "War \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Military",
+                  "Historical"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-war",
+            "name": "War \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Military",
+                  "Historical"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-crime",
+            "name": "Crime \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Heist",
+                  "Detective",
+                  "Gangster",
+                  "True Crime",
+                  "Noir"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-crime",
+            "name": "Crime \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All",
+                  "Heist",
+                  "Detective",
+                  "Gangster",
+                  "True Crime",
+                  "Noir"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-short-watches",
+            "name": "Short Watches \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-short-watches",
+            "name": "Short Watches \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-finished",
+            "name": "Ended Series \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-rewind",
+            "name": "Rewind \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "wa-rewind",
+            "name": "Rewind \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "genre",
+                "options": [
+                  "All"
+                ],
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "search",
+            "name": "Movies \u00b7 Watch Atlas",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          },
+          {
+            "id": "search",
+            "name": "Shows \u00b7 Watch Atlas",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": true
+              },
+              {
+                "name": "skip"
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog"
+        ],
+        "background": "https://watch-atlas.pages.dev/background.png",
+        "idPrefixes": [
+          "tt"
+        ],
+        "description": "Explore movies and TV by detailed genres, themes, time and mood. Updated automatically. Playback uses your existing stream add-ons.",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://halloween-after-dark.pages.dev/manifest.json",
+      "manifest": {
+        "id": "community.halloweenafterdark",
+        "logo": "https://halloween-after-dark.pages.dev/logo.png",
+        "name": "Halloween After Dark",
+        "types": [
+          "movie",
+          "series",
+          "other"
+        ],
+        "version": "2.3.0",
+        "catalogs": [
+          {
+            "id": "recent-horror",
+            "name": "Recent Releases \u00b7 HAD",
+            "type": "other",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "newly-added",
+            "name": "Recently Added \u00b7 HAD",
+            "type": "other",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "everything",
+            "name": "Everything \u00b7 HAD",
+            "type": "other",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "31-nights",
+            "name": "31 Nights \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "halloween-night",
+            "name": "Halloween Night \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "family-halloween",
+            "name": "Family Halloween \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "spooky-tv",
+            "name": "Spooky TV \u00b7 HAD",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "slashers",
+            "name": "Slashers \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "supernatural",
+            "name": "Ghosts, Witches & Demons \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "psychological-horror",
+            "name": "Mind Games \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "horror-comedy",
+            "name": "Horror Comedy \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "creature-features",
+            "name": "Creature Features \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "vampires-werewolves",
+            "name": "Vampires & Werewolves \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "zombies",
+            "name": "Zombies \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "found-footage",
+            "name": "Found Footage \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "folk-horror",
+            "name": "Folk Horror \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "sci-fi-horror",
+            "name": "Sci-Fi Horror \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "essential-classics",
+            "name": "Essential Classics \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "horror-classics",
+            "name": "Old-School Horror \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "hidden-gems",
+            "name": "World Horror & Cult \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "family-spooky",
+            "name": "Lighter Spooky TV \u00b7 HAD",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "halloween-episodes",
+            "name": "Halloween Episodes \u00b7 HAD",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "horror-library",
+            "name": "Horror Library \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "all-movies",
+            "name": "All Movies \u00b7 HAD",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "All styles",
+                  "Sort: Newest first",
+                  "Sort: IMDb score",
+                  "Sort: Most popular",
+                  "Slashers",
+                  "Supernatural",
+                  "Creatures",
+                  "Psychological",
+                  "Gothic",
+                  "Horror comedy",
+                  "Anthologies",
+                  "Folk horror",
+                  "Zombies",
+                  "Vampires",
+                  "Werewolves",
+                  "Found footage",
+                  "Body horror",
+                  "Sci-fi horror",
+                  "Survival horror",
+                  "Mood: Cozy",
+                  "Mood: Eerie",
+                  "Mood: Scary",
+                  "Mood: Extreme",
+                  "Era: Before 1960",
+                  "Era: 1960s",
+                  "Era: 1970s",
+                  "Era: 1980s",
+                  "Era: 1990s",
+                  "Era: 2000s",
+                  "Era: 2010s",
+                  "Era: 2020s"
+                ],
+                "isRequired": false,
+                "optionsLimit": 1
+              },
+              {
+                "name": "skip",
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          {
+            "name": "catalog",
+            "types": [
+              "movie",
+              "series",
+              "other"
+            ]
+          },
+          {
+            "name": "meta",
+            "types": [
+              "series"
+            ],
+            "idPrefixes": [
+              "had:episode:"
+            ]
+          }
+        ],
+        "background": "https://halloween-after-dark.pages.dev/logo.png",
+        "description": "HAD = Halloween After Dark. Automatically updated. 8945 curated movies, 623 spooky shows and 232 Halloween episodes. Slashers, cozy favorites, haunted TV, hidden gems and 31 Nights of Halloween. Choose collections and filter your mood. Playback uses your installed stream add-ons.",
+        "behaviorHints": {
+          "adult": false,
+          "configurable": true,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://origami-ltd.github.io/stremio-local-debrid/manifest.json",
+      "manifest": {
+        "id": "local.stremio.cache",
+        "logo": "https://origami-ltd.github.io/stremio-local-debrid/assets/logo.png",
+        "name": "Stremio Local Debrid",
+        "types": [
+          "movie",
+          "series",
+          "anime",
+          "other"
+        ],
+        "version": "1.2.0",
+        "catalogs": [],
+        "resources": [
+          "stream"
+        ],
+        "description": "Move torrent downloads from your TV to your computer. Self-hosted cache for the torrent sources returned by your installed Stremio addons. Requires a local server; configure your own instance to install.",
+        "behaviorHints": {
+          "p2p": true,
+          "configurable": true,
+          "configurationRequired": true
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..4lO7qF0iZ4JX3SexSWcJIQ.Do_F4wGkJjTJVMjYFGxkkHE0-euzEuJAZqvJGmn31tyqTkRIXicG1ZvJCe7Xa8A_Dh6b_RqMsieWpjyMETLdY5zOZ7f4tfJwEwYDnB1BpkrVdrfnMasK1y2Wt65Rtn3m.CfUOqpItK2uxRBtnKZxisw"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://api.rwind.app/manifest.json",
+      "manifest": {
+        "id": "app.rwind",
+        "logo": "https://rwind.app/addon-logo.png",
+        "name": "Rwind",
+        "types": [
+          "movie",
+          "series"
+        ],
+        "version": "1.0.0",
+        "catalogs": [],
+        "resources": [
+          "catalog",
+          {
+            "name": "player",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt",
+              "kitsu"
+            ]
+          },
+          {
+            "name": "library",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt",
+              "kitsu"
+            ]
+          }
+        ],
+        "background": "https://rwind.app/addon-background.jpg",
+        "description": "Records every play and puts Up Next on your board. Full history, stats and Year in Review at rwind.app. Import from Stremio, Trakt or Simkl. Free, no email or password.",
+        "contactEmail": "support@rwind.app",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": true
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..Z13czj5TITuTLw1QFV_22w.7pkWHWmZGkryvCFF6B4_gayONHE2y7yajvjL6_LFHX5db_mtwWeNEsxitfSrBQ430NaE1kzVDxwvoxo0UqwRNNf9hR8IeNIO4m_Z3VqLaGk5iNZaQ1l_SFORGgf8WT52.lRk_NgfzM-CfaNlgvBsZXg"
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://6880ee460bc3-iracemaflix.baby-beamup.club/manifest.json",
+      "manifest": {
+        "id": "community.m3u.catalog",
+        "logo": "https://files.catbox.moe/628bx9.png",
+        "name": "Iracemaflix",
+        "types": [
+          "movie",
+          "series",
+          "tv"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "m3u-movies",
+            "name": "Iracemaflix \u2022 Filmes",
+            "type": "movie",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "ANIMACAO/INFANTIL",
+                  "ANIMES",
+                  "A\u00c7AO",
+                  "CINEMA",
+                  "COMEDIA",
+                  "DC",
+                  "DOCUMENTARIOS \u00b7 Filmes",
+                  "DRAMA",
+                  "ESPECIAL DE NATAL",
+                  "FAROESTE",
+                  "FICCAO/FANTASIA",
+                  "GUERRA",
+                  "LANCAMENTOS",
+                  "LAN\u00c7AMENTOS LEGENDADOS",
+                  "LEGENDADOS \u00b7 Filmes",
+                  "LOLLAPALOOZA BRASIL 2025",
+                  "MARVEL",
+                  "NACIONAIS",
+                  "RELIGIOSOS \u00b7 Filmes",
+                  "ROMANCE",
+                  "SHOWS INTERNACIONAIS",
+                  "SHOWS NACIONAIS",
+                  "STAND-UP",
+                  "SUSPENSE",
+                  "TERROR",
+                  "THE TOWN 2025",
+                  "UHD 4K \u00b7 Filmes"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "m3u-series",
+            "name": "Iracemaflix \u2022 S\u00e9ries",
+            "type": "series",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "AMAZON PRIME VIDEO",
+                  "APPLETV+",
+                  "BRASIL PARALELO",
+                  "CRUNCHYROLL",
+                  "DESENHOS",
+                  "DISCOVERY+",
+                  "DISNEY+ \u00b7 S\u00e9ries",
+                  "DORAMA",
+                  "FILMES E SERIES \u00b7 S\u00e9ries",
+                  "GLOBOPLAY",
+                  "HBO MAX",
+                  "NETFLIX",
+                  "NOVELAS",
+                  "PARAMOUNT+",
+                  "SERIES TV",
+                  "SHORTS",
+                  "SHOWS",
+                  "STAR+"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "m3u-tv",
+            "name": "Iracemaflix \u2022 TV ao vivo",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "24 HORAS PARA RELAXAR",
+                  "A FAZENDA 18",
+                  "ABERTOS",
+                  "ANIMES 24 HORAS",
+                  "BAND",
+                  "BRASILEIRAO",
+                  "CINE SKY",
+                  "CLIPES 24 HORAS",
+                  "DAZN",
+                  "DESENHOS 24 HORAS",
+                  "DISCOVERY",
+                  "DISNEY+ \u00b7 Canais",
+                  "DOCUMENTARIOS \u00b7 Canais",
+                  "ELEVEN SPORTS",
+                  "ESPN",
+                  "ESPORTES",
+                  "ESTADUAIS",
+                  "FILMES 24 HORAS",
+                  "FILMES E SERIES \u00b7 Canais",
+                  "GLOBO CAPITAIS",
+                  "GLOBO INTERIOR",
+                  "H265/HEVC",
+                  "HBO",
+                  "INFANTIS",
+                  "JOGOS DO DIA",
+                  "LEGENDADOS \u00b7 Canais",
+                  "MAX",
+                  "MUSICAS",
+                  "NBA PAY-PER-VIEW",
+                  "NFL GAMEPASS",
+                  "NOTICIAS",
+                  "NOTICIAS INTERNACIONAIS",
+                  "PAY-PER-VIEW",
+                  "PREMIERE",
+                  "PROGRAMAS DE TV 24 HORAS",
+                  "RECORD TV",
+                  "REELSHORT 24 HORAS",
+                  "RELIGIOSOS \u00b7 Canais",
+                  "SBT",
+                  "SERIES 24 HORAS",
+                  "SERIES 24H POR TEMPORADA",
+                  "SPORTS WORLD",
+                  "SPORTV",
+                  "STAND-UP 24 HORAS",
+                  "TELECINE",
+                  "UHD 4K \u00b7 Canais",
+                  "VARIEDADES",
+                  "YOUTUBE 24 HORAS"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "iracematv",
+            "name": "IracemaTV \u2022 Canais",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Canais Abertos",
+                  "Document\u00e1rios",
+                  "Entretenimento",
+                  "Esportes",
+                  "Filmes e S\u00e9ries",
+                  "Infantil",
+                  "Not\u00edcias"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "iracematv_events",
+            "name": "IracemaTV \u2022 Eventos ao Vivo",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Futebol",
+                  "Basquete",
+                  "Beisebol",
+                  "H\u00f3quei",
+                  "V\u00f4lei",
+                  "Rugby",
+                  "MMA",
+                  "Golfe",
+                  "Outros"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "iracematv_upcoming",
+            "name": "IracemaTV \u2022 Pr\u00f3ximos Eventos",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Futebol",
+                  "Basquete",
+                  "Beisebol",
+                  "H\u00f3quei",
+                  "V\u00f4lei",
+                  "Rugby",
+                  "MMA",
+                  "Golfe",
+                  "Outros"
+                ],
+                "isRequired": false
+              }
+            ]
+          },
+          {
+            "id": "iracematv_all_events",
+            "name": "IracemaTV \u2022 Todos os Eventos",
+            "type": "tv",
+            "extra": [
+              {
+                "name": "search",
+                "isRequired": false
+              },
+              {
+                "name": "genre",
+                "options": [
+                  "Futebol",
+                  "Basquete",
+                  "Beisebol",
+                  "H\u00f3quei",
+                  "V\u00f4lei",
+                  "Rugby",
+                  "MMA",
+                  "Golfe",
+                  "Outros"
+                ],
+                "isRequired": false
+              }
+            ]
+          }
+        ],
+        "resources": [
+          "catalog",
+          "meta",
+          "stream"
+        ],
+        "idPrefixes": [
+          "m3u-",
+          "m3u-series-",
+          "xtream-",
+          "tt",
+          "iracematv_channel_",
+          "iracematv_event_"
+        ],
+        "description": "Filmes, s\u00e9ries e TV sem categorias ou conte\u00fado adulto.",
+        "behaviorHints": {
+          "configurable": false,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://magnetflix.flixbr.online/qualities%3D4k%2C1080p%2C720p%2Csd%7Caudio%3Ddublado%2Clegendado%7Ccatalogs%3Dpopulares_movie%2Cpopulares_series%2Crecentes_servidor_movie%2Crecentes_servidor_series%2Cemalta_movie%2Cemalta_series/manifest.json",
+      "manifest": {
+        "id": "com.magnetbr",
+        "logo": "https://magnetflix.flixbr.online/static/logo.jpg",
+        "name": "Magnetflix",
+        "types": [
+          "movie",
+          "series",
+          "anime",
+          "other",
+          "tv"
+        ],
+        "version": "1.0.0",
+        "catalogs": [
+          {
+            "id": "populares_magnetbr",
+            "name": "Filmes Populares",
+            "type": "movie"
+          },
+          {
+            "id": "populares_magnetbr",
+            "name": "S\u00e9ries Populares",
+            "type": "series"
+          },
+          {
+            "id": "recentes_servidor",
+            "name": "Filmes Rec\u00e9m Adicionados",
+            "type": "movie"
+          },
+          {
+            "id": "recentes_servidor",
+            "name": "S\u00e9ries Rec\u00e9m Adicionadas",
+            "type": "series"
+          },
+          {
+            "id": "popular",
+            "name": "Filmes em Alta (TMDB)",
+            "type": "movie"
+          },
+          {
+            "id": "popular",
+            "name": "S\u00e9ries em Alta (TMDB)",
+            "type": "series"
+          }
+        ],
+        "resources": [
+          {
+            "name": "stream",
+            "types": [
+              "movie",
+              "series",
+              "anime",
+              "other",
+              "tv"
+            ],
+            "idPrefixes": [
+              "tt",
+              "tmdb",
+              "kitsu"
+            ]
+          },
+          {
+            "name": "catalog",
+            "types": [
+              "movie",
+              "series"
+            ],
+            "idPrefixes": [
+              "tt",
+              "tmdb",
+              "kitsu"
+            ]
+          }
+        ],
+        "idPrefixes": [
+          "tt",
+          "tmdb",
+          "kitsu"
+        ],
+        "description": "Addon de filmes, s\u00e9ries e animes dublados e legendados em Portugu\u00eas (PT-BR)",
+        "behaviorHints": {
+          "configurable": true,
+          "configurationRequired": false
+        }
+      },
+      "transportName": "http"
+    },
+    {
+      "transportUrl": "https://papaserf.github.io/now-showing/addon/manifest.json",
+      "manifest": {
+        "id": "community.nowshowing",
+        "logo": "https://papaserf.github.io/now-showing/addon/logo.png",
+        "name": "Now Showing",
+        "types": [
+          "series",
+          "movie"
+        ],
+        "version": "1.1.0",
+        "catalogs": [
+          {
+            "id": "ns-onnow",
+            "name": "\ud83d\udcfa On Now",
+            "type": "series"
+          },
+          {
+            "id": "ns-random",
+            "name": "\ud83c\udfb2 Random Picks",
+            "type": "series"
+          },
+          {
+            "id": "ns-holiday",
+            "name": "\ud83c\udf89 Holiday Specials",
+            "type": "series"
+          },
+          {
+            "id": "ns-nyt",
+            "name": "\ud83d\uddfd NYT Top 100",
+            "type": "series"
+          },
+          {
+            "id": "ns-rt",
+            "name": "\ud83c\udf45 RT Comedy Top 100",
+            "type": "series"
+          },
+          {
+            "id": "ns-bbc",
+            "name": "\ud83c\uddec\ud83c\udde7 BBC Top 100",
+            "type": "series"
+          },
+          {
+            "id": "ns-picks",
+            "name": "\u2b50 Now Showing Picks",
+            "type": "series"
+          },
+          {
+            "id": "ns-movienight",
+            "name": "\ud83c\udfac Movie Night",
+            "type": "movie"
+          },
+          {
+            "id": "ns-holidaymovies",
+            "name": "\ud83c\udf89 Holiday Movie Night",
+            "type": "movie"
+          }
+        ],
+        "resources": [
+          "catalog"
+        ],
+        "description": "TV lists and a live TV Guide from the Now Showing episode randomizer: what's on now across retro channels, daily random picks, holiday specials, movie night, and the NYT, Rotten Tomatoes and BBC top-100 lists. Catalogs only; no streams.",
+        "behaviorHints": {
+          "configurable": false,
+          "configurationRequired": false
+        },
+        "stremioAddonsConfig": {
+          "issuer": "https://stremio-addons.net",
+          "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..NiE-r8L_vZT1gb7z3PVN5g.sSfXf6UHN1JpJVNb4YdmdACrl2Uv4OXCLbmXCqn4IgAvhhdB1_q8b8B2FwItVSUuUZ1myW6fEsP3nFhU84aDB_nkhJPu_DHpvXFty-uGvKYQ6fZjmB0piPivvB9Qcskj.LvoAOpU1a8j0IDXnN4mjrg"
+        }
+      },
+      "transportName": "http"
+    }
+  ]
+}

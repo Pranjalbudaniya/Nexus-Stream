@@ -17,6 +17,7 @@ data class ManifestDto(
     val resources: JsonElement? = null,
     val catalogs: List<CatalogDto>? = null,
     val behaviorHints: ManifestBehaviorHintsDto? = null,
+    val addonCatalogs: List<CatalogDto>? = null,
 )
 
 @Serializable

@@ -1,0 +1,24 @@
+{
+  "id": "community.stremio.stremio-addons-dot-net",
+  "logo": "https://stremio-addons.net/img/web-app-manifest-192x192.png",
+  "version": "1.0.1",
+  "name": "stremio-addons.net",
+  "description": "Provides the Community Stremio Addons catalog from stremio-addons.net.",
+  "types": [
+    "movie",
+    "series",
+    "channel",
+    "tv"
+  ],
+  "resources": [
+    "addon_catalog"
+  ],
+  "catalogs": [],
+  "addonCatalogs": [
+    {
+      "type": "all",
+      "id": "stremio-addons.net",
+      "name": "stremio-addons.net"
+    }
+  ]
+}

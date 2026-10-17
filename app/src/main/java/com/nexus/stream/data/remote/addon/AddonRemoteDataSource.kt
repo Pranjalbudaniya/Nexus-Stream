@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -49,7 +50,7 @@ class AddonRemoteDataSource
         suspend fun manifestWithRaw(transportUrl: String): Outcome<FetchedManifest> {
             val url = AddonUrlBuilder.manifestUrl(transportUrl)
             return safeCall(url) { targetUrl ->
-                val jsonObject = api.get(targetUrl)
+                val jsonObject = api.get(targetUrl).asJsonObjectOrThrow()
                 withContext(dispatcher) {
                     val dto = json.decodeFromJsonElement<ManifestDto>(jsonObject)
                     val manifest = AddonMappers.mapManifest(dto, json)
@@ -64,6 +65,17 @@ class AddonRemoteDataSource
         suspend fun manifest(transportUrl: String): Outcome<AddonManifest> =
             manifestWithRaw(transportUrl).map { it.manifest }
 
+        suspend fun addonCatalog(
+            transportUrl: String,
+            type: String,
+            catalogId: String,
+        ): Outcome<JsonElement> {
+            val url = AddonUrlBuilder.resourceUrl(transportUrl, "addon_catalog", type, catalogId)
+            return safeCall(url) { targetUrl ->
+                api.get(targetUrl)
+            }
+        }
+
         suspend fun catalog(
             transportUrl: String,
             type: String,
@@ -72,7 +84,7 @@ class AddonRemoteDataSource
         ): Outcome<CatalogPage> {
             val url = AddonUrlBuilder.resourceUrl(transportUrl, "catalog", type, catalogId, extra)
             return safeCall(url) { targetUrl ->
-                val jsonObject = api.get(targetUrl)
+                val jsonObject = api.get(targetUrl).asJsonObjectOrThrow()
                 withContext(dispatcher) {
                     val rawMetas = (jsonObject["metas"] as? JsonArray)?.toList().orEmpty()
                     val seen = mutableSetOf<String>()
@@ -110,7 +122,7 @@ class AddonRemoteDataSource
         ): Outcome<FetchedMeta> {
             val url = AddonUrlBuilder.resourceUrl(transportUrl, "meta", type, id)
             return safeCall(url) { targetUrl ->
-                val jsonObject = api.get(targetUrl)
+                val jsonObject = api.get(targetUrl).asJsonObjectOrThrow()
                 withContext(dispatcher) {
                     val targetObj =
                         when (val rawMeta = jsonObject["meta"]) {
@@ -142,7 +154,7 @@ class AddonRemoteDataSource
         ): Outcome<List<Stream>> {
             val url = AddonUrlBuilder.resourceUrl(transportUrl, "stream", type, videoId)
             return safeCall(url) { targetUrl ->
-                val jsonObject = api.get(targetUrl)
+                val jsonObject = api.get(targetUrl).asJsonObjectOrThrow()
                 withContext(dispatcher) {
                     val rawStreams = (jsonObject["streams"] as? JsonArray)?.toList().orEmpty()
                     val streams = mutableListOf<Stream>()
@@ -172,7 +184,7 @@ class AddonRemoteDataSource
         ): Outcome<List<Subtitle>> {
             val url = AddonUrlBuilder.resourceUrl(transportUrl, "subtitles", type, videoId, extra)
             return safeCall(url) { targetUrl ->
-                val jsonObject = api.get(targetUrl)
+                val jsonObject = api.get(targetUrl).asJsonObjectOrThrow()
                 withContext(dispatcher) {
                     val rawSubtitles = (jsonObject["subtitles"] as? JsonArray)?.toList().orEmpty()
                     val subtitles = mutableListOf<Subtitle>()
@@ -237,3 +249,6 @@ class AddonRemoteDataSource
             private const val HTTP_NOT_FOUND = 404
         }
     }
+
+private fun JsonElement.asJsonObjectOrThrow(): JsonObject =
+    this as? JsonObject ?: throw SerializationException("Expected JsonObject but found $this")

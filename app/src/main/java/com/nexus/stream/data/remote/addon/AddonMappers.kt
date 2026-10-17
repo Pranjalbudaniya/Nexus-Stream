@@ -32,6 +32,7 @@ object AddonMappers {
                 }.orEmpty()
 
         val catalogs = dto.catalogs.orEmpty().map { mapCatalogSpec(it) }
+        val addonCatalogs = dto.addonCatalogs.orEmpty().map { mapCatalogSpec(it) }
 
         return AddonManifest(
             id = dto.id.orEmpty(),
@@ -45,6 +46,7 @@ object AddonMappers {
             resources = resources,
             catalogs = catalogs,
             behaviorHints = mapManifestHints(dto.behaviorHints),
+            addonCatalogs = addonCatalogs,
         )
     }
 

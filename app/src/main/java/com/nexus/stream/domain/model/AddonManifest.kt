@@ -12,6 +12,7 @@ data class AddonManifest(
     val resources: List<ResourceSpec>,
     val catalogs: List<CatalogSpec>,
     val behaviorHints: ManifestHints,
+    val addonCatalogs: List<CatalogSpec> = emptyList(),
 ) {
     val isAdult: Boolean get() = behaviorHints.adult
 }

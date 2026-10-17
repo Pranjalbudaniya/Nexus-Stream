@@ -50,4 +50,10 @@ interface RepositoryModule {
     @Binds
     @Singleton
     fun bindMetaRepository(impl: MetaRepositoryImpl): MetaRepository
+
+    @Binds
+    @Singleton
+    fun bindCommunityAddonsRepository(
+        impl: com.nexus.stream.data.repository.CommunityAddonsRepositoryImpl,
+    ): com.nexus.stream.domain.repository.CommunityAddonsRepository
 }

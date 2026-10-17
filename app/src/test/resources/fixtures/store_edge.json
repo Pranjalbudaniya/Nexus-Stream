@@ -1,0 +1,99 @@
+{
+  "addons": [
+    {
+      "transportUrl": "https://no-manifest.com/manifest.json",
+      "transportName": "no-manifest.com"
+    },
+    {
+      "transportUrl": "https://only-catalog.com/manifest.json",
+      "manifest": {
+        "id": "only.catalog",
+        "name": "Only Catalog",
+        "version": "1.0.0",
+        "description": "Catalog only",
+        "types": ["movie"],
+        "resources": ["addon_catalog"]
+      }
+    },
+    {
+      "transportUrl": "https://meta-only.com/manifest.json",
+      "manifest": {
+        "id": "meta.only",
+        "name": "Meta Only",
+        "version": "1.0.0",
+        "description": "Meta only",
+        "types": ["movie"],
+        "resources": ["meta"]
+      }
+    },
+    {
+      "transportUrl": "https://subtitles-only.com/manifest.json",
+      "manifest": {
+        "id": "sub.only",
+        "name": "Subtitles Only",
+        "version": "1.0.0",
+        "description": "Subtitles only",
+        "types": ["movie"],
+        "resources": ["subtitles"]
+      }
+    },
+    {
+      "transportUrl": "http://insecure.com/manifest.json",
+      "manifest": {
+        "id": "insecure",
+        "name": "Insecure Addon",
+        "version": "1.0.0",
+        "description": "HTTP connection",
+        "types": ["movie"],
+        "resources": ["stream"]
+      }
+    },
+    {
+      "transportUrl": "https://adult.com/manifest.json",
+      "manifest": {
+        "id": "adult",
+        "name": "Adult Addon",
+        "version": "1.0.0",
+        "description": "18+ content",
+        "types": ["movie"],
+        "resources": ["stream"],
+        "behaviorHints": {
+          "adult": true
+        }
+      }
+    },
+    {
+      "transportUrl": "https://meta-only.com/manifest.json",
+      "manifest": {
+        "id": "meta.only.dup",
+        "name": "Meta Only Duplicate",
+        "version": "2.0.0",
+        "description": "Duplicate URL",
+        "types": ["movie"],
+        "resources": ["meta"]
+      }
+    },
+    {
+      "transportUrl": "ftp://bad-scheme.com/manifest.json",
+      "manifest": {
+        "id": "bad.scheme",
+        "name": "Bad Scheme",
+        "version": "1.0.0",
+        "description": "FTP scheme",
+        "types": ["movie"],
+        "resources": ["stream"]
+      }
+    },
+    {
+      "manifest": {
+        "id": "no.url",
+        "name": "No URL",
+        "version": "1.0.0",
+        "description": "Missing transportUrl",
+        "types": ["movie"],
+        "resources": ["stream"]
+      }
+    },
+    "just a raw string item"
+  ]
+}
