@@ -5,12 +5,10 @@ import kotlin.math.min
 private const val PERCENT_MULTIPLIER = 100
 private const val MAX_PERCENT = 100
 
-sealed interface PieceMapping
-
 data class TargetPieces(
     val head: List<Int>,
     val tail: List<Int>,
-) : PieceMapping {
+) {
     val all: List<Int> get() = head + tail
 }
 

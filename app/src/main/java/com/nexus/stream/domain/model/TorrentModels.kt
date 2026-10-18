@@ -55,4 +55,5 @@ object TorrentConfig {
     const val TAIL_BYTES = 2L * 1024 * 1024
     const val METADATA_TIMEOUT_MS = 60_000L
     const val POLL_INTERVAL_MS = 500L
+    const val PIECE_DEADLINE_STEP_MS = 100L
 }
