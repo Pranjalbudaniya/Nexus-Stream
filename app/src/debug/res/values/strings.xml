@@ -154,4 +154,22 @@
     <string name="dev_tools_database_empty">No rows</string>
     <string name="dev_tools_database_refresh">Refresh</string>
     <string name="dev_tools_database_back">Back</string>
+
+    <!-- Torrent tester -->
+    <string name="dev_tools_torrent_tester">Torrent tester</string>
+    <string name="torrent_tester_title">Torrent tester</string>
+    <string name="torrent_tester_input_hint">Paste a magnet or a 40-character hash</string>
+    <string name="torrent_tester_input_error">Invalid magnet link or info hash</string>
+    <string name="torrent_tester_start">Start</string>
+    <string name="torrent_tester_stop">Stop</string>
+    <string name="torrent_tester_fetching_metadata">Fetching metadata</string>
+    <string name="torrent_tester_buffering">Buffering %1$d%%</string>
+    <string name="torrent_tester_stats">%1$s · %2$d peers</string>
+    <string name="torrent_tester_ready">Ready: %1$s (%2$s)</string>
+    <string name="torrent_tester_error_invalid_hash">Invalid hash</string>
+    <string name="torrent_tester_error_metadata_timeout">Metadata fetch timed out</string>
+    <string name="torrent_tester_error_no_video_file">No video file found</string>
+    <string name="torrent_tester_error_storage">Storage error</string>
+    <string name="torrent_tester_error_engine_unavailable">Torrent engine unavailable on this device</string>
+    <string name="torrent_tester_error_unknown">Torrent failed: %1$s</string>
 </resources>

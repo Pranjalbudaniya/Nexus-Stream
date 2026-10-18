@@ -38,6 +38,7 @@ class DevToolsActivity : ComponentActivity() {
     private val addonTesterViewModel: AddonTesterViewModel by viewModels()
     private val homeTestDataViewModel: HomeTestDataViewModel by viewModels()
     private val databaseDevViewModel: DatabaseDevViewModel by viewModels()
+    private val torrentTesterViewModel: TorrentTesterViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +49,7 @@ class DevToolsActivity : ComponentActivity() {
                 addonTesterViewModel = addonTesterViewModel,
                 homeTestDataViewModel = homeTestDataViewModel,
                 databaseDevViewModel = databaseDevViewModel,
+                torrentTesterViewModel = torrentTesterViewModel,
             )
         }
     }
@@ -59,6 +61,7 @@ private fun DevToolsContent(
     addonTesterViewModel: AddonTesterViewModel,
     homeTestDataViewModel: HomeTestDataViewModel,
     databaseDevViewModel: DatabaseDevViewModel,
+    torrentTesterViewModel: TorrentTesterViewModel,
 ) {
     val uiState by themeViewModel.uiState.collectAsState()
     val state = uiState as? ThemeUiState.Ready ?: return
@@ -117,10 +120,21 @@ private fun DevToolsContent(
                     )
                 }
 
+                DevScreen.TORRENT_TESTER -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    val torrentState by torrentTesterViewModel.uiState.collectAsState()
+                    TorrentTesterScreen(
+                        state = torrentState,
+                        onEvent = torrentTesterViewModel::onEvent,
+                        onBack = { currentScreen = DevScreen.MENU },
+                    )
+                }
+
                 DevScreen.MENU -> {
                     DevToolsMenu(
                         onNavigateGallery = { currentScreen = DevScreen.THEME_GALLERY },
                         onNavigateTester = { currentScreen = DevScreen.ADDON_TESTER },
+                        onNavigateTorrentTester = { currentScreen = DevScreen.TORRENT_TESTER },
                         onNavigateHomeTestData = { currentScreen = DevScreen.HOME_TEST_DATA },
                         onNavigateDatabase = { currentScreen = DevScreen.DATABASE },
                     )
@@ -135,6 +149,7 @@ private fun DevToolsContent(
 private fun DevToolsMenu(
     onNavigateGallery: () -> Unit,
     onNavigateTester: () -> Unit,
+    onNavigateTorrentTester: () -> Unit,
     onNavigateHomeTestData: () -> Unit,
     onNavigateDatabase: () -> Unit,
 ) {
@@ -176,6 +191,17 @@ private fun DevToolsMenu(
             item {
                 ListItem(
                     headlineContent = {
+                        Text(stringResource(R.string.dev_tools_torrent_tester))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateTorrentTester),
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = {
                         Text(stringResource(R.string.dev_tools_home_test_data))
                     },
                     modifier =
@@ -203,6 +229,7 @@ private enum class DevScreen {
     MENU,
     THEME_GALLERY,
     ADDON_TESTER,
+    TORRENT_TESTER,
     HOME_TEST_DATA,
     DATABASE,
 }
