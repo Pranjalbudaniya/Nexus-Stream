@@ -15,8 +15,12 @@ sealed interface AppError {
 
     data object InvalidUrl : AppError
 
+    data class Torrent(
+        val reason: TorrentFailReason,
+    ) : AppError
+
     data class Unknown(
-        val message: String?,
+        val message: String? = null,
     ) : AppError
 }
 

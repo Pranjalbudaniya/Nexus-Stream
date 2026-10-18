@@ -508,4 +508,5 @@ private fun AppError.toDisplayName(): String =
         AppError.Timeout -> "Timeout"
         is AppError.Http -> "Http($code)"
         is AppError.Unknown -> "Unknown(${message.orEmpty()})"
+        is AppError.Torrent -> "Torrent(${reason.name})"
     }
