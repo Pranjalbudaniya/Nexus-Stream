@@ -74,6 +74,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.jlibtorrent)
+    implementation(libs.jlibtorrent.android.arm64)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

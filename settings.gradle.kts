@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        exclusiveContent {
+            forRepository { maven { url = uri("https://dl.frostwire.com/maven") } }
+            filter { includeGroup("com.frostwire") }
+        }
     }
 }
 

@@ -24,6 +24,7 @@ okhttp = "5.5.0"
 kotlinxSerializationJson = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 coil = "3.6.3"
+jlibtorrent = "2.0.12.9"
 
 # Tests
 junit = "4.13.2"
@@ -63,6 +64,8 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 junit = { module = "junit:junit", version.ref = "junit" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+jlibtorrent = { module = "com.frostwire:jlibtorrent", version.ref = "jlibtorrent" }
+jlibtorrent-android-arm64 = { module = "com.frostwire:jlibtorrent-android-arm64", version.ref = "jlibtorrent" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
