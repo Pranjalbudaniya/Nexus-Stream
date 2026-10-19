@@ -176,4 +176,34 @@ class StreamWindowTest {
         assertTrue(needsReprioritize(position = start - 1L, windowStart = start, windowBytes = window))
         assertTrue(needsReprioritize(position = start, windowStart = start, windowBytes = 0L))
     }
+
+    @Test
+    fun DL1_positionZero_givesStep() {
+        assertEquals(100, deadlineMsFor(position = 0, stepMs = 100L))
+    }
+
+    @Test
+    fun DL2_positionNine_givesTenSteps() {
+        assertEquals(1000, deadlineMsFor(position = 9, stepMs = 100L))
+    }
+
+    @Test
+    fun DL3_largeInputs_clampedToIntMaxWithoutOverflow() {
+        assertEquals(
+            Int.MAX_VALUE,
+            deadlineMsFor(position = Int.MAX_VALUE, stepMs = Long.MAX_VALUE / 2L),
+        )
+        assertEquals(
+            Int.MAX_VALUE,
+            deadlineMsFor(position = 1_000_000, stepMs = 1_000_000_000L),
+        )
+    }
+
+    @Test
+    fun DL4_negativePositionOrNonPositiveStep_givesOne() {
+        assertEquals(1, deadlineMsFor(position = -5, stepMs = 100L))
+        assertEquals(1, deadlineMsFor(position = 0, stepMs = 0L))
+        assertEquals(1, deadlineMsFor(position = 0, stepMs = -7L))
+        assertEquals(1, deadlineMsFor(position = -5, stepMs = -7L))
+    }
 }

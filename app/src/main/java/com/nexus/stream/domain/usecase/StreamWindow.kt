@@ -41,6 +41,18 @@ fun needsReprioritize(
     return position < windowStart || position >= windowStart + halfWindow
 }
 
+fun deadlineMsFor(
+    position: Int,
+    stepMs: Long,
+): Int {
+    if (position < 0 || stepMs <= 0L) return 1
+    val posFactor = position.toLong() + 1L
+    val maxInt = Int.MAX_VALUE.toLong()
+    val exceedsMax = posFactor > maxInt || stepMs > maxInt
+    val product = if (exceedsMax) maxInt else posFactor * stepMs
+    return minOf(maxInt, maxOf(1L, product)).toInt()
+}
+
 private fun isRangeInvalid(
     fileOffset: Long,
     pieceLength: Long,

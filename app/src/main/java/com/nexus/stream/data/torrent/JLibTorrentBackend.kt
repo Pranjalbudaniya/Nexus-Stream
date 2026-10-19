@@ -18,6 +18,7 @@ import com.frostwire.jlibtorrent.alerts.TorrentErrorAlert
 import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.domain.model.TorrentConfig
 import com.nexus.stream.domain.model.TorrentFailReason
+import com.nexus.stream.domain.usecase.deadlineMsFor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -195,7 +196,7 @@ class JLibTorrentBackend
                 handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
 
                 pieces.forEachIndexed { position, pieceIndex ->
-                    val deadlineMs = ((position + 1) * TorrentConfig.PIECE_DEADLINE_STEP_MS).toInt()
+                    val deadlineMs = deadlineMsFor(position, TorrentConfig.PIECE_DEADLINE_STEP_MS)
                     handle.setPieceDeadline(pieceIndex, deadlineMs)
                 }
             }
