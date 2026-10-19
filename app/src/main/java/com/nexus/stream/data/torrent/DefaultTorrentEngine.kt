@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import javax.inject.Singleton
 
 private val HASH_REGEX = Regex("^[0-9a-f]{40}$")
 
@@ -45,7 +46,8 @@ internal fun buildMagnet(
     return "magnet:?xt=urn:btih:$hash$params"
 }
 
-class DefaultTorrentEngine
+@Singleton
+open class DefaultTorrentEngine
     @Inject
     constructor(
         private val backend: TorrentBackend,
@@ -69,7 +71,7 @@ class DefaultTorrentEngine
             data object Stopped : MetaResult
         }
 
-        override fun prepare(request: TorrentRequest): Flow<TorrentState> =
+        open override fun prepare(request: TorrentRequest): Flow<TorrentState> =
             channelFlow {
                 val hash = request.infoHash.trim().lowercase()
                 if (!HASH_REGEX.matches(hash)) {
@@ -211,7 +213,7 @@ class DefaultTorrentEngine
             }
         }
 
-        override suspend fun selectFile(
+        open override suspend fun selectFile(
             infoHash: String,
             fileIdx: Int,
         ) {
@@ -222,7 +224,7 @@ class DefaultTorrentEngine
             }
         }
 
-        override suspend fun stop(infoHash: String) {
+        open override suspend fun stop(infoHash: String) {
             val hash = infoHash.trim().lowercase()
             sessions[hash]?.stopped?.complete(Unit)
         }

@@ -10,6 +10,9 @@ interface TorrentBackend {
 
     suspend fun awaitMetadata(infoHash: String): TorrentMetadata
 
+    /**
+     * Sets exactly these deadlines and clears earlier ones.
+     */
     suspend fun prioritize(
         infoHash: String,
         fileIndex: Int,

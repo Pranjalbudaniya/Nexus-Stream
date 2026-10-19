@@ -36,7 +36,8 @@ class JLibTorrentBackend
     constructor(
         @ApplicationContext private val context: Context,
         @IoDispatcher private val io: CoroutineDispatcher,
-    ) : TorrentBackend {
+    ) : TorrentBackend,
+        TorrentFileLocator {
         private val sessionMutex = Mutex()
         private var sessionManager: SessionManager? = null
 
@@ -182,6 +183,8 @@ class JLibTorrentBackend
                 val handle = sm.find(Sha1Hash(hash)) ?: throw TorrentBackendException(TorrentFailReason.STORAGE)
                 if (!handle.isValid) throw TorrentBackendException(TorrentFailReason.STORAGE)
 
+                handle.clearPieceDeadlines()
+
                 val ti = handle.torrentFile()
                 val numFiles = ti?.numFiles() ?: (fileIndex + 1)
                 val priorities =
@@ -247,6 +250,15 @@ class JLibTorrentBackend
                 }.onFailure { if (it is CancellationException) throw it }
                 Unit
             }
+
+        override fun fileOf(
+            infoHash: String,
+            relativePath: String,
+        ): File {
+            val root = File(context.cacheDir, "torrents")
+            return resolveInside(root, infoHash, relativePath)
+                ?: throw TorrentBackendException(TorrentFailReason.STORAGE)
+        }
     }
 
 private inline fun <T> runCatchingLibraryCall(

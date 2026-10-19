@@ -38,9 +38,15 @@ sealed interface TorrentTesterEvent {
     data class SelectFile(
         val index: Int,
     ) : TorrentTesterEvent
+
+    data object PlayInOtherApp : TorrentTesterEvent
 }
 
-sealed interface TorrentTesterEffect
+sealed interface TorrentTesterEffect {
+    data class OpenPlayer(
+        val url: String,
+    ) : TorrentTesterEffect
+}
 
 @HiltViewModel
 class TorrentTesterViewModel
@@ -56,6 +62,7 @@ class TorrentTesterViewModel
 
         private var activeHash: String? = null
         private var prepareJob: Job? = null
+        private var localUrl: String? = null
 
         fun onEvent(event: TorrentTesterEvent) {
             when (event) {
@@ -63,6 +70,7 @@ class TorrentTesterViewModel
                 TorrentTesterEvent.Start -> onStart()
                 TorrentTesterEvent.Stop -> onStop()
                 is TorrentTesterEvent.SelectFile -> onSelectFile(event.index)
+                TorrentTesterEvent.PlayInOtherApp -> onPlayInOtherApp()
             }
         }
 
@@ -80,6 +88,7 @@ class TorrentTesterViewModel
 
             val hash = parsed.infoHash
             activeHash = hash
+            localUrl = null
             _uiState.update {
                 it.copy(
                     input = "",
@@ -97,7 +106,15 @@ class TorrentTesterViewModel
                         .onCompletion { _ ->
                             _uiState.update { currentState -> currentState.copy(running = false) }
                         }.collect { newState ->
-                            _uiState.update { currentState -> currentState.copy(state = newState) }
+                            if (newState is TorrentState.Ready) {
+                                localUrl = newState.localUrl
+                                _uiState.update { currentState ->
+                                    currentState.copy(state = newState.copy(localUrl = null))
+                                }
+                            } else {
+                                localUrl = null
+                                _uiState.update { currentState -> currentState.copy(state = newState) }
+                            }
                         }
                 }
         }
@@ -105,6 +122,7 @@ class TorrentTesterViewModel
         private fun onStop() {
             prepareJob?.cancel()
             prepareJob = null
+            localUrl = null
             val hash = activeHash
             activeHash = null
             _uiState.update { it.copy(running = false, state = null) }
@@ -119,6 +137,15 @@ class TorrentTesterViewModel
             val hash = activeHash ?: return
             viewModelScope.launch {
                 engine.selectFile(hash, index)
+            }
+        }
+
+        private fun onPlayInOtherApp() {
+            if (_uiState.value.state is TorrentState.Ready) {
+                val url = localUrl ?: return
+                viewModelScope.launch {
+                    _effects.emit(TorrentTesterEffect.OpenPlayer(url))
+                }
             }
         }
 

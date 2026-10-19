@@ -1,6 +1,9 @@
 package com.nexus.stream.dev
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,13 +24,21 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -40,6 +51,9 @@ import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusOutlinedButton
 import com.nexus.stream.presentation.theme.NexusTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,11 +63,41 @@ fun TorrentTesterScreen(
     onEvent: (TorrentTesterEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    effects: Flow<TorrentTesterEffect> = emptyFlow(),
 ) {
     val spacing = NexusTheme.spacing
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var noPlayerFound by remember { mutableStateOf(false) }
+    val noPlayerFoundMessage = stringResource(R.string.torrent_tester_no_player_found)
+
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                is TorrentTesterEffect.OpenPlayer -> {
+                    noPlayerFound = false
+                    try {
+                        val intent =
+                            Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(Uri.parse(effect.url), "video/*")
+                            }
+                        val chooser = Intent.createChooser(intent, null)
+                        context.startActivity(chooser)
+                    } catch (_: ActivityNotFoundException) {
+                        noPlayerFound = true
+                        scope.launch {
+                            snackbarHostState.showSnackbar(noPlayerFoundMessage)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.torrent_tester_title)) },
@@ -125,6 +169,8 @@ fun TorrentTesterScreen(
                     TorrentStatusSection(
                         state = torrentState,
                         onSelectFile = { onEvent(TorrentTesterEvent.SelectFile(it)) },
+                        onPlayInOtherApp = { onEvent(TorrentTesterEvent.PlayInOtherApp) },
+                        noPlayerFound = noPlayerFound,
                     )
                 }
             }
@@ -136,6 +182,8 @@ fun TorrentTesterScreen(
 private fun TorrentStatusSection(
     state: TorrentState,
     onSelectFile: (Int) -> Unit,
+    onPlayInOtherApp: () -> Unit,
+    noPlayerFound: Boolean,
 ) {
     val spacing = NexusTheme.spacing
 
@@ -211,6 +259,21 @@ private fun TorrentStatusSection(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
+
+                    NexusButton(
+                        onClick = onPlayInOtherApp,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.torrent_tester_play_in_other_app))
+                    }
+
+                    if (noPlayerFound) {
+                        Text(
+                            text = stringResource(R.string.torrent_tester_no_player_found),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
 
                 is TorrentState.Failed -> {

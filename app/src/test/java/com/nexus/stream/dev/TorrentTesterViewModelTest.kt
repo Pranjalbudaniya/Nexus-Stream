@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -181,6 +182,75 @@ class TorrentTesterViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, fakeEngine.prepareCalls.size)
+        }
+
+    @Test
+    fun V9_readyWithLocalUrl_playInOtherAppEmitsOpenPlayerAndUrlNotInUiState() =
+        runTest(testDispatcher) {
+            val effects = mutableListOf<TorrentTesterEffect>()
+            val effectsJob =
+                launch {
+                    viewModel.effects.collect { effects.add(it) }
+                }
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            val streamUrl = "http://127.0.0.1:12345/t/0123456789abcdef0123456789abcdef/stream.mkv"
+            val readyWithUrl =
+                TorrentState.Ready(
+                    fileIndex = 1,
+                    fileName = "movie.mkv",
+                    fileSize = 100_000_000L,
+                    localUrl = streamUrl,
+                )
+            fakeEngine.prepareFlow.emit(readyWithUrl)
+            advanceUntilIdle()
+
+            val stateString = viewModel.uiState.value.toString()
+            assertFalse(stateString.contains("http://", ignoreCase = true))
+            assertFalse(stateString.contains("12345"))
+            assertFalse(stateString.contains(streamUrl))
+
+            viewModel.onEvent(TorrentTesterEvent.PlayInOtherApp)
+            advanceUntilIdle()
+
+            assertEquals(1, effects.size)
+            assertEquals(TorrentTesterEffect.OpenPlayer(streamUrl), effects[0])
+
+            effectsJob.cancel()
+        }
+
+    @Test
+    fun V10_readyWithNullLocalUrl_playInOtherAppEmitsNoEffect() =
+        runTest(testDispatcher) {
+            val effects = mutableListOf<TorrentTesterEffect>()
+            val effectsJob =
+                launch {
+                    viewModel.effects.collect { effects.add(it) }
+                }
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            val readyNullUrl =
+                TorrentState.Ready(
+                    fileIndex = 1,
+                    fileName = "movie.mkv",
+                    fileSize = 100_000_000L,
+                    localUrl = null,
+                )
+            fakeEngine.prepareFlow.emit(readyNullUrl)
+            advanceUntilIdle()
+
+            viewModel.onEvent(TorrentTesterEvent.PlayInOtherApp)
+            advanceUntilIdle()
+
+            assertTrue(effects.isEmpty())
+
+            effectsJob.cancel()
         }
 
     private class FakeTorrentEngine : TorrentEngine {

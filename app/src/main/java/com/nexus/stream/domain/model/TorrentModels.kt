@@ -43,6 +43,7 @@ sealed interface TorrentState {
         val fileIndex: Int,
         val fileName: String,
         val fileSize: Long,
+        val localUrl: String? = null,
     ) : TorrentState
 
     data class Failed(
@@ -56,4 +57,7 @@ object TorrentConfig {
     const val METADATA_TIMEOUT_MS = 60_000L
     const val POLL_INTERVAL_MS = 500L
     const val PIECE_DEADLINE_STEP_MS = 100L
+    const val STREAM_WINDOW_BYTES = 16L * 1024 * 1024
+    const val STREAM_POLL_MS = 100L
+    const val STREAM_STALL_TIMEOUT_MS = 30_000L
 }

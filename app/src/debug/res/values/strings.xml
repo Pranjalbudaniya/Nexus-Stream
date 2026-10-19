@@ -172,4 +172,6 @@
     <string name="torrent_tester_error_storage">Storage error</string>
     <string name="torrent_tester_error_engine_unavailable">Torrent engine unavailable on this device</string>
     <string name="torrent_tester_error_unknown">Torrent failed: %1$s</string>
+    <string name="torrent_tester_play_in_other_app">Play in another app</string>
+    <string name="torrent_tester_no_player_found">No player app found</string>
 </resources>

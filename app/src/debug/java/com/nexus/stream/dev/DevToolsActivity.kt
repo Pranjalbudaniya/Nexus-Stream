@@ -125,6 +125,7 @@ private fun DevToolsContent(
                     val torrentState by torrentTesterViewModel.uiState.collectAsState()
                     TorrentTesterScreen(
                         state = torrentState,
+                        effects = torrentTesterViewModel.effects,
                         onEvent = torrentTesterViewModel::onEvent,
                         onBack = { currentScreen = DevScreen.MENU },
                     )
