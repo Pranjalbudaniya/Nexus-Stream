@@ -183,4 +183,19 @@
     <string name="torrent_tester_cache_limit_1gb">1 GB</string>
     <string name="torrent_tester_cache_limit_2gb">2 GB</string>
     <string name="torrent_tester_cache_limit_5gb">5 GB</string>
+
+    <!-- Proxy tester -->
+    <string name="dev_tools_proxy_tester">Proxy tester</string>
+    <string name="proxy_tester_title">Proxy tester</string>
+    <string name="proxy_tester_url_label">Stream URL</string>
+    <string name="proxy_tester_url_hint">https://example.com/video.mp4</string>
+    <string name="proxy_tester_headers_label">Headers (one per line, Name: value)</string>
+    <string name="proxy_tester_headers_hint">Referer: https://example.org/\nUser-Agent: Player/1.0</string>
+    <string name="proxy_tester_parsed_count">Parsed headers: %1$d</string>
+    <string name="proxy_tester_ignored_count">Ignored lines: %1$d</string>
+    <string name="proxy_tester_open_browser">Open in browser</string>
+    <string name="proxy_tester_play_other_app">Play in another app</string>
+    <string name="proxy_tester_stop">Stop</string>
+    <string name="proxy_tester_status_label">Status: %1$s</string>
+    <string name="proxy_tester_no_app_found">No app found to handle this URL</string>
 </resources>

@@ -39,6 +39,7 @@ class DevToolsActivity : ComponentActivity() {
     private val homeTestDataViewModel: HomeTestDataViewModel by viewModels()
     private val databaseDevViewModel: DatabaseDevViewModel by viewModels()
     private val torrentTesterViewModel: TorrentTesterViewModel by viewModels()
+    private val proxyTesterViewModel: ProxyTesterViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +51,7 @@ class DevToolsActivity : ComponentActivity() {
                 homeTestDataViewModel = homeTestDataViewModel,
                 databaseDevViewModel = databaseDevViewModel,
                 torrentTesterViewModel = torrentTesterViewModel,
+                proxyTesterViewModel = proxyTesterViewModel,
             )
         }
     }
@@ -62,6 +64,7 @@ private fun DevToolsContent(
     homeTestDataViewModel: HomeTestDataViewModel,
     databaseDevViewModel: DatabaseDevViewModel,
     torrentTesterViewModel: TorrentTesterViewModel,
+    proxyTesterViewModel: ProxyTesterViewModel,
 ) {
     val uiState by themeViewModel.uiState.collectAsState()
     val state = uiState as? ThemeUiState.Ready ?: return
@@ -131,11 +134,23 @@ private fun DevToolsContent(
                     )
                 }
 
+                DevScreen.PROXY_TESTER -> {
+                    BackHandler { currentScreen = DevScreen.MENU }
+                    val proxyState by proxyTesterViewModel.uiState.collectAsState()
+                    ProxyTesterScreen(
+                        state = proxyState,
+                        effects = proxyTesterViewModel.effects,
+                        onEvent = proxyTesterViewModel::onEvent,
+                        onBack = { currentScreen = DevScreen.MENU },
+                    )
+                }
+
                 DevScreen.MENU -> {
                     DevToolsMenu(
                         onNavigateGallery = { currentScreen = DevScreen.THEME_GALLERY },
                         onNavigateTester = { currentScreen = DevScreen.ADDON_TESTER },
                         onNavigateTorrentTester = { currentScreen = DevScreen.TORRENT_TESTER },
+                        onNavigateProxyTester = { currentScreen = DevScreen.PROXY_TESTER },
                         onNavigateHomeTestData = { currentScreen = DevScreen.HOME_TEST_DATA },
                         onNavigateDatabase = { currentScreen = DevScreen.DATABASE },
                     )
@@ -151,6 +166,7 @@ private fun DevToolsMenu(
     onNavigateGallery: () -> Unit,
     onNavigateTester: () -> Unit,
     onNavigateTorrentTester: () -> Unit,
+    onNavigateProxyTester: () -> Unit,
     onNavigateHomeTestData: () -> Unit,
     onNavigateDatabase: () -> Unit,
 ) {
@@ -203,6 +219,17 @@ private fun DevToolsMenu(
             item {
                 ListItem(
                     headlineContent = {
+                        Text(stringResource(R.string.dev_tools_proxy_tester))
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateProxyTester),
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = {
                         Text(stringResource(R.string.dev_tools_home_test_data))
                     },
                     modifier =
@@ -231,6 +258,7 @@ private enum class DevScreen {
     THEME_GALLERY,
     ADDON_TESTER,
     TORRENT_TESTER,
+    PROXY_TESTER,
     HOME_TEST_DATA,
     DATABASE,
 }
