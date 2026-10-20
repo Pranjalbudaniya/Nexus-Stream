@@ -10,6 +10,7 @@ data class TorrentRequest(
     val trackers: List<String> = emptyList(),
     val fileIdx: Int? = null,
     val episodeHint: EpisodeHint? = null,
+    val allowMetered: Boolean = false,
 )
 
 data class TorrentFile(

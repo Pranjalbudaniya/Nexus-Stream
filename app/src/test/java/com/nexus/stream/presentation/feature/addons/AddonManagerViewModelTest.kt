@@ -436,6 +436,7 @@ class AddonManagerViewModelTest {
                 AppError.Timeout,
                 AppError.Http(404),
                 AppError.Http(500),
+                AppError.MeteredBlocked,
                 AppError.Unknown("custom message"),
             )
 

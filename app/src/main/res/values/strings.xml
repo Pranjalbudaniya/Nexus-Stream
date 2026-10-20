@@ -412,5 +412,14 @@
     <string name="streams_match_wrong_season">Different season from requested</string>
     <string name="streams_match_wrong_year">Different release year from requested</string>
     <string name="streams_match_unknown">Unknown (cannot verify from file name)</string>
+
+    <!-- Torrent streaming foreground service -->
+    <string name="torrent_service_channel_name">Torrent streaming</string>
+    <string name="torrent_service_title">Streaming a torrent</string>
+    <string name="torrent_service_text">Nexus Stream is downloading and serving a video.</string>
+    <string name="torrent_service_action_stop">Stop</string>
+
+    <!-- Metered network blocked error -->
+    <string name="error_metered_blocked">Wi-Fi only is on and this network is metered.</string>
 </resources>
 

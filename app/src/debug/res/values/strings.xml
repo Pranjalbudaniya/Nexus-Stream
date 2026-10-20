@@ -174,4 +174,6 @@
     <string name="torrent_tester_error_unknown">Torrent failed: %1$s</string>
     <string name="torrent_tester_play_in_other_app">Play in another app</string>
     <string name="torrent_tester_no_player_found">No player app found</string>
+    <string name="torrent_tester_blocked_metered">Blocked: Wi-Fi only is on and this network is metered.</string>
+    <string name="torrent_tester_allow_once">Allow once</string>
 </resources>

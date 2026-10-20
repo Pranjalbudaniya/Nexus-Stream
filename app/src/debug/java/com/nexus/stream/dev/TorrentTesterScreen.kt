@@ -50,6 +50,7 @@ import com.nexus.stream.domain.model.TorrentState
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusOutlinedButton
+import com.nexus.stream.presentation.common.rememberNotificationPermissionGate
 import com.nexus.stream.presentation.theme.NexusTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -71,6 +72,7 @@ fun TorrentTesterScreen(
     val scope = rememberCoroutineScope()
     var noPlayerFound by remember { mutableStateOf(false) }
     val noPlayerFoundMessage = stringResource(R.string.torrent_tester_no_player_found)
+    val permissionGate = rememberNotificationPermissionGate()
 
     LaunchedEffect(effects) {
         effects.collect { effect ->
@@ -146,7 +148,11 @@ fun TorrentTesterScreen(
                     horizontalArrangement = Arrangement.spacedBy(spacing.md),
                 ) {
                     NexusButton(
-                        onClick = { onEvent(TorrentTesterEvent.Start) },
+                        onClick = {
+                            permissionGate {
+                                onEvent(TorrentTesterEvent.Start)
+                            }
+                        },
                         enabled = !state.running && state.input.isNotBlank(),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -170,6 +176,8 @@ fun TorrentTesterScreen(
                         state = torrentState,
                         onSelectFile = { onEvent(TorrentTesterEvent.SelectFile(it)) },
                         onPlayInOtherApp = { onEvent(TorrentTesterEvent.PlayInOtherApp) },
+                        isBlockedMetered = state.isBlockedMetered,
+                        onAllowMeteredOnce = { onEvent(TorrentTesterEvent.AllowMeteredOnce) },
                         noPlayerFound = noPlayerFound,
                     )
                 }
@@ -183,6 +191,8 @@ private fun TorrentStatusSection(
     state: TorrentState,
     onSelectFile: (Int) -> Unit,
     onPlayInOtherApp: () -> Unit,
+    isBlockedMetered: Boolean,
+    onAllowMeteredOnce: () -> Unit,
     noPlayerFound: Boolean,
 ) {
     val spacing = NexusTheme.spacing
@@ -283,6 +293,15 @@ private fun TorrentStatusSection(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                     )
+
+                    if (isBlockedMetered) {
+                        NexusButton(
+                            onClick = onAllowMeteredOnce,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.torrent_tester_allow_once))
+                        }
+                    }
                 }
             }
         }
@@ -292,6 +311,10 @@ private fun TorrentStatusSection(
 @Composable
 private fun formatFailReason(error: AppError): String =
     when (error) {
+        is AppError.MeteredBlocked -> {
+            stringResource(R.string.torrent_tester_blocked_metered)
+        }
+
         is AppError.Torrent -> {
             when (error.reason) {
                 TorrentFailReason.INVALID_HASH -> stringResource(R.string.torrent_tester_error_invalid_hash)

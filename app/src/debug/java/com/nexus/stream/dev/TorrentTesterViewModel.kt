@@ -2,6 +2,7 @@ package com.nexus.stream.dev
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
 import com.nexus.stream.domain.repository.TorrentEngine
@@ -24,6 +25,7 @@ data class TorrentTesterUiState(
     val inputInvalid: Boolean = false,
     val running: Boolean = false,
     val state: TorrentState? = null,
+    val isBlockedMetered: Boolean = false,
 )
 
 sealed interface TorrentTesterEvent {
@@ -40,6 +42,8 @@ sealed interface TorrentTesterEvent {
     ) : TorrentTesterEvent
 
     data object PlayInOtherApp : TorrentTesterEvent
+
+    data object AllowMeteredOnce : TorrentTesterEvent
 }
 
 sealed interface TorrentTesterEffect {
@@ -63,6 +67,7 @@ class TorrentTesterViewModel
         private var activeHash: String? = null
         private var prepareJob: Job? = null
         private var localUrl: String? = null
+        private var lastRequest: TorrentRequest? = null
 
         fun onEvent(event: TorrentTesterEvent) {
             when (event) {
@@ -71,6 +76,7 @@ class TorrentTesterViewModel
                 TorrentTesterEvent.Stop -> onStop()
                 is TorrentTesterEvent.SelectFile -> onSelectFile(event.index)
                 TorrentTesterEvent.PlayInOtherApp -> onPlayInOtherApp()
+                TorrentTesterEvent.AllowMeteredOnce -> onAllowMeteredOnce()
             }
         }
 
@@ -86,15 +92,31 @@ class TorrentTesterViewModel
                 return
             }
 
-            val hash = parsed.infoHash
-            activeHash = hash
+            val request =
+                TorrentRequest(
+                    infoHash = parsed.infoHash,
+                    trackers = parsed.trackers,
+                    allowMetered = false,
+                )
+            lastRequest = request
+            _uiState.update { it.copy(input = "", inputInvalid = false) }
+            runPrepare(request)
+        }
+
+        private fun onAllowMeteredOnce() {
+            val req = lastRequest ?: return
+            lastRequest = null
+            runPrepare(req.copy(allowMetered = true))
+        }
+
+        private fun runPrepare(request: TorrentRequest) {
+            activeHash = request.infoHash
             localUrl = null
             _uiState.update {
                 it.copy(
-                    input = "",
-                    inputInvalid = false,
                     running = true,
                     state = null,
+                    isBlockedMetered = false,
                 )
             }
 
@@ -102,18 +124,34 @@ class TorrentTesterViewModel
             prepareJob =
                 viewModelScope.launch {
                     engine
-                        .prepare(TorrentRequest(infoHash = hash, trackers = parsed.trackers))
+                        .prepare(request)
                         .onCompletion { _ ->
                             _uiState.update { currentState -> currentState.copy(running = false) }
                         }.collect { newState ->
                             if (newState is TorrentState.Ready) {
                                 localUrl = newState.localUrl
                                 _uiState.update { currentState ->
-                                    currentState.copy(state = newState.copy(localUrl = null))
+                                    currentState.copy(
+                                        state = newState.copy(localUrl = null),
+                                        isBlockedMetered = false,
+                                    )
+                                }
+                            } else if (newState is TorrentState.Failed && newState.error is AppError.MeteredBlocked) {
+                                localUrl = null
+                                _uiState.update { currentState ->
+                                    currentState.copy(
+                                        state = newState,
+                                        isBlockedMetered = true,
+                                    )
                                 }
                             } else {
                                 localUrl = null
-                                _uiState.update { currentState -> currentState.copy(state = newState) }
+                                _uiState.update { currentState ->
+                                    currentState.copy(
+                                        state = newState,
+                                        isBlockedMetered = false,
+                                    )
+                                }
                             }
                         }
                 }
@@ -125,7 +163,7 @@ class TorrentTesterViewModel
             localUrl = null
             val hash = activeHash
             activeHash = null
-            _uiState.update { it.copy(running = false, state = null) }
+            _uiState.update { it.copy(running = false, state = null, isBlockedMetered = false) }
             if (hash != null) {
                 viewModelScope.launch {
                     engine.stop(hash)

@@ -4,6 +4,7 @@ import com.nexus.stream.data.local.prefs.AppStateRepositoryImpl
 import com.nexus.stream.data.local.prefs.ContentPrefsRepositoryImpl
 import com.nexus.stream.data.local.prefs.PlayerPrefsRepositoryImpl
 import com.nexus.stream.data.local.prefs.SettingsRepositoryImpl
+import com.nexus.stream.data.local.prefs.TorrentPrefsRepositoryImpl
 import com.nexus.stream.data.repository.AddonRepositoryImpl
 import com.nexus.stream.data.repository.CommunityAddonsRepositoryImpl
 import com.nexus.stream.data.repository.LibraryRepositoryImpl
@@ -21,6 +22,7 @@ import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.repository.SettingsRepository
 import com.nexus.stream.domain.repository.StreamRepository
+import com.nexus.stream.domain.repository.TorrentPrefsRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -70,6 +72,10 @@ interface RepositoryModule {
     @Binds
     @Singleton
     fun bindPlayerPrefsRepository(impl: PlayerPrefsRepositoryImpl): PlayerPrefsRepository
+
+    @Binds
+    @Singleton
+    fun bindTorrentPrefsRepository(impl: TorrentPrefsRepositoryImpl): TorrentPrefsRepository
 
     companion object {
         @Provides

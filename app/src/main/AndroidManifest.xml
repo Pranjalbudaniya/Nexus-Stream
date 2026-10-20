@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".NexusApp"
@@ -29,6 +32,11 @@
                 <data android:scheme="stremio" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".data.torrent.TorrentStreamService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
 
     </application>
 

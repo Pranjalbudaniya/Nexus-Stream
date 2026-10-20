@@ -23,6 +23,8 @@ fun AppError.toUserMessage(): AddonErrorText =
 
         is AppError.Http -> AddonErrorText(R.string.error_addon_http, listOf(code))
 
+        is AppError.MeteredBlocked -> AddonErrorText(R.string.error_metered_blocked)
+
         is AppError.Unknown,
         is AppError.Torrent,
         -> AddonErrorText(R.string.error_addon_unknown)

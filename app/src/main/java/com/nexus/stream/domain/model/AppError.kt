@@ -19,6 +19,8 @@ sealed interface AppError {
         val reason: TorrentFailReason,
     ) : AppError
 
+    data object MeteredBlocked : AppError
+
     data class Unknown(
         val message: String? = null,
     ) : AppError

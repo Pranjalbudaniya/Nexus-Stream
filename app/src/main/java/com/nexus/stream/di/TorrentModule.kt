@@ -1,9 +1,16 @@
 package com.nexus.stream.di
 
+import com.nexus.stream.data.torrent.AndroidServiceLauncher
+import com.nexus.stream.data.torrent.ConnectivityNetworkStatusProvider
+import com.nexus.stream.data.torrent.GatedTorrentEngine
 import com.nexus.stream.data.torrent.JLibTorrentBackend
-import com.nexus.stream.data.torrent.ServingTorrentEngine
+import com.nexus.stream.data.torrent.NetworkStatusProvider
+import com.nexus.stream.data.torrent.RefCountedKeepAlive
+import com.nexus.stream.data.torrent.ServiceLauncher
 import com.nexus.stream.data.torrent.TorrentBackend
 import com.nexus.stream.data.torrent.TorrentFileLocator
+import com.nexus.stream.data.torrent.TorrentKeepAlive
+import com.nexus.stream.data.torrent.TorrentSessionControl
 import com.nexus.stream.domain.repository.TorrentEngine
 import dagger.Binds
 import dagger.Module
@@ -24,5 +31,21 @@ interface TorrentModule {
 
     @Binds
     @Singleton
-    fun bindTorrentEngine(impl: ServingTorrentEngine): TorrentEngine
+    fun bindTorrentEngine(impl: GatedTorrentEngine): TorrentEngine
+
+    @Binds
+    @Singleton
+    fun bindTorrentSessionControl(impl: GatedTorrentEngine): TorrentSessionControl
+
+    @Binds
+    @Singleton
+    fun bindTorrentKeepAlive(impl: RefCountedKeepAlive): TorrentKeepAlive
+
+    @Binds
+    @Singleton
+    fun bindServiceLauncher(impl: AndroidServiceLauncher): ServiceLauncher
+
+    @Binds
+    @Singleton
+    fun bindNetworkStatusProvider(impl: ConnectivityNetworkStatusProvider): NetworkStatusProvider
 }

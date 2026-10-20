@@ -253,6 +253,80 @@ class TorrentTesterViewModelTest {
             effectsJob.cancel()
         }
 
+    @Test
+    fun V12_failedMeteredBlocked_stateOffersAllowOnce_noHashInUiState() =
+        runTest(testDispatcher) {
+            fakeEngine.customFlow = flowOf(TorrentState.Failed(AppError.MeteredBlocked))
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isBlockedMetered)
+            assertFalse(viewModel.uiState.value.running)
+            assertEquals(TorrentState.Failed(AppError.MeteredBlocked), viewModel.uiState.value.state)
+
+            val stateString = viewModel.uiState.value.toString()
+            assertFalse(stateString.contains(validHash, ignoreCase = true))
+        }
+
+    @Test
+    fun V13_allowMeteredOnce_callsEngineWithAllowMeteredTrueAndClearsBlockedFlag() =
+        runTest(testDispatcher) {
+            fakeEngine.customFlow = flowOf(TorrentState.Failed(AppError.MeteredBlocked))
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isBlockedMetered)
+            assertEquals(1, fakeEngine.prepareCalls.size)
+            assertFalse(fakeEngine.prepareCalls[0].allowMetered)
+
+            fakeEngine.customFlow = null
+            viewModel.onEvent(TorrentTesterEvent.AllowMeteredOnce)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isBlockedMetered)
+            assertEquals(2, fakeEngine.prepareCalls.size)
+            assertEquals(validHash, fakeEngine.prepareCalls[1].infoHash)
+            assertTrue(fakeEngine.prepareCalls[1].allowMetered)
+        }
+
+    @Test
+    fun V14_afterV13_newStartHasAllowMeteredFalse() =
+        runTest(testDispatcher) {
+            fakeEngine.customFlow = flowOf(TorrentState.Failed(AppError.MeteredBlocked))
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            fakeEngine.customFlow = null
+            viewModel.onEvent(TorrentTesterEvent.AllowMeteredOnce)
+            advanceUntilIdle()
+
+            viewModel.onEvent(TorrentTesterEvent.Stop)
+            advanceUntilIdle()
+
+            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            viewModel.onEvent(TorrentTesterEvent.Start)
+            advanceUntilIdle()
+
+            assertEquals(3, fakeEngine.prepareCalls.size)
+            assertFalse(fakeEngine.prepareCalls[2].allowMetered)
+        }
+
+    @Test
+    fun V15_allowMeteredOnceWithNoStoredRequest_noEngineCallNoCrash() =
+        runTest(testDispatcher) {
+            viewModel.onEvent(TorrentTesterEvent.AllowMeteredOnce)
+            advanceUntilIdle()
+
+            assertTrue(fakeEngine.prepareCalls.isEmpty())
+            assertFalse(viewModel.uiState.value.isBlockedMetered)
+        }
+
     private class FakeTorrentEngine : TorrentEngine {
         val prepareCalls = mutableListOf<TorrentRequest>()
         val selectFileCalls = mutableListOf<Pair<String, Int>>()
