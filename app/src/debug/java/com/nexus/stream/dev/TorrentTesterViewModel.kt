@@ -2,6 +2,7 @@ package com.nexus.stream.dev
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
@@ -10,7 +11,10 @@ import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.repository.TorrentPrefsRepository
 import com.nexus.stream.domain.usecase.parseMagnetLink
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -67,6 +71,8 @@ sealed interface TorrentTesterEffect {
     ) : TorrentTesterEffect
 }
 
+private const val CACHE_REFRESH_MS = 1_000L
+
 @HiltViewModel
 class TorrentTesterViewModel
     @Inject
@@ -74,6 +80,7 @@ class TorrentTesterViewModel
         private val engine: TorrentEngine,
         private val cache: TorrentCache,
         private val prefs: TorrentPrefsRepository,
+        @DefaultDispatcher private val tickerDispatcher: CoroutineDispatcher = Dispatchers.Default,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(TorrentTesterUiState())
         val uiState: StateFlow<TorrentTesterUiState> = _uiState.asStateFlow()
@@ -83,6 +90,7 @@ class TorrentTesterViewModel
 
         private var activeHash: String? = null
         private var prepareJob: Job? = null
+        private var cacheRefreshJob: Job? = null
         private var localUrl: String? = null
         private var lastRequest: TorrentRequest? = null
 
@@ -144,9 +152,9 @@ class TorrentTesterViewModel
                 }
 
                 is TorrentTesterEvent.SetKeepAfterStop -> {
+                    _uiState.update { it.copy(keepDataAfterStop = event.keep) }
                     viewModelScope.launch {
                         prefs.setClearCacheOnExit(!event.keep)
-                        refreshCacheSize()
                     }
                 }
 
@@ -196,11 +204,24 @@ class TorrentTesterViewModel
             }
 
             prepareJob?.cancel()
+            prepareJob = null
+            cacheRefreshJob?.cancel()
+            cacheRefreshJob =
+                viewModelScope.launch(tickerDispatcher) {
+                    while (true) {
+                        delay(CACHE_REFRESH_MS)
+                        val size = cache.cacheSizeBytes()
+                        _uiState.update { it.copy(cacheSizeBytes = size) }
+                    }
+                }
+
             prepareJob =
                 viewModelScope.launch {
                     engine
                         .prepare(request)
                         .onCompletion { _ ->
+                            cacheRefreshJob?.cancel()
+                            cacheRefreshJob = null
                             _uiState.update { currentState -> currentState.copy(running = false) }
                             refreshCacheSize()
                         }.collect { newState ->
@@ -234,6 +255,8 @@ class TorrentTesterViewModel
         }
 
         private fun onStop() {
+            cacheRefreshJob?.cancel()
+            cacheRefreshJob = null
             prepareJob?.cancel()
             prepareJob = null
             localUrl = null
@@ -256,6 +279,8 @@ class TorrentTesterViewModel
 
         override fun onCleared() {
             super.onCleared()
+            cacheRefreshJob?.cancel()
+            cacheRefreshJob = null
             prepareJob?.cancel()
             prepareJob = null
         }

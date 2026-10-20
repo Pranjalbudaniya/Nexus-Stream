@@ -21,7 +21,10 @@ class TorrentCacheStoreTest {
     private var limitBytesVal: Long = 2L * 1024L * 1024L * 1024L
     private var keepAfterStopVal: Boolean = true
 
-    private fun createStore(rootName: String = "torrents"): TorrentCacheStore {
+    private fun createStore(
+        rootName: String = "torrents",
+        fileBytes: (File) -> Long = File::length,
+    ): TorrentCacheStore {
         val root = File(tmpFolder.root, rootName)
         return TorrentCacheStore(
             root = root,
@@ -29,6 +32,7 @@ class TorrentCacheStoreTest {
             keepAfterStopProvider = { keepAfterStopVal },
             io = Dispatchers.Default,
             nowMs = { fakeClockMs },
+            fileBytes = fileBytes,
         )
     }
 
@@ -238,15 +242,7 @@ class TorrentCacheStoreTest {
     @Test
     fun CS10_missingRoot_sizeZeroOnSessionStartCreatesItClearCacheNoOp() =
         runBlocking {
-            val root = File(tmpFolder.root, "missing_root")
-            val store =
-                TorrentCacheStore(
-                    root = root,
-                    limitBytes = { 1000L },
-                    keepAfterStopProvider = { true },
-                    io = Dispatchers.Default,
-                    nowMs = { 1000L },
-                )
+            val store = createStore("missing_root")
 
             assertEquals(0L, store.cacheSizeBytes())
             store.clearCache() // no crash
@@ -291,5 +287,45 @@ class TorrentCacheStoreTest {
             assertFalse(file1.exists())
             assertTrue(file2.exists())
             assertEquals(150L, store.cacheSizeBytes())
+        }
+
+    @Test
+    fun CS13_sparseFileApparentLength3GbFakeFileBytes10Mb_cacheSize10MbNothingEvicted() =
+        runBlocking {
+            val root = File(tmpFolder.root, "torrents")
+            val dir = File(root, "sparsehash")
+            createSparseFile(dir, "video.mkv", 3L * 1024L * 1024L * 1024L, fakeClockMs)
+            val store = createStore(fileBytes = { 10L * 1024L * 1024L })
+
+            assertEquals(10L * 1024L * 1024L, store.cacheSizeBytes())
+
+            store.onSessionStart()
+            assertTrue(dir.exists())
+        }
+
+    @Test
+    fun CS14_fileBytesReturnsZeroForDirFiles_onRemovedKeptTrueDeletesDir() =
+        runBlocking {
+            val root = File(tmpFolder.root, "torrents")
+            val hash = "zerohash"
+            val dir = createTorrentDir(root, hash, 1024L, fakeClockMs)
+            val store = createStore(fileBytes = { 0L })
+
+            store.onRemoved(hash, kept = true)
+            assertFalse(dir.exists())
+        }
+
+    @Test
+    fun CS15_fileBytesUsedForEvictionTotals_onlyOlderEvictedRegardlessOfApparentLength() =
+        runBlocking {
+            val root = File(tmpFolder.root, "torrents")
+            val oldDir = createTorrentDir(root, "oldhash", 5L * 1024L * 1024L * 1024L, 1000L)
+            val newDir = createTorrentDir(root, "newhash", 5L * 1024L * 1024L * 1024L, 2000L)
+            limitBytesVal = (1.5 * 1024L * 1024L * 1024L).toLong()
+            val store = createStore(fileBytes = { 1L * 1024L * 1024L * 1024L })
+
+            store.onSessionStart()
+            assertFalse(oldDir.exists())
+            assertTrue(newDir.exists())
         }
 }

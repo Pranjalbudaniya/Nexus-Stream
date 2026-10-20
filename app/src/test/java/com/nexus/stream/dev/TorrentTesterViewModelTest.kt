@@ -9,6 +9,7 @@ import com.nexus.stream.domain.model.TorrentState
 import com.nexus.stream.domain.repository.TorrentCache
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.repository.TorrentPrefsRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,8 +20,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -386,24 +389,127 @@ class TorrentTesterViewModelTest {
     @Test
     fun V20_sessionFlowEnding_exactlyOneExtraRefresh() =
         runTest(testDispatcher) {
-            advanceUntilIdle()
+            val vm = TorrentTesterViewModel(fakeEngine, fakeCache, fakePrefs, testDispatcher)
+            runCurrent()
             val initialRefreshes = fakeCache.cacheSizeBytesCallCount
-            assertEquals(1, initialRefreshes)
 
-            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
-            viewModel.onEvent(TorrentTesterEvent.Start)
-            advanceUntilIdle()
-            assertEquals(initialRefreshes, fakeCache.cacheSizeBytesCallCount)
-
-            viewModel.onEvent(TorrentTesterEvent.Stop)
-            advanceUntilIdle()
-            assertEquals(initialRefreshes + 1, fakeCache.cacheSizeBytesCallCount)
-
-            viewModel.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            vm.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
             fakeEngine.customFlow = flowOf(TorrentState.Buffering(10, 1000L, 5))
-            viewModel.onEvent(TorrentTesterEvent.Start)
+            vm.onEvent(TorrentTesterEvent.Start)
+            runCurrent()
+
+            val afterEndRefreshes = fakeCache.cacheSizeBytesCallCount
+            assertEquals(initialRefreshes + 1, afterEndRefreshes)
+
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertEquals(afterEndRefreshes, fakeCache.cacheSizeBytesCallCount)
+        }
+
+    @Test
+    fun V21_sessionRunning_liveSizeRefreshesEachSecond() =
+        runTest(testDispatcher) {
+            val vm = TorrentTesterViewModel(fakeEngine, fakeCache, fakePrefs, testDispatcher)
+            runCurrent()
+            vm.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            vm.onEvent(TorrentTesterEvent.Start)
+            runCurrent()
+
+            fakeCache.sizeBytes = 100L
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(100L, vm.uiState.value.cacheSizeBytes)
+
+            fakeCache.sizeBytes = 200L
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(200L, vm.uiState.value.cacheSizeBytes)
+
+            fakeCache.sizeBytes = 300L
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(300L, vm.uiState.value.cacheSizeBytes)
+
+            vm.onEvent(TorrentTesterEvent.Stop)
+            runCurrent()
+        }
+
+    @Test
+    fun V22_sessionEnds_exactlyOneRefreshAfterEndNoMoreAfterFiveSeconds() =
+        runTest(testDispatcher) {
+            val vm = TorrentTesterViewModel(fakeEngine, fakeCache, fakePrefs, testDispatcher)
+            runCurrent()
+            vm.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            fakeEngine.customFlow = flowOf(TorrentState.Buffering(10, 1000L, 5))
+            vm.onEvent(TorrentTesterEvent.Start)
+            runCurrent()
+
+            val afterEndRefreshes = fakeCache.cacheSizeBytesCallCount
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertEquals(afterEndRefreshes, fakeCache.cacheSizeBytesCallCount)
+        }
+
+    @Test
+    fun V23_nothingRunning_noRefreshTicks() =
+        runTest(testDispatcher) {
+            val vm = TorrentTesterViewModel(fakeEngine, fakeCache, fakePrefs, testDispatcher)
+            runCurrent()
+            val initialRefreshes = fakeCache.cacheSizeBytesCallCount
+            assertFalse(vm.uiState.value.running)
+
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertEquals(initialRefreshes, fakeCache.cacheSizeBytesCallCount)
+        }
+
+    @Test
+    fun V24_startStopStartQuickly_onlyOneRefreshJobAlive() =
+        runTest(testDispatcher) {
+            val vm = TorrentTesterViewModel(fakeEngine, fakeCache, fakePrefs, testDispatcher)
+            runCurrent()
+
+            vm.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            vm.onEvent(TorrentTesterEvent.Start)
+            advanceTimeBy(200L)
+            runCurrent()
+
+            vm.onEvent(TorrentTesterEvent.Stop)
+            advanceTimeBy(200L)
+            runCurrent()
+
+            vm.onEvent(TorrentTesterEvent.InputChanged(validMagnet))
+            vm.onEvent(TorrentTesterEvent.Start)
+            runCurrent()
+
+            val baselineRefreshes = fakeCache.cacheSizeBytesCallCount
+            advanceTimeBy(3_000L)
+            runCurrent()
+            assertEquals(baselineRefreshes + 3, fakeCache.cacheSizeBytesCallCount)
+
+            vm.onEvent(TorrentTesterEvent.Stop)
+            runCurrent()
+        }
+
+    @Test
+    fun V25_setKeepAfterStopTrue_uiStateKeepAfterStopIsTrueBeforePrefsWriteCompletes() =
+        runTest(testDispatcher) {
             advanceUntilIdle()
-            assertEquals(initialRefreshes + 2, fakeCache.cacheSizeBytesCallCount)
+            assertFalse(viewModel.uiState.value.keepDataAfterStop)
+
+            val writeLatch = CompletableDeferred<Unit>()
+            fakePrefs.onSetClearCacheOnExit = {
+                writeLatch.await()
+            }
+
+            viewModel.onEvent(TorrentTesterEvent.SetKeepAfterStop(true))
+
+            assertTrue(viewModel.uiState.value.keepDataAfterStop)
+
+            writeLatch.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.keepDataAfterStop)
+            assertFalse(fakePrefs.clearCacheOnExit.first())
         }
 
     private class FakeTorrentCache : TorrentCache {
@@ -436,6 +542,8 @@ class TorrentTesterViewModelTest {
         private val _clearCacheOnExit = MutableStateFlow(initialClearCacheOnExit)
         override val clearCacheOnExit: Flow<Boolean> = _clearCacheOnExit
 
+        var onSetClearCacheOnExit: (suspend (Boolean) -> Unit)? = null
+
         override suspend fun setWifiOnly(value: Boolean) {
             _wifiOnly.value = value
         }
@@ -445,6 +553,7 @@ class TorrentTesterViewModelTest {
         }
 
         override suspend fun setClearCacheOnExit(value: Boolean) {
+            onSetClearCacheOnExit?.invoke(value)
             _clearCacheOnExit.value = value
         }
     }

@@ -1,6 +1,7 @@
 package com.nexus.stream.data.torrent
 
 import android.content.Context
+import android.system.Os
 import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.domain.repository.TorrentCache
 import com.nexus.stream.domain.repository.TorrentPrefsRepository
@@ -18,21 +19,34 @@ import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
-internal fun computeFileSize(file: File): Long {
+private const val BYTES_PER_BLOCK: Long = 512L
+
+internal fun diskBytes(file: File): Long =
+    runCatching {
+        Os.lstat(file.path).st_blocks * BYTES_PER_BLOCK
+    }.getOrDefault(0L)
+
+internal fun computeFileSize(
+    file: File,
+    fileBytes: (File) -> Long,
+): Long {
     if (!file.exists()) return 0L
     return if (file.isFile) {
-        file.length()
+        fileBytes(file)
     } else {
-        file.listFiles()?.sumOf { computeFileSize(it) } ?: 0L
+        file.listFiles()?.sumOf { computeFileSize(it, fileBytes) } ?: 0L
     }
 }
 
-internal fun listCacheEntries(root: File): List<CacheEntry> {
+internal fun listCacheEntries(
+    root: File,
+    fileBytes: (File) -> Long,
+): List<CacheEntry> {
     val files = root.listFiles() ?: return emptyList()
     return files.map { child ->
         CacheEntry(
             name = child.name,
-            sizeBytes = computeFileSize(child),
+            sizeBytes = computeFileSize(child, fileBytes),
             lastUsedMs = child.lastModified(),
         )
     }
@@ -45,6 +59,7 @@ class TorrentCacheStore internal constructor(
     private val keepAfterStopProvider: suspend () -> Boolean,
     private val io: CoroutineDispatcher,
     private val nowMs: () -> Long,
+    private val fileBytes: (File) -> Long,
 ) : TorrentCache {
     @Inject
     constructor(
@@ -57,6 +72,7 @@ class TorrentCacheStore internal constructor(
         keepAfterStopProvider = { !prefs.clearCacheOnExit.first() },
         io = io,
         nowMs = System::currentTimeMillis,
+        fileBytes = ::diskBytes,
     )
 
     private val activeHashes = Collections.synchronizedSet(mutableSetOf<String>())
@@ -105,7 +121,7 @@ class TorrentCacheStore internal constructor(
                 markInactive(hash)
                 if (kept) {
                     val dir = File(root, hash.lowercase())
-                    if (!dir.exists() || computeFileSize(dir) == 0L) {
+                    if (!dir.exists() || computeFileSize(dir, fileBytes) == 0L) {
                         dir.deleteRecursively()
                     } else {
                         dir.setLastModified(nowMs())
@@ -120,7 +136,7 @@ class TorrentCacheStore internal constructor(
         withContext(io) {
             mutex.withLock {
                 if (!root.exists()) return@withContext 0L
-                computeFileSize(root)
+                computeFileSize(root, fileBytes)
             }
         }
 
@@ -139,7 +155,7 @@ class TorrentCacheStore internal constructor(
     }
 
     private suspend fun trimInternal() {
-        val entries = listCacheEntries(root)
+        val entries = listCacheEntries(root, fileBytes)
         val limit = limitBytes()
         val inUse = activeHashes.toSet()
         val plan = evictionPlan(entries, limit, inUse)

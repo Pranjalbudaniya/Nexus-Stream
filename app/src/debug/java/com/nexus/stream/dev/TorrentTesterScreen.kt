@@ -125,7 +125,7 @@ fun TorrentTesterScreen(
                     .padding(horizontal = spacing.lg),
             verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
-            item {
+            item(key = "input") {
                 OutlinedTextField(
                     value = state.input,
                     onValueChange = { onEvent(TorrentTesterEvent.InputChanged(it)) },
@@ -145,7 +145,7 @@ fun TorrentTesterScreen(
                 )
             }
 
-            item {
+            item(key = "actions") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(spacing.md),
@@ -172,7 +172,7 @@ fun TorrentTesterScreen(
                 }
             }
 
-            item {
+            item(key = "cache") {
                 CacheCard(
                     sizeBytes = state.cacheSizeBytes,
                     limitGb = state.cacheLimitGb,
@@ -185,7 +185,7 @@ fun TorrentTesterScreen(
 
             val torrentState = state.state
             if (torrentState != null) {
-                item {
+                item(key = "status") {
                     TorrentStatusSection(
                         state = torrentState,
                         onSelectFile = { onEvent(TorrentTesterEvent.SelectFile(it)) },
