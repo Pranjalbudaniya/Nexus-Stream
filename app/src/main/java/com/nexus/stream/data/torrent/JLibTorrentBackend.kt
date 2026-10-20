@@ -1,6 +1,5 @@
 package com.nexus.stream.data.torrent
 
-import android.content.Context
 import com.frostwire.jlibtorrent.AlertListener
 import com.frostwire.jlibtorrent.Priority
 import com.frostwire.jlibtorrent.SessionHandle
@@ -19,7 +18,6 @@ import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.domain.model.TorrentConfig
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.usecase.deadlineMsFor
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -35,7 +33,7 @@ import javax.inject.Singleton
 class JLibTorrentBackend
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
+        private val cache: TorrentCacheStore,
         @IoDispatcher private val io: CoroutineDispatcher,
     ) : TorrentBackend,
         TorrentFileLocator {
@@ -114,12 +112,7 @@ class JLibTorrentBackend
                 sessionManager?.let { return it }
                 try {
                     runCatchingLibraryCall {
-                        val root = File(context.cacheDir, "torrents")
-                        if (root.exists()) {
-                            root.listFiles()?.forEach { it.deleteRecursively() }
-                        } else {
-                            root.mkdirs()
-                        }
+                        cache.onSessionStart()
                         val sm = SessionManager()
                         sm.addListener(alertListener)
                         sm.start()
@@ -143,11 +136,12 @@ class JLibTorrentBackend
 
             runCatchingLibraryCall {
                 val sm = getOrCreateSession()
-                val root = File(context.cacheDir, "torrents")
-                val torrentDir = File(root, hash)
+                val torrentDir = File(cache.root, hash)
                 if (!torrentDir.exists()) {
                     torrentDir.mkdirs()
                 }
+                cache.markActive(hash)
+                cache.touch(hash)
 
                 sm.download(magnetUri, torrentDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
 
@@ -229,6 +223,7 @@ class JLibTorrentBackend
         override suspend fun remove(infoHash: String) =
             withContext(io) {
                 val hash = infoHash.lowercase()
+                val keep = cache.keepAfterStop()
                 deferredMap.remove(hash)?.cancel()
                 errorHashes.remove(hash)
 
@@ -237,29 +232,33 @@ class JLibTorrentBackend
                     if (sm != null) {
                         val handle = sm.find(Sha1Hash(hash))
                         if (handle != null && handle.isValid) {
-                            sm.remove(handle, SessionHandle.DELETE_FILES)
+                            if (keep) {
+                                sm.remove(handle)
+                            } else {
+                                sm.remove(handle, SessionHandle.DELETE_FILES)
+                            }
                         }
                     }
                 }.onFailure { if (it is CancellationException) throw it }
 
-                runCatching {
-                    val root = File(context.cacheDir, "torrents")
-                    val torrentDir = File(root, hash)
-                    if (torrentDir.exists()) {
-                        torrentDir.deleteRecursively()
-                    }
-                }.onFailure { if (it is CancellationException) throw it }
-                Unit
+                if (!keep) {
+                    runCatching {
+                        val torrentDir = File(cache.root, hash)
+                        if (torrentDir.exists()) {
+                            torrentDir.deleteRecursively()
+                        }
+                    }.onFailure { if (it is CancellationException) throw it }
+                }
+
+                cache.onRemoved(hash, kept = keep)
             }
 
         override fun fileOf(
             infoHash: String,
             relativePath: String,
-        ): File {
-            val root = File(context.cacheDir, "torrents")
-            return resolveInside(root, infoHash, relativePath)
+        ): File =
+            resolveInside(cache.root, infoHash, relativePath)
                 ?: throw TorrentBackendException(TorrentFailReason.STORAGE)
-        }
     }
 
 private inline fun <T> runCatchingLibraryCall(

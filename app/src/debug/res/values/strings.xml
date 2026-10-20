@@ -176,4 +176,11 @@
     <string name="torrent_tester_no_player_found">No player app found</string>
     <string name="torrent_tester_blocked_metered">Blocked: Wi-Fi only is on and this network is metered.</string>
     <string name="torrent_tester_allow_once">Allow once</string>
+    <string name="torrent_tester_cache_title">Cache</string>
+    <string name="torrent_tester_cache_size_and_limit">%1$s · Limit: %2$d GB</string>
+    <string name="torrent_tester_cache_keep_after_stop">Keep data after stop</string>
+    <string name="torrent_tester_cache_clear">Clear cache</string>
+    <string name="torrent_tester_cache_limit_1gb">1 GB</string>
+    <string name="torrent_tester_cache_limit_2gb">2 GB</string>
+    <string name="torrent_tester_cache_limit_5gb">5 GB</string>
 </resources>

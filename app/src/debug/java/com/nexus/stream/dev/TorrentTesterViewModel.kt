@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.repository.TorrentCache
 import com.nexus.stream.domain.repository.TorrentEngine
+import com.nexus.stream.domain.repository.TorrentPrefsRepository
 import com.nexus.stream.domain.usecase.parseMagnetLink
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -26,6 +28,9 @@ data class TorrentTesterUiState(
     val running: Boolean = false,
     val state: TorrentState? = null,
     val isBlockedMetered: Boolean = false,
+    val cacheSizeBytes: Long = 0L,
+    val keepDataAfterStop: Boolean = false,
+    val cacheLimitGb: Int = 2,
 )
 
 sealed interface TorrentTesterEvent {
@@ -44,6 +49,16 @@ sealed interface TorrentTesterEvent {
     data object PlayInOtherApp : TorrentTesterEvent
 
     data object AllowMeteredOnce : TorrentTesterEvent
+
+    data object ClearCache : TorrentTesterEvent
+
+    data class SetKeepAfterStop(
+        val keep: Boolean,
+    ) : TorrentTesterEvent
+
+    data class SetCacheLimit(
+        val limitGb: Int,
+    ) : TorrentTesterEvent
 }
 
 sealed interface TorrentTesterEffect {
@@ -57,6 +72,8 @@ class TorrentTesterViewModel
     @Inject
     constructor(
         private val engine: TorrentEngine,
+        private val cache: TorrentCache,
+        private val prefs: TorrentPrefsRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(TorrentTesterUiState())
         val uiState: StateFlow<TorrentTesterUiState> = _uiState.asStateFlow()
@@ -69,19 +86,77 @@ class TorrentTesterViewModel
         private var localUrl: String? = null
         private var lastRequest: TorrentRequest? = null
 
-        fun onEvent(event: TorrentTesterEvent) {
-            when (event) {
-                is TorrentTesterEvent.InputChanged -> onInputChanged(event.text)
-                TorrentTesterEvent.Start -> onStart()
-                TorrentTesterEvent.Stop -> onStop()
-                is TorrentTesterEvent.SelectFile -> onSelectFile(event.index)
-                TorrentTesterEvent.PlayInOtherApp -> onPlayInOtherApp()
-                TorrentTesterEvent.AllowMeteredOnce -> onAllowMeteredOnce()
+        init {
+            refreshCacheSize()
+            viewModelScope.launch {
+                prefs.cacheLimitGb.collect { limit ->
+                    _uiState.update { it.copy(cacheLimitGb = limit) }
+                }
+            }
+            viewModelScope.launch {
+                prefs.clearCacheOnExit.collect { clearOnExit ->
+                    _uiState.update { it.copy(keepDataAfterStop = !clearOnExit) }
+                }
             }
         }
 
-        private fun onInputChanged(text: String) {
-            _uiState.update { it.copy(input = text, inputInvalid = false) }
+        fun onEvent(event: TorrentTesterEvent) {
+            when (event) {
+                is TorrentTesterEvent.InputChanged -> {
+                    _uiState.update { it.copy(input = event.text, inputInvalid = false) }
+                }
+
+                TorrentTesterEvent.Start -> {
+                    onStart()
+                }
+
+                TorrentTesterEvent.Stop -> {
+                    onStop()
+                }
+
+                is TorrentTesterEvent.SelectFile -> {
+                    activeHash?.let { hash ->
+                        viewModelScope.launch {
+                            engine.selectFile(hash, event.index)
+                        }
+                    }
+                }
+
+                TorrentTesterEvent.PlayInOtherApp -> {
+                    if (_uiState.value.state is TorrentState.Ready) {
+                        localUrl?.let { url ->
+                            viewModelScope.launch {
+                                _effects.emit(TorrentTesterEffect.OpenPlayer(url))
+                            }
+                        }
+                    }
+                }
+
+                TorrentTesterEvent.AllowMeteredOnce -> {
+                    onAllowMeteredOnce()
+                }
+
+                TorrentTesterEvent.ClearCache -> {
+                    viewModelScope.launch {
+                        cache.clearCache()
+                        refreshCacheSize()
+                    }
+                }
+
+                is TorrentTesterEvent.SetKeepAfterStop -> {
+                    viewModelScope.launch {
+                        prefs.setClearCacheOnExit(!event.keep)
+                        refreshCacheSize()
+                    }
+                }
+
+                is TorrentTesterEvent.SetCacheLimit -> {
+                    viewModelScope.launch {
+                        prefs.setCacheLimitGb(event.limitGb)
+                        refreshCacheSize()
+                    }
+                }
+            }
         }
 
         private fun onStart() {
@@ -127,6 +202,7 @@ class TorrentTesterViewModel
                         .prepare(request)
                         .onCompletion { _ ->
                             _uiState.update { currentState -> currentState.copy(running = false) }
+                            refreshCacheSize()
                         }.collect { newState ->
                             if (newState is TorrentState.Ready) {
                                 localUrl = newState.localUrl
@@ -171,19 +247,10 @@ class TorrentTesterViewModel
             }
         }
 
-        private fun onSelectFile(index: Int) {
-            val hash = activeHash ?: return
+        private fun refreshCacheSize() {
             viewModelScope.launch {
-                engine.selectFile(hash, index)
-            }
-        }
-
-        private fun onPlayInOtherApp() {
-            if (_uiState.value.state is TorrentState.Ready) {
-                val url = localUrl ?: return
-                viewModelScope.launch {
-                    _effects.emit(TorrentTesterEffect.OpenPlayer(url))
-                }
+                val size = cache.cacheSizeBytes()
+                _uiState.update { it.copy(cacheSizeBytes = size) }
             }
         }
 

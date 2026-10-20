@@ -54,10 +54,16 @@ class GatedTorrentEngineTest {
     ) : TorrentPrefsRepository {
         private val _wifiOnly = MutableStateFlow(initialWifiOnly)
         override val wifiOnly: Flow<Boolean> = _wifiOnly
+        override val cacheLimitGb: Flow<Int> = MutableStateFlow(2)
+        override val clearCacheOnExit: Flow<Boolean> = MutableStateFlow(true)
 
         override suspend fun setWifiOnly(value: Boolean) {
             _wifiOnly.value = value
         }
+
+        override suspend fun setCacheLimitGb(value: Int) = Unit
+
+        override suspend fun setClearCacheOnExit(value: Boolean) = Unit
     }
 
     private class FakeTorrentKeepAlive : TorrentKeepAlive {

@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.text.format.Formatter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -27,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -167,6 +170,17 @@ fun TorrentTesterScreen(
                         Text(stringResource(R.string.torrent_tester_stop))
                     }
                 }
+            }
+
+            item {
+                CacheCard(
+                    sizeBytes = state.cacheSizeBytes,
+                    limitGb = state.cacheLimitGb,
+                    keepAfterStop = state.keepDataAfterStop,
+                    onKeepAfterStopChange = { onEvent(TorrentTesterEvent.SetKeepAfterStop(it)) },
+                    onLimitChange = { onEvent(TorrentTesterEvent.SetCacheLimit(it)) },
+                    onClearCache = { onEvent(TorrentTesterEvent.ClearCache) },
+                )
             }
 
             val torrentState = state.state
@@ -344,6 +358,83 @@ private fun formatBytes(bytes: Long): String =
 
 private fun formatSpeed(bytesPerSec: Long): String = "${formatBytes(bytesPerSec)}/s"
 
+@Composable
+private fun CacheCard(
+    sizeBytes: Long,
+    limitGb: Int,
+    keepAfterStop: Boolean,
+    onKeepAfterStopChange: (Boolean) -> Unit,
+    onLimitChange: (Int) -> Unit,
+    onClearCache: () -> Unit,
+) {
+    val spacing = NexusTheme.spacing
+    val context = LocalContext.current
+    val formattedSize =
+        remember(sizeBytes, context) {
+            Formatter.formatFileSize(context, sizeBytes)
+        }
+
+    NexusCard(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(spacing.md),
+            verticalArrangement = Arrangement.spacedBy(spacing.sm),
+        ) {
+            Text(
+                text = stringResource(R.string.torrent_tester_cache_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.torrent_tester_cache_size_and_limit, formattedSize, limitGb),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.torrent_tester_cache_keep_after_stop),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Switch(
+                    checked = keepAfterStop,
+                    onCheckedChange = onKeepAfterStopChange,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+            ) {
+                val limits =
+                    remember {
+                        listOf(
+                            1 to R.string.torrent_tester_cache_limit_1gb,
+                            2 to R.string.torrent_tester_cache_limit_2gb,
+                            5 to R.string.torrent_tester_cache_limit_5gb,
+                        )
+                    }
+                limits.forEach { (limit, strRes) ->
+                    FilterChip(
+                        selected = limitGb == limit,
+                        onClick = { onLimitChange(limit) },
+                        label = { Text(stringResource(strRes)) },
+                        shape = NexusTheme.shapes.chip,
+                    )
+                }
+            }
+            NexusOutlinedButton(
+                onClick = onClearCache,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.torrent_tester_cache_clear))
+            }
+        }
+    }
+}
+
 @Preview(name = "Light")
 @Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -356,6 +447,9 @@ fun TorrentTesterScreenPreview() {
                         input = "",
                         running = true,
                         state = TorrentState.Buffering(percent = 42, speedBps = 1_258_291L, peers = 14),
+                        cacheSizeBytes = 125_829_120L,
+                        keepDataAfterStop = true,
+                        cacheLimitGb = 2,
                     ),
                 onEvent = {},
                 onBack = {},

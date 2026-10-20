@@ -8,9 +8,11 @@ import com.nexus.stream.data.torrent.NetworkStatusProvider
 import com.nexus.stream.data.torrent.RefCountedKeepAlive
 import com.nexus.stream.data.torrent.ServiceLauncher
 import com.nexus.stream.data.torrent.TorrentBackend
+import com.nexus.stream.data.torrent.TorrentCacheStore
 import com.nexus.stream.data.torrent.TorrentFileLocator
 import com.nexus.stream.data.torrent.TorrentKeepAlive
 import com.nexus.stream.data.torrent.TorrentSessionControl
+import com.nexus.stream.domain.repository.TorrentCache
 import com.nexus.stream.domain.repository.TorrentEngine
 import dagger.Binds
 import dagger.Module
@@ -21,6 +23,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 interface TorrentModule {
+    @Binds
+    @Singleton
+    fun bindTorrentCache(impl: TorrentCacheStore): TorrentCache
+
     @Binds
     @Singleton
     fun bindTorrentBackend(impl: JLibTorrentBackend): TorrentBackend
