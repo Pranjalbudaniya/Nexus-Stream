@@ -27,15 +27,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -69,6 +68,7 @@ import com.nexus.stream.presentation.theme.tokens.AmoledTokens
 
 private const val PICK_FILE_CARD_WIDTH_FRACTION = 0.7f
 private val PICK_FILE_LIST_MAX_HEIGHT = 200.dp
+private val NETWORK_CARD_TOP_PADDING = 64.dp
 
 @Composable
 fun PlayerScreen(
@@ -80,25 +80,41 @@ fun PlayerScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(context) {
-        val activity = context.findActivity()
-        val window = activity?.window
+    val activity = remember(context) { context.findActivity() }
+    val window = activity?.window
 
+    val restoreChrome =
+        remember(activity, window) {
+            {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                if (window != null) {
+                    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                    insetsController.show(WindowInsetsCompat.Type.systemBars())
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
+
+    val handleBack =
+        remember(restoreChrome, onNavigateUp) {
+            {
+                restoreChrome()
+                onNavigateUp()
+            }
+        }
+
+    DisposableEffect(context) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (window != null) {
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
         onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            if (window != null) {
-                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(WindowInsetsCompat.Type.systemBars())
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
+            restoreChrome()
         }
     }
 
@@ -116,34 +132,25 @@ fun PlayerScreen(
     }
 
     BackHandler {
-        onNavigateUp()
+        handleBack()
     }
 
-    if (uiState.phase is PlayerPhase.Empty) {
-        LaunchedEffect(Unit) {
-            onNavigateUp()
-        }
-    }
-
-    val controller = remember { viewModel.getController() }
+    val controller = viewModel.getController()
 
     PlayerScreenContent(
         uiState = uiState,
-        onNavigateUp = onNavigateUp,
+        onNavigateUp = handleBack,
         onTogglePlay = { viewModel.onEvent(PlayerEvent.TogglePlay) },
         onSeekTo = { viewModel.onEvent(PlayerEvent.SeekTo(it)) },
         onToggleControls = { viewModel.onEvent(PlayerEvent.ToggleControls) },
         onPickFile = { viewModel.onEvent(PlayerEvent.PickFile(it)) },
         onAllowMeteredOnce = { viewModel.onEvent(PlayerEvent.AllowMeteredOnce) },
+        onRetry = { viewModel.onEvent(PlayerEvent.Retry) },
+        onToggleNetworkCard = { viewModel.onEvent(PlayerEvent.ToggleNetworkCard) },
+        onDismissNetworkCard = { viewModel.onEvent(PlayerEvent.DismissNetworkCard) },
+        surfaceFactory = controller?.let { ctrl -> { ctx -> ctrl.createSurface(ctx) } },
+        surfaceRelease = { controller?.detachSurface() },
         modifier = modifier,
-        surfaceFactory =
-            controller?.let { ctrl ->
-                { ctx -> ctrl.createSurface(ctx) }
-            },
-        surfaceRelease =
-            controller?.let { ctrl ->
-                { ctrl.detachSurface() }
-            },
     )
 }
 
@@ -156,10 +163,17 @@ internal fun PlayerScreenContent(
     onToggleControls: () -> Unit,
     onPickFile: (Int) -> Unit,
     onAllowMeteredOnce: () -> Unit,
+    onRetry: () -> Unit,
+    onToggleNetworkCard: () -> Unit,
+    onDismissNetworkCard: () -> Unit,
     modifier: Modifier = Modifier,
     surfaceFactory: ((Context) -> android.view.View)? = null,
     surfaceRelease: (() -> Unit)? = null,
 ) {
+    val showLoadingOverlay =
+        uiState.phase is PlayerPhase.Preparing ||
+            (uiState.phase is PlayerPhase.Playing && uiState.isBuffering)
+
     Box(
         modifier =
             modifier
@@ -186,6 +200,16 @@ internal fun PlayerScreenContent(
                     },
         )
 
+        if (showLoadingOverlay) {
+            PlayerLoadingOverlay(
+                title = uiState.title,
+                logoUrl = uiState.logoUrl,
+                backgroundUrl = uiState.backgroundUrl,
+                phase = uiState.phase,
+                stats = uiState.stats,
+            )
+        }
+
         AnimatedVisibility(
             visible = uiState.controlsVisible,
             enter = fadeIn(),
@@ -194,10 +218,27 @@ internal fun PlayerScreenContent(
         ) {
             PlayerControlsOverlay(
                 uiState = uiState,
+                showCenterPlay = !showLoadingOverlay,
                 onNavigateUp = onNavigateUp,
                 onTogglePlay = onTogglePlay,
                 onSeekTo = onSeekTo,
+                onToggleNetworkCard = onToggleNetworkCard,
             )
+        }
+
+        if (uiState.showNetworkCard && uiState.isTorrentSource) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = NETWORK_CARD_TOP_PADDING, end = NexusTheme.spacing.md),
+                contentAlignment = Alignment.TopEnd,
+            ) {
+                NetworkStatusCard(
+                    stats = uiState.stats,
+                    onDismiss = onDismissNetworkCard,
+                )
+            }
         }
 
         PlayerStateOverlay(
@@ -205,6 +246,7 @@ internal fun PlayerScreenContent(
             onNavigateUp = onNavigateUp,
             onPickFile = onPickFile,
             onAllowMeteredOnce = onAllowMeteredOnce,
+            onRetry = onRetry,
             modifier = Modifier.align(Alignment.Center),
         )
     }
@@ -213,9 +255,11 @@ internal fun PlayerScreenContent(
 @Composable
 private fun PlayerControlsOverlay(
     uiState: PlayerUiState,
+    showCenterPlay: Boolean,
     onNavigateUp: () -> Unit,
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onToggleNetworkCard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -250,29 +294,43 @@ private fun PlayerControlsOverlay(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            if (uiState.isTorrentSource) {
+                Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+                NexusIconButton(
+                    onClick = onToggleNetworkCard,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.player_diag_toggle),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
         }
 
-        NexusIconButton(
-            onClick = onTogglePlay,
-            modifier =
-                Modifier
-                    .align(Alignment.Center)
-                    .size(64.dp),
-        ) {
-            if (uiState.isPlaying) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_pause),
-                    contentDescription = stringResource(R.string.player_pause),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(48.dp),
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(R.string.player_play),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(48.dp),
-                )
+        if (showCenterPlay) {
+            NexusIconButton(
+                onClick = onTogglePlay,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .size(64.dp),
+            ) {
+                if (uiState.isPlaying) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_pause),
+                        contentDescription = stringResource(R.string.player_pause),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(48.dp),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.player_play),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
             }
         }
 
@@ -330,13 +388,10 @@ private fun PlayerStateOverlay(
     onNavigateUp: () -> Unit,
     onPickFile: (Int) -> Unit,
     onAllowMeteredOnce: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (phase) {
-        is PlayerPhase.Preparing -> {
-            PlayerPreparingOverlay(phase = phase, modifier = modifier)
-        }
-
         is PlayerPhase.PickFile -> {
             PlayerPickFileOverlay(phase = phase, onPickFile = onPickFile, modifier = modifier)
         }
@@ -346,52 +401,12 @@ private fun PlayerStateOverlay(
                 phase = phase,
                 onNavigateUp = onNavigateUp,
                 onAllowMeteredOnce = onAllowMeteredOnce,
+                onRetry = onRetry,
                 modifier = modifier,
             )
         }
 
         else -> {}
-    }
-}
-
-@Composable
-private fun PlayerPreparingOverlay(
-    phase: PlayerPhase.Preparing,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.padding(NexusTheme.spacing.lg),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
-    ) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary,
-        )
-        val labelText =
-            when (phase.label) {
-                PreparingLabel.OPENING -> {
-                    stringResource(R.string.player_preparing)
-                }
-
-                PreparingLabel.FETCHING_METADATA -> {
-                    stringResource(R.string.player_fetching_metadata)
-                }
-
-                PreparingLabel.BUFFERING -> {
-                    val pct = phase.percent ?: 0
-                    val peers = phase.peers
-                    if (peers != null && peers > 0) {
-                        stringResource(R.string.player_buffering, pct, peers)
-                    } else {
-                        stringResource(R.string.player_buffering_no_peers, pct)
-                    }
-                }
-            }
-        Text(
-            text = labelText,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -451,10 +466,22 @@ private fun PlayerPickFileOverlay(
 }
 
 @Composable
+private fun resolveErrorMessage(phase: PlayerPhase.Error): String {
+    val resId = playerErrorMessageRes(phase.kind)
+    val code = phase.statusCode
+    return if (code != null && hasStatusPlaceholder(phase.kind)) {
+        stringResource(resId, code)
+    } else {
+        stringResource(resId)
+    }
+}
+
+@Composable
 private fun PlayerErrorOverlay(
     phase: PlayerPhase.Error,
     onNavigateUp: () -> Unit,
     onAllowMeteredOnce: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -462,17 +489,7 @@ private fun PlayerErrorOverlay(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
     ) {
-        val errorMessage =
-            when (phase.kind) {
-                PlayerError.UNPLAYABLE -> stringResource(R.string.error_player_unplayable)
-                PlayerError.PLAYBACK_FAILED -> stringResource(R.string.error_player_failed)
-                PlayerError.METERED_BLOCKED -> stringResource(R.string.error_metered_blocked)
-                PlayerError.TORRENT_TIMEOUT -> stringResource(R.string.error_torrent_timeout)
-                PlayerError.TORRENT_NO_VIDEO -> stringResource(R.string.error_torrent_no_video)
-                PlayerError.TORRENT_STORAGE -> stringResource(R.string.error_torrent_storage)
-                PlayerError.TORRENT_UNAVAILABLE -> stringResource(R.string.error_torrent_engine_unavailable)
-                PlayerError.OTHER -> stringResource(R.string.error_player_other)
-            }
+        val errorMessage = resolveErrorMessage(phase)
         Text(
             text = errorMessage,
             style = MaterialTheme.typography.bodyLarge,
@@ -486,6 +503,11 @@ private fun PlayerErrorOverlay(
                 onClick = onNavigateUp,
             ) {
                 Text(text = stringResource(R.string.navigate_up))
+            }
+            NexusButton(
+                onClick = onRetry,
+            ) {
+                Text(text = stringResource(R.string.player_retry))
             }
             if (phase.kind == PlayerError.METERED_BLOCKED) {
                 NexusButton(
@@ -519,6 +541,7 @@ internal fun PlayerControlsLightPreview() {
                     positionMs = 65_000,
                     durationMs = 180_000,
                     controlsVisible = true,
+                    isTorrentSource = true,
                 ),
             onNavigateUp = {},
             onTogglePlay = {},
@@ -526,6 +549,9 @@ internal fun PlayerControlsLightPreview() {
             onToggleControls = {},
             onPickFile = {},
             onAllowMeteredOnce = {},
+            onRetry = {},
+            onToggleNetworkCard = {},
+            onDismissNetworkCard = {},
         )
     }
 }
@@ -539,11 +565,12 @@ internal fun PlayerControlsDarkPreview() {
                 PlayerUiState(
                     title = "Sample Video Title",
                     phase = PlayerPhase.Playing,
-                    isPlaying = true,
+                    isPlaying = false,
                     isSeekable = true,
-                    positionMs = 65_000,
+                    positionMs = 10_000,
                     durationMs = 180_000,
                     controlsVisible = true,
+                    isTorrentSource = false,
                 ),
             onNavigateUp = {},
             onTogglePlay = {},
@@ -551,27 +578,9 @@ internal fun PlayerControlsDarkPreview() {
             onToggleControls = {},
             onPickFile = {},
             onAllowMeteredOnce = {},
-        )
-    }
-}
-
-@Preview(name = "Player Error Dark", showBackground = true)
-@Composable
-internal fun PlayerErrorDarkPreview() {
-    NexusTheme(settings = ThemeSettings(mode = ThemeMode.DARK)) {
-        PlayerScreenContent(
-            uiState =
-                PlayerUiState(
-                    title = "Sample Video Title",
-                    phase = PlayerPhase.Error(PlayerError.METERED_BLOCKED),
-                    controlsVisible = false,
-                ),
-            onNavigateUp = {},
-            onTogglePlay = {},
-            onSeekTo = {},
-            onToggleControls = {},
-            onPickFile = {},
-            onAllowMeteredOnce = {},
+            onRetry = {},
+            onToggleNetworkCard = {},
+            onDismissNetworkCard = {},
         )
     }
 }

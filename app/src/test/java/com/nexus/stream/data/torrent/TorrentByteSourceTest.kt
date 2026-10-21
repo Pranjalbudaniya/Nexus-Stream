@@ -11,6 +11,8 @@ import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
@@ -418,6 +420,151 @@ class TorrentByteSourceTest {
 
             val buf = ByteArray(10)
             assertEquals(-1, source.read(position = 0L, buffer = buf, offset = 0, length = 10))
+        }
+
+    @Test
+    fun BS12_twoReadersAlternate20Times_prioritizeCalledAtMost3Times_containsBothWindows() =
+        runTest {
+            val file = createSparseTempFile(100L * mib)
+            val backend = FakeBackend()
+            var now = 1_000L
+            val source =
+                TorrentByteSource(
+                    backend = backend,
+                    infoHash = "h",
+                    fileIndex = 0,
+                    fileOffset = 0L,
+                    sizeBytes = 100L * mib,
+                    pieceLength = 1L * mib,
+                    localFile = file,
+                    contentType = "video/mp4",
+                    nowMs = { now },
+                )
+
+            val buf = ByteArray(10)
+            val posA = 0L
+            val posB = 50L * mib
+
+            repeat(20) {
+                source.read(position = posA, buffer = buf, offset = 0, length = 10)
+                now += 50L
+                source.read(position = posB, buffer = buf, offset = 0, length = 10)
+                now += 50L
+            }
+
+            assertTrue(
+                "Expected <= 3 prioritize calls, but was ${backend.prioritizeCalls.size}",
+                backend.prioritizeCalls.size <= 3,
+            )
+            val lastPieces = backend.prioritizeCalls.last().third
+            assertTrue(lastPieces.contains(0))
+            assertTrue(lastPieces.contains(50))
+        }
+
+    @Test
+    fun BS13_readerAtA_clockPastTtl_readerAtB_lastPrioritizeCoversOnlyB() =
+        runTest {
+            val file = createSparseTempFile(100L * mib)
+            val backend = FakeBackend()
+            var now = 1_000L
+            val source =
+                TorrentByteSource(
+                    backend = backend,
+                    infoHash = "h",
+                    fileIndex = 0,
+                    fileOffset = 0L,
+                    sizeBytes = 100L * mib,
+                    pieceLength = 1L * mib,
+                    localFile = file,
+                    contentType = "video/mp4",
+                    nowMs = { now },
+                )
+
+            val buf = ByteArray(10)
+            source.read(position = 0L, buffer = buf, offset = 0, length = 10)
+            assertEquals(1, backend.prioritizeCalls.size)
+            assertTrue(backend.prioritizeCalls[0].third.contains(0))
+
+            // Advance clock past TTL (default 5000ms)
+            now += 6_000L
+
+            source.read(position = 50L * mib, buffer = buf, offset = 0, length = 10)
+            val lastPieces = backend.prioritizeCalls.last().third
+            assertTrue(lastPieces.contains(50))
+            assertFalse(lastPieces.contains(0))
+        }
+
+    @Test
+    fun BS14_readWaitsForMissingPiece_currentWaitMsGrows_returnsZeroWhenDone() =
+        runTest {
+            val file = createTempFileWithBytes(100)
+            val backend = FakeBackend()
+            var now = 1_000L
+            var havePieces = 0
+            backend.snapshotProvider = { _, _ ->
+                TorrentSnapshot(piecesHave = havePieces, downloadSpeedBps = 0L, peers = 1)
+            }
+
+            val source =
+                TorrentByteSource(
+                    backend = backend,
+                    infoHash = "h",
+                    fileIndex = 0,
+                    fileOffset = 0L,
+                    sizeBytes = 100L,
+                    pieceLength = 10L,
+                    localFile = file,
+                    contentType = "video/mp4",
+                    config = StreamReadConfig(pollIntervalMs = 50L, stallTimeoutMs = 10_000L),
+                    nowMs = { now },
+                )
+
+            assertEquals(0L, source.currentWaitMs())
+
+            val buf = ByteArray(10)
+            val deferred =
+                async {
+                    source.read(position = 0L, buffer = buf, offset = 0, length = 10)
+                }
+
+            // Yield so read enters awaitPieces and begins waiting
+            kotlinx.coroutines.yield()
+            now += 500L
+            assertTrue(source.currentWaitMs() >= 500L)
+
+            // Make piece appear
+            havePieces = 10
+            now += 200L
+            deferred.await()
+
+            assertEquals(0L, source.currentWaitMs())
+        }
+
+    @Test
+    fun BS15_lastReadPosition_followsMostRecentRead() =
+        runTest {
+            val file = createTempFileWithBytes(100)
+            val backend = FakeBackend()
+            val source =
+                TorrentByteSource(
+                    backend = backend,
+                    infoHash = "h",
+                    fileIndex = 0,
+                    fileOffset = 0L,
+                    sizeBytes = 100L,
+                    pieceLength = 10L,
+                    localFile = file,
+                    contentType = "video/mp4",
+                )
+
+            assertEquals(0L, source.lastReadPosition)
+
+            val buf = ByteArray(10)
+            source.read(position = 20L, buffer = buf, offset = 0, length = 10)
+            assertEquals(20L, source.lastReadPosition)
+
+            source.read(position = 70L, buffer = buf, offset = 0, length = 10)
+            assertEquals(70L, source.lastReadPosition)
         }
 
     private class FakeBackend : TorrentBackend {

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -24,6 +25,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -49,6 +51,7 @@ private class ServingFakeBackend : TorrentBackend {
     var snapshotResult =
         TorrentSnapshot(piecesHave = 100, downloadSpeedBps = 0L, peers = 1)
     var lastPrioritizePieces: List<Int>? = null
+    var snapshotError: Throwable? = null
 
     override suspend fun add(
         infoHash: String,
@@ -84,7 +87,10 @@ private class ServingFakeBackend : TorrentBackend {
     override suspend fun snapshot(
         infoHash: String,
         pieces: List<Int>,
-    ): TorrentSnapshot = snapshotResult
+    ): TorrentSnapshot {
+        snapshotError?.let { throw it }
+        return snapshotResult
+    }
 
     override suspend fun remove(infoHash: String) {
         // No-op for test fake
@@ -130,7 +136,24 @@ private fun createEngine(
         backend = backend,
         locator = locator,
         server = server,
+        hub = StreamStatsHub(),
         tokenGenerator = { token },
+    )
+
+private fun createEngine(
+    delegate: DefaultTorrentEngine,
+    backend: TorrentBackend,
+    locator: TorrentFileLocator,
+    server: LoopbackServer,
+    hub: StreamStatsHub,
+): ServingTorrentEngine =
+    ServingTorrentEngine(
+        delegate = delegate,
+        backend = backend,
+        locator = locator,
+        server = server,
+        hub = hub,
+        tokenGenerator = { "0123456789abcdef0123456789abcdef" },
     )
 
 private fun createSe2Backend(totalSize: Long) =
@@ -424,6 +447,7 @@ class ServingTorrentEngineTest {
                     backend = backend,
                     locator = locator,
                     server = server,
+                    hub = StreamStatsHub(),
                     tokenGenerator = {
                         if (tokenCounter++ == 1) {
                             "11111111111111111111111111111111"
@@ -718,6 +742,176 @@ class ServingTorrentEngineTest {
             runCurrent()
             assertTrue(flowFinished)
 
+            server.stop()
+            tempFile.delete()
+        }
+
+    @Test
+    fun SE12_statsPoller_publishesStreamStatsOncePerSecondOfVirtualTime() =
+        runTest {
+            val totalSize = 10L * 1024 * 1024L
+            val pieceLen = 1024 * 1024L
+            val tempFile = File.createTempFile("se_stats", ".mkv").apply { writeBytes(ByteArray(100)) }
+            val server = LoopbackServer(Dispatchers.IO)
+            val backend =
+                ServingFakeBackend().apply {
+                    metadataResult =
+                        TorrentMetadata(
+                            files =
+                                listOf(
+                                    BackendFile(index = 1, path = "video.mkv", sizeBytes = totalSize, offsetBytes = 0L),
+                                ),
+                            pieceLength = pieceLen,
+                        )
+                    snapshotResult = TorrentSnapshot(piecesHave = 5, downloadSpeedBps = 1_500_000L, peers = 7)
+                }
+
+            val locator = ServingFakeLocator(mapOf("video.mkv" to tempFile))
+            val hang = CompletableDeferred<Unit>()
+            val delegateFlow =
+                flow {
+                    emit(TorrentState.Ready(1, "video.mkv", totalSize, null))
+                    hang.await()
+                }
+            val delegate = ServingFakeDefaultEngine(backend, delegateFlow)
+            val hub = StreamStatsHub()
+            val engine = createEngine(delegate, backend, locator, server, hub = hub)
+
+            val job = launch { engine.prepare(TorrentRequest(TEST_HASH)).collect {} }
+            runCurrent()
+
+            // Before 1s: no stats yet
+            assertNull(hub.stats.value)
+
+            // After 1s virtual time: first stats published
+            advanceTimeBy(1000L)
+            runCurrent()
+            val stats1 = hub.stats.value
+            assertNotNull(stats1)
+            assertEquals(1_500_000L, stats1?.speedBps)
+            assertEquals(7, stats1?.peers)
+            assertEquals(totalSize, stats1?.fileSizeBytes)
+
+            // After another 1s: updated
+            backend.snapshotResult = TorrentSnapshot(piecesHave = 8, downloadSpeedBps = 2_000_000L, peers = 9)
+            advanceTimeBy(1000L)
+            runCurrent()
+            val stats2 = hub.stats.value
+            assertEquals(2_000_000L, stats2?.speedBps)
+            assertEquals(9, stats2?.peers)
+
+            job.cancel()
+            runCurrent()
+            server.stop()
+            tempFile.delete()
+        }
+
+    @Test
+    fun SE13_statsPoller_clearedOnUnmountAndNoMorePublishes() =
+        runTest {
+            val totalSize = 10L * 1024 * 1024L
+            val pieceLen = 1024 * 1024L
+            val tempFile = File.createTempFile("se_stats", ".mkv").apply { writeBytes(ByteArray(100)) }
+            val server = LoopbackServer(Dispatchers.IO)
+            val backend =
+                ServingFakeBackend().apply {
+                    metadataResult =
+                        TorrentMetadata(
+                            files =
+                                listOf(
+                                    BackendFile(index = 1, path = "video.mkv", sizeBytes = totalSize, offsetBytes = 0L),
+                                ),
+                            pieceLength = pieceLen,
+                        )
+                    snapshotResult = TorrentSnapshot(piecesHave = 5, downloadSpeedBps = 500_000L, peers = 3)
+                }
+
+            val locator = ServingFakeLocator(mapOf("video.mkv" to tempFile))
+            val hang = CompletableDeferred<Unit>()
+            val delegateFlow =
+                flow {
+                    emit(TorrentState.Ready(1, "video.mkv", totalSize, null))
+                    hang.await()
+                }
+            val delegate = ServingFakeDefaultEngine(backend, delegateFlow)
+            val hub = StreamStatsHub()
+            val engine = createEngine(delegate, backend, locator, server, hub = hub)
+
+            val job = launch { engine.prepare(TorrentRequest(TEST_HASH)).collect {} }
+            runCurrent()
+            advanceTimeBy(1000L)
+            runCurrent()
+            assertNotNull(hub.stats.value)
+
+            // Cancel/unmount
+            job.cancel()
+            runCurrent()
+            assertNull(hub.stats.value)
+
+            // Advance further: no more publishes happen
+            advanceTimeBy(3000L)
+            runCurrent()
+            assertNull(hub.stats.value)
+
+            server.stop()
+            tempFile.delete()
+        }
+
+    @Test
+    fun SE14_statsPoller_throwingSnapshotSkipsOneTickAndNextTickPublishes() =
+        runTest {
+            val totalSize = 10L * 1024 * 1024L
+            val pieceLen = 1024 * 1024L
+            val tempFile = File.createTempFile("se_stats", ".mkv").apply { writeBytes(ByteArray(100)) }
+            val server = LoopbackServer(Dispatchers.IO)
+            val backend =
+                ServingFakeBackend().apply {
+                    metadataResult =
+                        TorrentMetadata(
+                            files =
+                                listOf(
+                                    BackendFile(index = 1, path = "video.mkv", sizeBytes = totalSize, offsetBytes = 0L),
+                                ),
+                            pieceLength = pieceLen,
+                        )
+                    snapshotResult = TorrentSnapshot(piecesHave = 5, downloadSpeedBps = 500_000L, peers = 3)
+                }
+
+            val locator = ServingFakeLocator(mapOf("video.mkv" to tempFile))
+            val hang = CompletableDeferred<Unit>()
+            val delegateFlow =
+                flow {
+                    emit(TorrentState.Ready(1, "video.mkv", totalSize, null))
+                    hang.await()
+                }
+            val delegate = ServingFakeDefaultEngine(backend, delegateFlow)
+            val hub = StreamStatsHub()
+            val engine = createEngine(delegate, backend, locator, server, hub = hub)
+
+            backend.snapshotError = null
+            val job = launch { engine.prepare(TorrentRequest(TEST_HASH)).collect {} }
+            runCurrent()
+            advanceTimeBy(1000L)
+            runCurrent()
+            assertNotNull(hub.stats.value)
+            val initialStats = hub.stats.value
+
+            // Cause snapshot to throw TorrentBackendException
+            backend.snapshotError = TorrentBackendException(TorrentFailReason.STORAGE)
+            advanceTimeBy(1000L)
+            runCurrent()
+            // Skipped, stats retained
+            assertEquals(initialStats, hub.stats.value)
+
+            // Recovery on next tick
+            backend.snapshotError = null
+            backend.snapshotResult = TorrentSnapshot(piecesHave = 9, downloadSpeedBps = 900_000L, peers = 12)
+            advanceTimeBy(1000L)
+            runCurrent()
+            assertEquals(900_000L, hub.stats.value?.speedBps)
+
+            job.cancel()
+            runCurrent()
             server.stop()
             tempFile.delete()
         }

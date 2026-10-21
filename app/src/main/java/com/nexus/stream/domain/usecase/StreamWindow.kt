@@ -1,4 +1,37 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.nexus.stream.domain.usecase
+
+import kotlin.math.abs
+
+data class ReadWindow(
+    val position: Long,
+    val lastSeenMs: Long,
+)
+
+fun activeReadWindows(
+    recent: List<ReadWindow>,
+    nowMs: Long,
+    windowBytes: Long,
+    maxWindows: Int = 3,
+    ttlMs: Long = 5_000,
+): List<Long> {
+    if (recent.isEmpty() || maxWindows <= 0 || windowBytes <= 0L) return emptyList()
+    val halfWindow = windowBytes / 2L
+    val valid = recent.asReversed().filter { rw -> rw.lastSeenMs <= nowMs && (nowMs - rw.lastSeenMs) <= ttlMs }
+    val sorted = valid.sortedByDescending { it.lastSeenMs }
+    val result = mutableListOf<Long>()
+    for (rw in sorted) {
+        val isClose = result.any { chosen -> abs(rw.position - chosen) <= halfWindow }
+        if (!isClose) {
+            result.add(rw.position)
+            if (result.size == maxWindows) {
+                break
+            }
+        }
+    }
+    return result
+}
 
 fun piecesForRange(
     fileOffset: Long,

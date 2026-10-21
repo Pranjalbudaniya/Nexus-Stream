@@ -2,12 +2,15 @@ package com.nexus.stream.data.stream
 
 import android.os.Build
 import com.nexus.stream.di.IoDispatcher
+import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.usecase.parseCookieHeader
 import com.nexus.stream.domain.usecase.proxyFileName
 import com.nexus.stream.domain.usecase.sanitizeRequestHeaders
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -205,6 +208,8 @@ class LoopbackStreamProxy internal constructor(
         val fileName = proxyFileName(url)
         val expectedPath = "$prefix$fileName"
 
+        val diagnosticsFlow = MutableStateFlow(ProxyDiagnostics())
+
         val route =
             ProxyRoute(
                 upstream = httpUrl,
@@ -213,6 +218,7 @@ class LoopbackStreamProxy internal constructor(
                 expectedPath = expectedPath,
                 defaultUserAgent = defaultUserAgent,
                 io = io,
+                diagnostics = diagnosticsFlow,
             )
 
         val sessionUrl = "http://127.0.0.1:$port$expectedPath"
@@ -227,7 +233,7 @@ class LoopbackStreamProxy internal constructor(
 
             lateinit var session: ProxySession
             session =
-                ProxySession(sessionUrl) {
+                ProxySession(sessionUrl, diagnosticsFlow.asStateFlow()) {
                     synchronized(lock) {
                         sessions.remove(token)
                         server.unmount(prefix)

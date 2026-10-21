@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+@Suppress("LargeClass")
 class ProxyRouteTest {
     private val proxyServer = LoopbackServer(Dispatchers.IO, ServerConfig(maxConnections = 50))
     private val upstreamServer = LoopbackServer(Dispatchers.IO, ServerConfig(maxConnections = 50))
@@ -944,5 +945,79 @@ class ProxyRouteTest {
 
         assertEquals(listOf("c1"), res1.map { it.name })
         assertEquals(listOf("c2"), res2.map { it.name })
+    }
+
+    @Test
+    fun PT15_proxyRoute_diagnostics_recordsStatusAndUnsupportedPath() {
+        val diagnosticsFlow =
+            kotlinx.coroutines.flow.MutableStateFlow(
+                com.nexus.stream.domain.repository
+                    .ProxyDiagnostics(),
+            )
+        val upstreamUrl = "http://127.0.0.1:$upstreamPort/video/video.mp4".toHttpUrl()
+        val client = createProxyClient()
+        val expectedPath = "/p/token/video.mp4"
+        val route =
+            ProxyRoute(
+                upstream = upstreamUrl,
+                streamHeaders = emptyMap(),
+                client = client,
+                expectedPath = expectedPath,
+                defaultUserAgent = "TestUA",
+                io = Dispatchers.IO,
+                diagnostics = diagnosticsFlow,
+            )
+        proxyServer.mount("/p/token/", route)
+
+        // 1. After a 403 upstream
+        upstreamServer.mount(
+            "/video/",
+            object : HttpRoute {
+                override suspend fun handle(
+                    request: HttpRequest,
+                    response: HttpResponseWriter,
+                ) {
+                    response.head(403, listOf("Content-Length" to "0", "Connection" to "close"))
+                }
+            },
+        )
+        val res403 =
+            testClient
+                .newCall(
+                    Request.Builder().url("http://127.0.0.1:$proxyPort$expectedPath").build(),
+                ).execute()
+        res403.close()
+        assertEquals(403, diagnosticsFlow.value.lastUpstreamStatus)
+
+        // 2. After a wrong sub-path
+        val resWrongPath =
+            testClient
+                .newCall(
+                    Request.Builder().url("http://127.0.0.1:$proxyPort/p/token/segment0.ts").build(),
+                ).execute()
+        resWrongPath.close()
+        assertEquals(1, diagnosticsFlow.value.unsupportedPathRequests)
+
+        // 3. After a refused connection
+        val deadPort = ServerSocket(0).use { it.localPort }
+        val deadUrl = "http://127.0.0.1:$deadPort/video.mp4".toHttpUrl()
+        val deadRoute =
+            ProxyRoute(
+                upstream = deadUrl,
+                streamHeaders = emptyMap(),
+                client = client,
+                expectedPath = expectedPath,
+                defaultUserAgent = "TestUA",
+                io = Dispatchers.IO,
+                diagnostics = diagnosticsFlow,
+            )
+        proxyServer.mount("/p/token/", deadRoute)
+        val res502 =
+            testClient
+                .newCall(
+                    Request.Builder().url("http://127.0.0.1:$proxyPort$expectedPath").build(),
+                ).execute()
+        res502.close()
+        assertEquals(502, diagnosticsFlow.value.lastUpstreamStatus)
     }
 }

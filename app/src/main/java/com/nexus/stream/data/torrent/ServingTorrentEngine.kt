@@ -3,14 +3,23 @@ package com.nexus.stream.data.torrent
 import com.nexus.stream.data.stream.LoopbackServer
 import com.nexus.stream.data.stream.RangeRoute
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.StreamStats
+import com.nexus.stream.domain.model.TorrentConfig
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
 import com.nexus.stream.domain.repository.TorrentEngine
+import com.nexus.stream.domain.usecase.piecesForRange
 import com.nexus.stream.domain.usecase.videoMimeType
+import com.nexus.stream.domain.usecase.windowPieces
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +28,7 @@ private const val TOKEN_BYTES = 16
 private const val HEX_RADIX = 16
 private val EXTENSION_REGEX = Regex("^[a-z0-9]{1,5}$")
 private val secureRandom = SecureRandom()
+private const val STATS_POLL_INTERVAL_MS = 1000L
 
 private class ServingStartException : Exception()
 
@@ -28,14 +38,17 @@ private class MountedStream(
     val token: String,
     val source: TorrentByteSource,
     val url: String,
+    val pollerJob: Job,
 )
 
 @Singleton
+@Suppress("LongParameterList")
 class ServingTorrentEngine internal constructor(
     private val delegate: DefaultTorrentEngine,
     private val backend: TorrentBackend,
     private val locator: TorrentFileLocator,
     private val server: LoopbackServer,
+    private val hub: StreamStatsHub,
     private val tokenGenerator: () -> String,
 ) : TorrentEngine {
     @Inject
@@ -44,11 +57,13 @@ class ServingTorrentEngine internal constructor(
         backend: TorrentBackend,
         locator: TorrentFileLocator,
         server: LoopbackServer,
+        hub: StreamStatsHub,
     ) : this(
         delegate = delegate,
         backend = backend,
         locator = locator,
         server = server,
+        hub = hub,
         tokenGenerator = ::generateSecureToken,
     )
 
@@ -57,15 +72,17 @@ class ServingTorrentEngine internal constructor(
             val hash = request.infoHash.trim().lowercase()
             var currentToken: String? = null
             var currentSource: TorrentByteSource? = null
+            var currentPollerJob: Job? = null
 
             try {
                 try {
                     delegate.prepare(request).collect { state ->
                         if (state is TorrentState.Ready && state.localUrl == null) {
                             try {
-                                val mounted = mountStream(hash, state.fileIndex)
+                                val mounted = mountStream(this@channelFlow, hash, state.fileIndex)
                                 currentToken = mounted.token
                                 currentSource = mounted.source
+                                currentPollerJob = mounted.pollerJob
                                 send(state.copy(localUrl = mounted.url))
                             } catch (e: CancellationException) {
                                 throw e
@@ -87,6 +104,8 @@ class ServingTorrentEngine internal constructor(
                     // Flow aborted after emitting Failed; complete cleanly
                 }
             } finally {
+                currentPollerJob?.cancel()
+                hub.clear()
                 currentToken?.let { token ->
                     server.unmount("/t/$token/")
                 }
@@ -104,6 +123,7 @@ class ServingTorrentEngine internal constructor(
         }
 
     private suspend fun mountStream(
+        scope: CoroutineScope,
         hash: String,
         fileIndex: Int,
     ): MountedStream {
@@ -129,9 +149,70 @@ class ServingTorrentEngine internal constructor(
         val token = tokenGenerator()
         server.mount("/t/$token/", RangeRoute(source))
 
+        val pollerJob = startStatsPoller(scope, hash, file, meta.pieceLength, source)
+
         val ext = extractExtension(file.path)
         val url = "http://127.0.0.1:$port/t/$token/stream.$ext"
-        return MountedStream(token, source, url)
+        return MountedStream(token, source, url, pollerJob)
+    }
+
+    private fun startStatsPoller(
+        scope: CoroutineScope,
+        hash: String,
+        file: BackendFile,
+        pieceLength: Long,
+        source: TorrentByteSource,
+    ): Job {
+        val filePieces = piecesForRange(file.offsetBytes, pieceLength, 0L, file.sizeBytes)
+        return scope.launch {
+            while (isActive) {
+                delay(STATS_POLL_INTERVAL_MS)
+                pollStatsTick(hash, file, pieceLength, source, filePieces)
+            }
+        }
+    }
+
+    private suspend fun pollStatsTick(
+        hash: String,
+        file: BackendFile,
+        pieceLength: Long,
+        source: TorrentByteSource,
+        filePieces: List<Int>,
+    ) {
+        try {
+            val aheadPieces =
+                windowPieces(
+                    fileOffset = file.offsetBytes,
+                    fileSize = file.sizeBytes,
+                    pieceLength = pieceLength,
+                    position = source.lastReadPosition,
+                    windowBytes = TorrentConfig.STATS_AHEAD_BYTES,
+                )
+            val snapAhead = backend.snapshot(hash, aheadPieces)
+            val snapFile = backend.snapshot(hash, filePieces)
+            val aheadBytes =
+                minOf(
+                    snapAhead.piecesHave.toLong() * pieceLength,
+                    TorrentConfig.STATS_AHEAD_BYTES,
+                )
+            val downloadedBytes =
+                minOf(
+                    snapFile.piecesHave.toLong() * pieceLength,
+                    file.sizeBytes,
+                )
+            val stats =
+                StreamStats(
+                    speedBps = snapAhead.downloadSpeedBps,
+                    peers = snapAhead.peers,
+                    aheadBytes = aheadBytes,
+                    downloadedBytes = downloadedBytes,
+                    fileSizeBytes = file.sizeBytes,
+                    waitMs = source.currentWaitMs(),
+                )
+            hub.publish(stats)
+        } catch (_: TorrentBackendException) {
+            // Swallowed for that tick (do not log)
+        }
     }
 
     override suspend fun selectFile(

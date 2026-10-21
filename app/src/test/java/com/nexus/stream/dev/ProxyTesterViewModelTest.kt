@@ -266,7 +266,14 @@ class ProxyTesterViewModelTest {
                 "Invalid URL: must be http or https"
             }
             openCalls.add(url to headers)
-            return ProxySession(nextSessionUrl) {
+            return ProxySession(
+                url = nextSessionUrl,
+                diagnostics =
+                    kotlinx.coroutines.flow.MutableStateFlow(
+                        com.nexus.stream.domain.repository
+                            .ProxyDiagnostics(),
+                    ),
+            ) {
                 closedCount++
             }
         }

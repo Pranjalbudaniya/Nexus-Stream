@@ -267,4 +267,18 @@ class LoopbackStreamProxyTest {
         assertEquals(0, client.callTimeoutMillis)
         assertEquals(1, client.networkInterceptors.size)
     }
+
+    @Test
+    fun SP9_diagnostics_startsAsDefaultsAndIsPerSession() {
+        val session1 = proxy.open("http://127.0.0.1:$upstreamPort/s1.mp4", emptyMap())
+        val session2 = proxy.open("http://127.0.0.1:$upstreamPort/s2.mp4", emptyMap())
+
+        assertNull(session1.diagnostics.value.lastUpstreamStatus)
+        assertEquals(0, session1.diagnostics.value.unsupportedPathRequests)
+
+        assertNull(session2.diagnostics.value.lastUpstreamStatus)
+        assertEquals(0, session2.diagnostics.value.unsupportedPathRequests)
+
+        assertNotEquals(session1.diagnostics, session2.diagnostics)
+    }
 }

@@ -1,11 +1,14 @@
 package com.nexus.stream.data.stream
 
+import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.usecase.buildUpstreamHeaders
 import com.nexus.stream.domain.usecase.filterResponseHeaders
 import com.nexus.stream.domain.usecase.mapUpstreamStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
@@ -26,6 +29,7 @@ private const val STATUS_NO_CONTENT = 204
 private const val STATUS_NOT_MODIFIED = 304
 private const val BUFFER_SIZE = 64 * 1024
 
+@Suppress("LongParameterList")
 class ProxyRoute internal constructor(
     private val upstream: HttpUrl,
     private val streamHeaders: Map<String, String>,
@@ -33,6 +37,7 @@ class ProxyRoute internal constructor(
     private val expectedPath: String,
     private val defaultUserAgent: String,
     private val io: CoroutineDispatcher,
+    private val diagnostics: MutableStateFlow<ProxyDiagnostics> = MutableStateFlow(ProxyDiagnostics()),
 ) : HttpRoute {
     override suspend fun handle(
         request: HttpRequest,
@@ -55,9 +60,18 @@ class ProxyRoute internal constructor(
     ): Boolean {
         val errorStatus =
             when {
-                request.method != "GET" && request.method != "HEAD" -> STATUS_METHOD_NOT_ALLOWED
-                request.path != expectedPath -> STATUS_NOT_FOUND
-                else -> null
+                request.method != "GET" && request.method != "HEAD" -> {
+                    STATUS_METHOD_NOT_ALLOWED
+                }
+
+                request.path != expectedPath -> {
+                    diagnostics.update { it.copy(unsupportedPathRequests = it.unsupportedPathRequests + 1) }
+                    STATUS_NOT_FOUND
+                }
+
+                else -> {
+                    null
+                }
             } ?: return true
 
         val headers =
@@ -114,12 +128,15 @@ class ProxyRoute internal constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: SocketTimeoutException) {
+            diagnostics.update { it.copy(lastUpstreamStatus = STATUS_GATEWAY_TIMEOUT) }
             sendErrorHead(response, STATUS_GATEWAY_TIMEOUT)
             null
         } catch (_: InterruptedIOException) {
+            diagnostics.update { it.copy(lastUpstreamStatus = STATUS_GATEWAY_TIMEOUT) }
             sendErrorHead(response, STATUS_GATEWAY_TIMEOUT)
             null
         } catch (_: IOException) {
+            diagnostics.update { it.copy(lastUpstreamStatus = STATUS_BAD_GATEWAY) }
             sendErrorHead(response, STATUS_BAD_GATEWAY)
             null
         }
@@ -143,6 +160,7 @@ class ProxyRoute internal constructor(
         upstreamResponse: Response,
         call: okhttp3.Call,
     ) {
+        diagnostics.update { it.copy(lastUpstreamStatus = upstreamResponse.code) }
         val mappedStatus = mapUpstreamStatus(upstreamResponse.code)
         val upstreamHeadersList =
             (0 until upstreamResponse.headers.size).map { i ->

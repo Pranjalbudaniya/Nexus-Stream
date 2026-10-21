@@ -576,6 +576,8 @@ class StreamsViewModel
                     type = req?.type ?: "movie",
                     metaId = req?.metaId.orEmpty(),
                     videoId = req?.videoId.orEmpty(),
+                    logoUrl = req?.logoUrl,
+                    backgroundUrl = req?.backgroundUrl,
                 )
             playbackSessionHolder.start(selection)
             _effects.emit(StreamsEffect.DismissSheet)

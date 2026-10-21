@@ -12,6 +12,7 @@ import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
@@ -45,6 +46,9 @@ class PlayerViewModelTest {
     private val fakeFactory = FakePlayerControllerFactory()
     private val fakeProxy = FakeStreamProxy()
     private val fakeEngine = FakeTorrentEngine()
+    private val statsHub =
+        com.nexus.stream.data.torrent
+            .StreamStatsHub()
 
     @Before
     fun setUp() {
@@ -56,12 +60,13 @@ class PlayerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): PlayerViewModel =
+    private fun createViewModel(h: PlaybackSessionHolder = holder): PlayerViewModel =
         PlayerViewModel(
-            holder = holder,
+            holder = h,
             controllerFactory = fakeFactory,
             streamProxy = fakeProxy,
             torrentEngine = fakeEngine,
+            statsHub = statsHub,
             mainDispatcher = testDispatcher,
         )
 
@@ -170,14 +175,7 @@ class PlayerViewModelTest {
             nullUrlHolder.start(
                 PlaybackSelection("Movie", PlaybackSource.Torrent(req), "movie", "m1", "v1"),
             )
-            val nullVm =
-                PlayerViewModel(
-                    holder = nullUrlHolder,
-                    controllerFactory = fakeFactory,
-                    streamProxy = fakeProxy,
-                    torrentEngine = fakeEngine,
-                    mainDispatcher = testDispatcher,
-                )
+            val nullVm = createViewModel(nullUrlHolder)
             advanceUntilIdle()
             fakeEngine.prepareFlow.emit(TorrentState.Ready(1, "stream.mkv", 1024L, null))
             advanceUntilIdle()
@@ -488,6 +486,235 @@ class PlayerViewModelTest {
             assertTrue(vm.uiState.value.controlsVisible)
         }
 
+    @Test
+    fun PL16_torrentPlaying_snapshotFailed_autoRecoversAndSeeksToOldPosition() =
+        runTest(testDispatcher) {
+            val req = TorrentRequest("0123456789abcdef0123456789abcdef01234567")
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Torrent(req), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val streamUrl = "http://127.0.0.1:1234/t/tok/stream.mkv"
+            fakeEngine.prepareFlow.emit(TorrentState.Ready(1, "video.mkv", 1000L, streamUrl))
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            assertEquals(listOf(streamUrl), ctrl.playedUrls)
+
+            // Playing at 42_000ms
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 42_000L, isSeekable = true)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+
+            // Fails while playing -> triggers auto-recovery
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+
+            assertEquals(PlayerPhase.Preparing(PreparingLabel.OPENING), vm.uiState.value.phase)
+            assertEquals(listOf(streamUrl, streamUrl), ctrl.playedUrls)
+
+            // Resumes playing -> seeks to 42_000ms
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = true)
+            advanceUntilIdle()
+
+            assertEquals(listOf(42_000L), ctrl.seekPositions)
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+        }
+
+    @Test
+    fun PL17_secondFailureWithin60s_errors_after60s_recovers() =
+        runTest(testDispatcher) {
+            var clock = 100_000L
+            val req = TorrentRequest("0123456789abcdef0123456789abcdef01234567")
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Torrent(req), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            vm.nowMs = { clock }
+            advanceUntilIdle()
+
+            val streamUrl = "http://127.0.0.1:1234/t/tok/stream.mkv"
+            fakeEngine.prepareFlow.emit(TorrentState.Ready(1, "video.mkv", 1000L, streamUrl))
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 10_000L)
+            advanceUntilIdle()
+
+            // 1st failure -> recovers
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.phase is PlayerPhase.Preparing)
+
+            // First playing snapshot after recovery
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 10_000L)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+
+            // 2nd failure at clock + 30s (< 60s) -> Error(PLAYBACK_FAILED)
+            clock += 30_000L
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Error(PlayerError.PLAYBACK_FAILED), vm.uiState.value.phase)
+
+            // Now test after 60s: recover via retry, then fail after 61s
+            vm.onEvent(PlayerEvent.Retry)
+            advanceUntilIdle()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 20_000L)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+
+            clock += 65_000L
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.phase is PlayerPhase.Preparing)
+        }
+
+    @Test
+    fun PL18_directStreamWithoutProxy_failsWithoutAutoRecovery() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 15_000L)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+
+            assertEquals(PlayerPhase.Error(PlayerError.PLAYBACK_FAILED), vm.uiState.value.phase)
+            assertEquals(1, ctrl.playedUrls.size)
+        }
+
+    @Test
+    fun PL19_retryFromErrorState_reopensOnce() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            assertEquals(PlayerPhase.Error(PlayerError.PLAYBACK_FAILED), vm.uiState.value.phase)
+
+            vm.onEvent(PlayerEvent.Retry)
+            advanceUntilIdle()
+
+            assertEquals(PlayerPhase.Preparing(PreparingLabel.OPENING), vm.uiState.value.phase)
+            assertEquals(listOf(url, url), ctrl.playedUrls)
+        }
+
+    @Test
+    fun PL20_directWithHeaders_diagnosticFailureMapping() =
+        runTest(testDispatcher) {
+            fun assertDiagnosticMapping(
+                diag: ProxyDiagnostics,
+                expectedError: PlayerError,
+                expectedStatus: Int?,
+            ) {
+                fakeProxy.nextDiagnostics = MutableStateFlow(diag)
+                val testHolder = PlaybackSessionHolder()
+                testHolder.start(
+                    PlaybackSelection(
+                        "Stream",
+                        PlaybackSource.DirectWithHeaders("https://ex.com/s", mapOf("A" to "B")),
+                        "movie",
+                        "m",
+                        "v",
+                    ),
+                )
+                val testVm = createViewModel(testHolder)
+                advanceUntilIdle()
+                val ctrl = fakeFactory.createdControllers.last()
+                ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+                advanceUntilIdle()
+                assertEquals(PlayerPhase.Error(expectedError, expectedStatus), testVm.uiState.value.phase)
+            }
+
+            // 403 -> SOURCE_REFUSED
+            assertDiagnosticMapping(ProxyDiagnostics(lastUpstreamStatus = 403), PlayerError.SOURCE_REFUSED, 403)
+
+            // 404 -> SOURCE_NOT_FOUND
+            assertDiagnosticMapping(ProxyDiagnostics(lastUpstreamStatus = 404), PlayerError.SOURCE_NOT_FOUND, 404)
+
+            // 502 -> SOURCE_UNREACHABLE
+            assertDiagnosticMapping(ProxyDiagnostics(lastUpstreamStatus = 502), PlayerError.SOURCE_UNREACHABLE, 502)
+
+            // unsupportedPathRequests > 0 -> SOURCE_UNSUPPORTED_PATH (wins over status)
+            assertDiagnosticMapping(
+                ProxyDiagnostics(lastUpstreamStatus = 403, unsupportedPathRequests = 2),
+                PlayerError.SOURCE_UNSUPPORTED_PATH,
+                null,
+            )
+        }
+
+    @Test
+    fun PL21_privacyCheck_noUrlHeaderOrHashInToString() =
+        runTest(testDispatcher) {
+            val secretUrl = "https://secret.stream.provider.com/playlist.m3u8?token=xyz123"
+            val secretHeaderVal = "Bearer secret_jwt_token_987654"
+            val secretHash = "4a5b6c7d8e9f0123456789abcdef0123456789ab"
+            holder.start(
+                PlaybackSelection(
+                    title = "Secret Movie",
+                    source = PlaybackSource.DirectWithHeaders(secretUrl, mapOf("Authorization" to secretHeaderVal)),
+                    type = "movie",
+                    metaId = "tt123",
+                    videoId = "tt123",
+                ),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val str = vm.uiState.value.toString()
+            assertFalse(str.contains(secretUrl))
+            assertFalse(str.contains(secretHeaderVal))
+            assertFalse(str.contains(secretHash))
+        }
+
+    @Test
+    fun PL22_statsHub_exposedOnlyForTorrentSource() =
+        runTest(testDispatcher) {
+            val dummyStats =
+                com.nexus.stream.domain.model.StreamStats(
+                    speedBps = 1000L,
+                    peers = 5,
+                    aheadBytes = 2000L,
+                    downloadedBytes = 5000L,
+                    fileSizeBytes = 10000L,
+                    waitMs = 0L,
+                )
+            statsHub.publish(dummyStats)
+
+            // 1. Direct stream -> stats is null
+            holder.start(
+                PlaybackSelection("Direct", PlaybackSource.Direct("https://ex.com/v.mp4"), "movie", "m", "v"),
+            )
+            val vmDirect = createViewModel()
+            advanceUntilIdle()
+            assertNull(vmDirect.uiState.value.stats)
+
+            // 2. Torrent stream -> stats is visible
+            val req = TorrentRequest("0123456789abcdef0123456789abcdef01234567")
+            holder.start(
+                PlaybackSelection("Torrent", PlaybackSource.Torrent(req), "movie", "m", "v"),
+            )
+            val vmTorrent = createViewModel()
+            advanceUntilIdle()
+            assertEquals(dummyStats, vmTorrent.uiState.value.stats)
+        }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
@@ -539,6 +766,7 @@ class PlayerViewModelTest {
         val openCalls = mutableListOf<Pair<String, Map<String, String>>>()
         var closedSessionsCount = 0
         var nextSessionUrl = "http://127.0.0.1:45678/p/token/stream.mp4"
+        var nextDiagnostics: StateFlow<ProxyDiagnostics> = MutableStateFlow(ProxyDiagnostics())
         var throwOnOpen: Exception? = null
 
         override fun open(
@@ -548,7 +776,7 @@ class PlayerViewModelTest {
             val err = throwOnOpen
             if (err != null) throw err
             openCalls.add(url to headers)
-            return ProxySession(nextSessionUrl) {
+            return ProxySession(nextSessionUrl, nextDiagnostics) {
                 closedSessionsCount++
             }
         }

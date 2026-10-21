@@ -686,6 +686,31 @@ class StreamsViewModelTest {
         }
 
     @Test
+    fun SV_P7_playbackSelection_carriesLogoAndBackgroundUrls_fromRequest() =
+        runTest {
+            val reqWithArt =
+                sampleRequest.copy(
+                    logoUrl = "https://images.example.com/logo.png",
+                    backgroundUrl = "https://images.example.com/background.jpg",
+                )
+            val stream = createParsedStream("s1", kind = StreamKind.Direct)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(reqWithArt.type, reqWithArt.videoId, false, null) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(reqWithArt))
+            advanceUntilIdle()
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            advanceUntilIdle()
+
+            val selection = playbackSessionHolder.current.value
+            assertNotNull(selection)
+            assertEquals("https://images.example.com/logo.png", selection?.logoUrl)
+            assertEquals("https://images.example.com/background.jpg", selection?.backgroundUrl)
+        }
+
+    @Test
     fun menuActions_emitExpectedEffects() =
         runTest {
             val directStream =

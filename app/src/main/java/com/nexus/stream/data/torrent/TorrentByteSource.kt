@@ -4,6 +4,8 @@ import com.nexus.stream.data.stream.RangeByteSource
 import com.nexus.stream.data.stream.SourceIoException
 import com.nexus.stream.data.stream.SourceStallException
 import com.nexus.stream.domain.model.TorrentConfig
+import com.nexus.stream.domain.usecase.ReadWindow
+import com.nexus.stream.domain.usecase.activeReadWindows
 import com.nexus.stream.domain.usecase.needsReprioritize
 import com.nexus.stream.domain.usecase.piecesForRange
 import com.nexus.stream.domain.usecase.windowPieces
@@ -17,12 +19,16 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 data class StreamReadConfig(
     val windowBytes: Long = TorrentConfig.STREAM_WINDOW_BYTES,
     val pollIntervalMs: Long = TorrentConfig.STREAM_POLL_MS,
     val stallTimeoutMs: Long = TorrentConfig.STREAM_STALL_TIMEOUT_MS,
 )
+
+private const val MAX_RECENT_READS = 16
 
 @Suppress("LongParameterList")
 class TorrentByteSource(
@@ -35,16 +41,31 @@ class TorrentByteSource(
     private val localFile: File,
     override val contentType: String,
     private val config: StreamReadConfig = StreamReadConfig(),
+    private val nowMs: () -> Long = System::currentTimeMillis,
 ) : RangeByteSource,
     Closeable {
     private val mutex = Mutex()
-    private var windowStart: Long? = null
+    private var storedWindowStarts: List<Long> = emptyList()
+
+    private val readsLock = Any()
+    private val recentReads = ArrayDeque<ReadWindow>(MAX_RECENT_READS)
+
+    @Volatile
+    var lastReadPosition: Long = 0L
+
+    private val activeWaiters = ConcurrentHashMap<Long, Long>()
+    private val waiterIdGen = AtomicLong(0L)
 
     @Volatile
     private var closed: Boolean = false
 
     private val channelLock = Any()
     private var channel: FileChannel? = null
+
+    fun currentWaitMs(): Long {
+        val earliest = activeWaiters.values.minOrNull() ?: return 0L
+        return maxOf(0L, nowMs() - earliest)
+    }
 
     override suspend fun read(
         position: Long,
@@ -57,19 +78,44 @@ class TorrentByteSource(
 
         val toRead = minOf(length.toLong(), sizeBytes - position).toInt()
         if (toRead > 0) {
-            reprioritizeIfNeeded(position)
+            val now = nowMs()
+            lastReadPosition = position
+            synchronized(readsLock) {
+                if (recentReads.size >= MAX_RECENT_READS) {
+                    recentReads.removeFirst()
+                }
+                recentReads.addLast(ReadWindow(position, now))
+            }
+            reprioritizeIfNeeded()
             awaitPieces(position, toRead.toLong())
             readFileBytes(position, buffer, offset, toRead)
         }
         return maxOf(0, toRead)
     }
 
-    private suspend fun reprioritizeIfNeeded(position: Long) {
+    private suspend fun reprioritizeIfNeeded() {
+        val now = nowMs()
+        val recentSnapshot = synchronized(readsLock) { recentReads.toList() }
+        val active = activeReadWindows(recentSnapshot, now, config.windowBytes)
+        if (active.isEmpty()) return
+
         mutex.withLock {
-            if (needsReprioritize(position, windowStart, config.windowBytes)) {
-                val pieces = windowPieces(fileOffset, sizeBytes, pieceLength, position, config.windowBytes)
+            val needsPrioritize =
+                active.size != storedWindowStarts.size ||
+                    active.any { pos ->
+                        storedWindowStarts.none { stored ->
+                            !needsReprioritize(pos, stored, config.windowBytes)
+                        }
+                    }
+
+            if (needsPrioritize) {
+                val pieces =
+                    active
+                        .flatMap { pos ->
+                            windowPieces(fileOffset, sizeBytes, pieceLength, pos, config.windowBytes)
+                        }.distinct()
                 runBackendCall { backend.prioritize(infoHash, fileIndex, pieces) }
-                windowStart = position
+                storedWindowStarts = active
             }
         }
     }
@@ -81,28 +127,35 @@ class TorrentByteSource(
         val need = piecesForRange(fileOffset, pieceLength, position, length)
         if (need.isEmpty()) return
 
-        var lastPiecesHave = -1
-        var stallElapsed = 0L
+        val waiterId = waiterIdGen.incrementAndGet()
+        val start = nowMs()
+        activeWaiters[waiterId] = start
+        try {
+            var lastPiecesHave = -1
+            var stallElapsed = 0L
 
-        while (true) {
-            if (closed) throw SourceIoException()
-            val snapshot = runBackendCall { backend.snapshot(infoHash, need) }
+            while (true) {
+                if (closed) throw SourceIoException()
+                val snapshot = runBackendCall { backend.snapshot(infoHash, need) }
 
-            if (snapshot.piecesHave >= need.size) {
-                break
+                if (snapshot.piecesHave >= need.size) {
+                    break
+                }
+
+                if (snapshot.piecesHave > lastPiecesHave) {
+                    lastPiecesHave = snapshot.piecesHave
+                    stallElapsed = 0L
+                }
+
+                delay(config.pollIntervalMs)
+                stallElapsed += config.pollIntervalMs
+
+                if (stallElapsed >= config.stallTimeoutMs) {
+                    throw SourceStallException()
+                }
             }
-
-            if (snapshot.piecesHave > lastPiecesHave) {
-                lastPiecesHave = snapshot.piecesHave
-                stallElapsed = 0L
-            }
-
-            delay(config.pollIntervalMs)
-            stallElapsed += config.pollIntervalMs
-
-            if (stallElapsed >= config.stallTimeoutMs) {
-                throw SourceStallException()
-            }
+        } finally {
+            activeWaiters.remove(waiterId)
         }
     }
 

@@ -32,3 +32,31 @@ fun formatFileSize(bytes: Long): String =
         bytes >= BYTES_IN_MB -> String.format(Locale.US, "%.1f MB", bytes / BYTES_IN_MB)
         else -> String.format(Locale.US, "%.0f KB", bytes / BYTES_IN_KB)
     }
+
+fun playerErrorMessageRes(kind: PlayerError): Int =
+    when (kind) {
+        PlayerError.UNPLAYABLE -> com.nexus.stream.R.string.error_player_unplayable
+        PlayerError.PLAYBACK_FAILED -> com.nexus.stream.R.string.error_player_failed
+        PlayerError.METERED_BLOCKED -> com.nexus.stream.R.string.error_metered_blocked
+        PlayerError.TORRENT_TIMEOUT -> com.nexus.stream.R.string.error_torrent_timeout
+        PlayerError.TORRENT_NO_VIDEO -> com.nexus.stream.R.string.error_torrent_no_video
+        PlayerError.TORRENT_STORAGE -> com.nexus.stream.R.string.error_torrent_storage
+        PlayerError.TORRENT_UNAVAILABLE -> com.nexus.stream.R.string.error_torrent_engine_unavailable
+        PlayerError.SOURCE_REFUSED -> com.nexus.stream.R.string.error_source_refused
+        PlayerError.SOURCE_NOT_FOUND -> com.nexus.stream.R.string.error_source_not_found
+        PlayerError.SOURCE_SERVER_ERROR -> com.nexus.stream.R.string.error_source_server_error
+        PlayerError.SOURCE_UNREACHABLE -> com.nexus.stream.R.string.error_source_unreachable
+        PlayerError.SOURCE_UNSUPPORTED_PATH -> com.nexus.stream.R.string.error_source_unsupported_path
+        PlayerError.OTHER -> com.nexus.stream.R.string.error_player_other
+    }
+
+fun hasStatusPlaceholder(kind: PlayerError): Boolean =
+    when (kind) {
+        PlayerError.SOURCE_REFUSED,
+        PlayerError.SOURCE_NOT_FOUND,
+        PlayerError.SOURCE_SERVER_ERROR,
+        PlayerError.SOURCE_UNREACHABLE,
+        -> true
+
+        else -> false
+    }

@@ -61,4 +61,5 @@ object TorrentConfig {
     const val STREAM_WINDOW_BYTES = 16L * 1024 * 1024
     const val STREAM_POLL_MS = 100L
     const val STREAM_STALL_TIMEOUT_MS = 30_000L
+    const val STATS_AHEAD_BYTES = 64L * 1024 * 1024
 }

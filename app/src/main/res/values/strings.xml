@@ -442,5 +442,24 @@
 
     <!-- Proxy tester strings -->
     <string name="proxy_tester_play_in_app">Play in app</string>
+
+    <!-- Player diagnostics & status strings -->
+    <string name="player_status_buffering_stats">Buffering %1$d%% • %2$s • %3$d peers</string>
+    <string name="player_status_waiting_for_stats">Waiting for stats…</string>
+    <string name="player_diag_title">Network status</string>
+    <string name="player_diag_toggle">Network status</string>
+    <string name="diag_stat_speed_label">Stream speed</string>
+    <string name="diag_stat_ahead_label">Buffered ahead</string>
+    <string name="diag_stat_downloaded_label">Downloaded</string>
+    <string name="diag_stat_peers_label">Peers connected</string>
+    <string name="diag_stat_waiting_label">Waiting for data</string>
+    <string name="player_retry">Retry</string>
+
+    <!-- Source error strings -->
+    <string name="error_source_refused">The source answered %1$d.</string>
+    <string name="error_source_not_found">The source answered %1$d (not found).</string>
+    <string name="error_source_server_error">The source answered %1$d (server error).</string>
+    <string name="error_source_unreachable">The source could not be reached (%1$d).</string>
+    <string name="error_source_unsupported_path">Unsupported stream path requested. Segmented streams such as HLS are not supported with headers yet.</string>
 </resources>
 

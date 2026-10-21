@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
+import com.nexus.stream.data.torrent.StreamStatsHub
 import com.nexus.stream.di.MainDispatcher
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
+import com.nexus.stream.domain.model.StreamStats
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
@@ -25,6 +27,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
+private const val RECOVERY_WINDOW_MS = 60_000L
+
+private val HTTP_REFUSED_STATUSES = setOf(401, 403, 429)
+private val HTTP_NOT_FOUND_STATUSES = setOf(404, 410)
+private val HTTP_UNREACHABLE_STATUSES = setOf(502, 504)
+private const val HTTP_SERVER_ERROR_MIN = 500
+private const val HTTP_SERVER_ERROR_MAX = 599
 
 sealed interface PlayerPhase {
     data object Empty : PlayerPhase
@@ -45,6 +54,7 @@ sealed interface PlayerPhase {
 
     data class Error(
         val kind: PlayerError,
+        val statusCode: Int? = null,
     ) : PlayerPhase
 }
 
@@ -63,6 +73,11 @@ enum class PlayerError {
     TORRENT_UNAVAILABLE,
     METERED_BLOCKED,
     OTHER,
+    SOURCE_REFUSED,
+    SOURCE_NOT_FOUND,
+    SOURCE_SERVER_ERROR,
+    SOURCE_UNREACHABLE,
+    SOURCE_UNSUPPORTED_PATH,
 }
 
 data class TorrentFileUi(
@@ -80,10 +95,16 @@ data class PlayerUiState(
     val isBuffering: Boolean = false,
     val isSeekable: Boolean = false,
     val controlsVisible: Boolean = true,
+    val logoUrl: String? = null,
+    val backgroundUrl: String? = null,
+    val stats: StreamStats? = null,
+    val showNetworkCard: Boolean = false,
+    val isTorrentSource: Boolean = false,
 ) {
     override fun toString(): String =
         "PlayerUiState(title=$title, phase=$phase, pos=$positionMs, dur=$durationMs, " +
-            "playing=$isPlaying, buffering=$isBuffering, seekable=$isSeekable, controls=$controlsVisible)"
+            "playing=$isPlaying, buffering=$isBuffering, seekable=$isSeekable, controls=$controlsVisible, " +
+            "showNetworkCard=$showNetworkCard, hasStats=${stats != null})"
 }
 
 sealed interface PlayerEvent {
@@ -104,10 +125,14 @@ sealed interface PlayerEvent {
     data object AllowMeteredOnce : PlayerEvent
 
     data object Retry : PlayerEvent
+
+    data object ToggleNetworkCard : PlayerEvent
+
+    data object DismissNetworkCard : PlayerEvent
 }
 
 @HiltViewModel
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class PlayerViewModel
     @Inject
     constructor(
@@ -115,10 +140,13 @@ class PlayerViewModel
         private val controllerFactory: PlayerControllerFactory,
         private val streamProxy: StreamProxy,
         private val torrentEngine: TorrentEngine,
+        private val statsHub: StreamStatsHub,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PlayerUiState())
         val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+
+        internal var nowMs: () -> Long = System::currentTimeMillis
 
         private var controller: PlayerController? = null
         private var proxySession: ProxySession? = null
@@ -127,13 +155,38 @@ class PlayerViewModel
         private var activeTorrentRequest: TorrentRequest? = null
         private var playedOnce = false
 
+        private var lastRecoveryMs: Long = -RECOVERY_WINDOW_MS
+        private var pendingResumePositionMs: Long? = null
+        private var currentStreamUrl: String? = null
+
         init {
             val selection = holder.current.value
+            val isTorrent = selection?.source is PlaybackSource.Torrent
             if (selection == null) {
                 _uiState.update { it.copy(phase = PlayerPhase.Empty) }
             } else {
-                _uiState.update { it.copy(title = selection.title) }
+                _uiState.update {
+                    it.copy(
+                        title = selection.title,
+                        logoUrl = selection.logoUrl,
+                        backgroundUrl = selection.backgroundUrl,
+                        isTorrentSource = isTorrent,
+                    )
+                }
                 startPlayback(selection)
+            }
+
+            viewModelScope.launch(mainDispatcher) {
+                statsHub.stats.collect { hubStats ->
+                    _uiState.update { current ->
+                        val activeSelection = holder.current.value
+                        val activeTorrent = activeSelection?.source is PlaybackSource.Torrent
+                        current.copy(
+                            stats = if (activeTorrent) hubStats else null,
+                            isTorrentSource = activeTorrent,
+                        )
+                    }
+                }
             }
         }
 
@@ -148,6 +201,8 @@ class PlayerViewModel
                 is PlayerEvent.PickFile -> handlePickFile(event.index)
                 PlayerEvent.AllowMeteredOnce -> handleAllowMeteredOnce()
                 PlayerEvent.Retry -> handleRetry()
+                PlayerEvent.ToggleNetworkCard -> handleToggleNetworkCard()
+                PlayerEvent.DismissNetworkCard -> handleDismissNetworkCard()
             }
         }
 
@@ -204,10 +259,31 @@ class PlayerViewModel
         }
 
         private fun handleRetry() {
-            holder.current.value?.let { selection ->
-                playedOnce = false
-                startPlayback(selection)
+            val url = currentStreamUrl
+            if (url != null) {
+                lastRecoveryMs = nowMs()
+                pendingResumePositionMs = _uiState.value.positionMs
+                _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                val ctrl =
+                    controller ?: controllerFactory.create().also {
+                        controller = it
+                        observeSnapshot(it)
+                    }
+                ctrl.play(url)
+            } else {
+                holder.current.value?.let { selection ->
+                    playedOnce = false
+                    startPlayback(selection)
+                }
             }
+        }
+
+        private fun handleToggleNetworkCard() {
+            _uiState.update { it.copy(showNetworkCard = !it.showNetworkCard) }
+        }
+
+        private fun handleDismissNetworkCard() {
+            _uiState.update { it.copy(showNetworkCard = false) }
         }
 
         private fun startPlayback(selection: PlaybackSelection) {
@@ -217,6 +293,7 @@ class PlayerViewModel
                     controller = ctrl
                     observeSnapshot(ctrl)
                     _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                    currentStreamUrl = source.url
                     ctrl.play(source.url)
                 }
 
@@ -228,6 +305,7 @@ class PlayerViewModel
                         controller = ctrl
                         observeSnapshot(ctrl)
                         _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                        currentStreamUrl = session.url
                         ctrl.play(session.url)
                     } catch (_: IllegalArgumentException) {
                         _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.UNPLAYABLE)) }
@@ -293,6 +371,7 @@ class PlayerViewModel
         private fun handleTorrentReady(state: TorrentState.Ready) {
             val localUrl = state.localUrl
             if (localUrl != null) {
+                currentStreamUrl = localUrl
                 if (!playedOnce) {
                     playedOnce = true
                     val ctrl =
@@ -336,13 +415,23 @@ class PlayerViewModel
         private fun observeSnapshot(ctrl: PlayerController) {
             viewModelScope.launch(mainDispatcher) {
                 ctrl.snapshot.collect { snap ->
+                    if (snap.failed) {
+                        handlePlaybackFailed(ctrl)
+                        return@collect
+                    }
+
+                    if (snap.isPlaying) {
+                        pendingResumePositionMs?.let { target ->
+                            if (snap.isSeekable) {
+                                pendingResumePositionMs = null
+                                ctrl.seekTo(target)
+                            }
+                        }
+                    }
+
                     _uiState.update { current ->
                         val newPhase =
                             when {
-                                snap.failed -> {
-                                    PlayerPhase.Error(PlayerError.PLAYBACK_FAILED)
-                                }
-
                                 snap.ended -> {
                                     PlayerPhase.Ended
                                 }
@@ -375,6 +464,68 @@ class PlayerViewModel
                 }
             }
         }
+
+        private fun handlePlaybackFailed(ctrl: PlayerController) {
+            val source = holder.current.value?.source
+            val isRecoverableSource =
+                source is PlaybackSource.Torrent || source is PlaybackSource.DirectWithHeaders
+
+            val now = nowMs()
+            val wasPlaying = _uiState.value.phase is PlayerPhase.Playing
+            if (wasPlaying && isRecoverableSource && (now - lastRecoveryMs >= RECOVERY_WINDOW_MS)) {
+                lastRecoveryMs = now
+                pendingResumePositionMs = _uiState.value.positionMs
+                _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                currentStreamUrl?.let { ctrl.play(it) }
+                return
+            }
+
+            val errorPhase =
+                if (source is PlaybackSource.DirectWithHeaders) {
+                    val diag = proxySession?.diagnostics?.value
+                    resolveProxyError(diag)
+                } else {
+                    PlayerPhase.Error(PlayerError.PLAYBACK_FAILED)
+                }
+
+            _uiState.update { it.copy(phase = errorPhase) }
+        }
+
+        private fun resolveProxyError(diag: com.nexus.stream.domain.repository.ProxyDiagnostics?): PlayerPhase.Error =
+            when {
+                diag != null && diag.unsupportedPathRequests > 0 -> {
+                    PlayerPhase.Error(PlayerError.SOURCE_UNSUPPORTED_PATH)
+                }
+
+                diag?.lastUpstreamStatus != null -> {
+                    val status = diag.lastUpstreamStatus
+                    when {
+                        status in HTTP_REFUSED_STATUSES -> {
+                            PlayerPhase.Error(PlayerError.SOURCE_REFUSED, status)
+                        }
+
+                        status in HTTP_NOT_FOUND_STATUSES -> {
+                            PlayerPhase.Error(PlayerError.SOURCE_NOT_FOUND, status)
+                        }
+
+                        status in HTTP_UNREACHABLE_STATUSES -> {
+                            PlayerPhase.Error(PlayerError.SOURCE_UNREACHABLE, status)
+                        }
+
+                        status in HTTP_SERVER_ERROR_MIN..HTTP_SERVER_ERROR_MAX -> {
+                            PlayerPhase.Error(PlayerError.SOURCE_SERVER_ERROR, status)
+                        }
+
+                        else -> {
+                            PlayerPhase.Error(PlayerError.PLAYBACK_FAILED, status)
+                        }
+                    }
+                }
+
+                else -> {
+                    PlayerPhase.Error(PlayerError.PLAYBACK_FAILED)
+                }
+            }
 
         private fun handleControlsTimer() {
             controlsTimerJob?.cancel()

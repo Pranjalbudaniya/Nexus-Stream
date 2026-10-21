@@ -206,4 +206,55 @@ class StreamWindowTest {
         assertEquals(1, deadlineMsFor(position = 0, stepMs = -7L))
         assertEquals(1, deadlineMsFor(position = -5, stepMs = -7L))
     }
+
+    @Test
+    fun WP11_activeReadWindows_oneReadGivesOnePosition() {
+        val recent = listOf(ReadWindow(position = 100L, lastSeenMs = 1_000L))
+        val result = activeReadWindows(recent, nowMs = 1_000L, windowBytes = 16L * mib)
+        assertEquals(listOf(100L), result)
+    }
+
+    @Test
+    fun WP12_activeReadWindows_twoReadsFarApartWithinTtl_mostRecentFirst() {
+        val recent =
+            listOf(
+                ReadWindow(position = 100L, lastSeenMs = 1_000L),
+                ReadWindow(position = 50L * mib, lastSeenMs = 2_000L),
+            )
+        val result = activeReadWindows(recent, nowMs = 2_500L, windowBytes = 16L * mib)
+        assertEquals(listOf(50L * mib, 100L), result)
+    }
+
+    @Test
+    fun WP13_activeReadWindows_ttlAndDedupeAndMaxWindows() {
+        // Read older than TTL is dropped
+        val expired = listOf(ReadWindow(position = 100L, lastSeenMs = 1_000L))
+        assertEquals(
+            emptyList<Long>(),
+            activeReadWindows(expired, nowMs = 7_000L, windowBytes = 16L * mib, ttlMs = 5_000L),
+        )
+
+        // Two reads closer than half a window -> only more recent wins
+        val window = 16L * mib
+        val closeReads =
+            listOf(
+                ReadWindow(position = 100L, lastSeenMs = 1_000L),
+                ReadWindow(position = 100L + 2L * mib, lastSeenMs = 2_000L),
+            )
+        assertEquals(listOf(100L + 2L * mib), activeReadWindows(closeReads, nowMs = 2_500L, windowBytes = window))
+
+        // Five distinct reads -> three most recent
+        val fiveDistinct =
+            listOf(
+                ReadWindow(position = 0L, lastSeenMs = 1_000L),
+                ReadWindow(position = 20L * mib, lastSeenMs = 2_000L),
+                ReadWindow(position = 40L * mib, lastSeenMs = 3_000L),
+                ReadWindow(position = 60L * mib, lastSeenMs = 4_000L),
+                ReadWindow(position = 80L * mib, lastSeenMs = 5_000L),
+            )
+        assertEquals(
+            listOf(80L * mib, 60L * mib, 40L * mib),
+            activeReadWindows(fiveDistinct, nowMs = 5_000L, windowBytes = window, maxWindows = 3),
+        )
+    }
 }
