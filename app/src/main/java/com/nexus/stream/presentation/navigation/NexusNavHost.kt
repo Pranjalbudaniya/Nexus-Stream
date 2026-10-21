@@ -1,6 +1,7 @@
 package com.nexus.stream.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -11,6 +12,8 @@ import com.nexus.stream.presentation.feature.detail.DetailScreen
 import com.nexus.stream.presentation.feature.discover.DiscoverScreen
 import com.nexus.stream.presentation.feature.home.HomeScreen
 import com.nexus.stream.presentation.feature.library.LibraryScreen
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
+import com.nexus.stream.presentation.feature.player.PlayerScreen
 import com.nexus.stream.presentation.feature.search.SearchScreen
 import com.nexus.stream.presentation.feature.settings.SettingsScreen
 
@@ -18,7 +21,14 @@ import com.nexus.stream.presentation.feature.settings.SettingsScreen
 fun NexusNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    playbackSessionHolder: PlaybackSessionHolder? = null,
 ) {
+    LaunchedEffect(playbackSessionHolder) {
+        playbackSessionHolder?.openRequests?.collect {
+            navController.navigate(Player)
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = Home,
@@ -60,6 +70,11 @@ fun NexusNavHost(
             DetailScreen(
                 onNavigateUp = { navController.navigateUp() },
                 onOpenAddons = { navController.navigate(Addons()) },
+            )
+        }
+        composable<Player> {
+            PlayerScreen(
+                onNavigateUp = { navController.navigateUp() },
             )
         }
     }

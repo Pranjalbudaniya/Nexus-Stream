@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.jlibtorrent)
     implementation(libs.jlibtorrent.android.arm64)
+    implementation(libs.libvlc.all)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.stream.R
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.EpisodeHint
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
+import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSort
@@ -21,7 +23,10 @@ import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.MagnetLink
 import com.nexus.stream.domain.usecase.StreamMatching
 import com.nexus.stream.domain.usecase.StreamOrdering
+import com.nexus.stream.domain.usecase.resolvePlaybackSource
 import com.nexus.stream.presentation.common.PlaybackRequest
+import com.nexus.stream.presentation.feature.player.PlaybackSelection
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -196,6 +201,7 @@ sealed interface StreamsEvent {
 }
 
 @HiltViewModel
+@Suppress("TooManyFunctions")
 class StreamsViewModel
     @Inject
     constructor(
@@ -203,6 +209,7 @@ class StreamsViewModel
         private val addonRepository: AddonRepository,
         private val playerPrefsRepository: PlayerPrefsRepository,
         private val playbackCapabilities: PlaybackCapabilities,
+        private val playbackSessionHolder: PlaybackSessionHolder,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(StreamsUiState())
@@ -517,36 +524,61 @@ class StreamsViewModel
                         )
                     if (candidate != null) {
                         playStream(candidate)
-                        _effects.emit(StreamsEffect.DismissSheet)
                     }
                 }
             }
         }
 
         private suspend fun playStream(stream: ParsedStream) {
-            when (stream.kind) {
-                StreamKind.Direct -> {
-                    val source = stream.stream.source as? StreamSource.Url
-                    val url = source?.url.orEmpty()
-                    val title = _uiState.value.request?.title ?: stream.displayName
-                    val headers = source?.requestHeaders.orEmpty()
-                    _effects.emit(StreamsEffect.OpenVideo(url, title, headers))
+            val req = _uiState.value.request
+            val hint =
+                if (req?.season != null && req.episode != null) {
+                    EpisodeHint(season = req.season, episode = req.episode)
+                } else {
+                    null
+                }
+            val source = resolvePlaybackSource(stream.stream.source, hint)
+            val title = req?.title ?: stream.displayName
+            when (source) {
+                is PlaybackSource.Direct,
+                is PlaybackSource.DirectWithHeaders,
+                -> {
+                    startPlayback(title, source, req)
                 }
 
-                StreamKind.Torrent -> {
+                is PlaybackSource.Torrent -> {
                     if (playbackCapabilities.supportsTorrent) {
-                        // Handled in P08
+                        startPlayback(title, source, req)
                     } else {
                         _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
                     }
                 }
 
-                StreamKind.ExternalLink -> {
-                    val source = stream.stream.source as? StreamSource.External
-                    val url = source?.url.orEmpty()
-                    _effects.emit(StreamsEffect.OpenExternalUrl(url))
+                is PlaybackSource.External -> {
+                    _effects.emit(StreamsEffect.OpenExternalUrl(source.url))
+                }
+
+                is PlaybackSource.Unsupported -> {
+                    _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
                 }
             }
+        }
+
+        private suspend fun startPlayback(
+            title: String,
+            source: PlaybackSource,
+            req: PlaybackRequest?,
+        ) {
+            val selection =
+                PlaybackSelection(
+                    title = title,
+                    source = source,
+                    type = req?.type ?: "movie",
+                    metaId = req?.metaId.orEmpty(),
+                    videoId = req?.videoId.orEmpty(),
+                )
+            playbackSessionHolder.start(selection)
+            _effects.emit(StreamsEffect.DismissSheet)
         }
 
         private fun handleStreamAction(event: StreamsEvent) {

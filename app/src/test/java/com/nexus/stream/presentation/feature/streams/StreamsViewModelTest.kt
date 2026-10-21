@@ -9,6 +9,7 @@ import com.nexus.stream.domain.model.DebridMark
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
+import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.StreamKind
@@ -23,6 +24,7 @@ import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.presentation.common.PlaybackRequest
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -48,11 +50,13 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class StreamsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val streamRepository = mockk<StreamRepository>()
     private val addonRepository = mockk<AddonRepository>()
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
+    private val playbackSessionHolder = PlaybackSessionHolder()
 
     private val quickPlayFlow = MutableStateFlow(false)
     private val sortFlow = MutableStateFlow(StreamSort.BEST)
@@ -160,6 +164,9 @@ class StreamsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        every {
+            streamRepository.streams(any(), any(), any(), any())
+        } returns MutableSharedFlow()
         every { playerPrefsRepository.quickPlay } returns quickPlayFlow
         every { playerPrefsRepository.sort } returns sortFlow
         every { playerPrefsRepository.preferredLanguage } returns preferredLanguageFlow
@@ -175,6 +182,7 @@ class StreamsViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
         StreamFilterMemory.reset()
+        playbackSessionHolder.clear()
     }
 
     private fun createViewModel(capabilities: PlaybackCapabilities = defaultCapabilities): StreamsViewModel =
@@ -183,6 +191,7 @@ class StreamsViewModelTest {
             addonRepository = addonRepository,
             playerPrefsRepository = playerPrefsRepository,
             playbackCapabilities = capabilities,
+            playbackSessionHolder = playbackSessionHolder,
             defaultDispatcher = testDispatcher,
         )
 
@@ -478,14 +487,16 @@ class StreamsViewModelTest {
             streamFlow.emit(StreamsState(listOf(s1), 2, 2, emptyList(), done = true))
             advanceUntilIdle()
 
-            assertEquals(2, effects.size)
-            assertTrue(effects[0] is StreamsEffect.OpenVideo)
-            assertEquals(StreamsEffect.DismissSheet, effects[1])
+            assertEquals(1, effects.size)
+            assertEquals(StreamsEffect.DismissSheet, effects[0])
+            val selection = playbackSessionHolder.current.value
+            assertNotNull(selection)
+            assertTrue(selection?.source is PlaybackSource.Direct)
 
             // Repeated done emission -> does not play twice
             streamFlow.emit(StreamsState(listOf(s1), 2, 2, emptyList(), done = true))
             advanceUntilIdle()
-            assertEquals(2, effects.size)
+            assertEquals(1, effects.size)
 
             job.cancel()
         }
@@ -516,11 +527,117 @@ class StreamsViewModelTest {
         }
 
     @Test
-    fun torrentTap_emitsExplanationEffectWhenTorrentUnsupported() =
+    fun SV_P1_directStreamWithoutHeaders_startsHolderDirect_andDismissesSheet() =
         runTest {
-            val torrentStream = createParsedStream("s1", kind = StreamKind.Torrent)
-            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = false))
+            val directStream = createParsedStream("s1", kind = StreamKind.Direct)
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
 
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(directStream))
+            advanceUntilIdle()
+
+            assertEquals(listOf(StreamsEffect.DismissSheet), effects)
+            val current = playbackSessionHolder.current.value
+            assertNotNull(current)
+            assertEquals("Test Movie", current?.title)
+            val source = current?.source as? PlaybackSource.Direct
+            assertNotNull(source)
+            assertEquals("https://example.com/video.mp4", source?.url)
+
+            job.cancel()
+        }
+
+    @Test
+    fun SV_P2_directStreamWithHeaders_startsHolderDirectWithHeaders() =
+        runTest {
+            val directWithHeadersStream =
+                createParsedStream("s2", kind = StreamKind.Direct).let {
+                    it.copy(
+                        stream =
+                            it.stream.copy(
+                                source =
+                                    StreamSource.Url(
+                                        "https://example.com/video.mp4",
+                                        mapOf("Referer" to "https://example.org"),
+                                    ),
+                            ),
+                    )
+                }
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(directWithHeadersStream))
+            advanceUntilIdle()
+
+            assertEquals(listOf(StreamsEffect.DismissSheet), effects)
+            val current = playbackSessionHolder.current.value
+            assertNotNull(current)
+            val source = current?.source as? PlaybackSource.DirectWithHeaders
+            assertNotNull(source)
+            assertEquals("https://example.com/video.mp4", source?.url)
+            assertEquals(mapOf("Referer" to "https://example.org"), source?.headers)
+
+            job.cancel()
+        }
+
+    @Test
+    fun SV_P3_torrentStreamWithSupportsTorrent_carriesEpisodeHint() =
+        runTest {
+            val seriesRequest =
+                PlaybackRequest(
+                    type = "series",
+                    metaId = "tt999",
+                    videoId = "tt999:2:5",
+                    title = "Test Series",
+                    season = 2,
+                    episode = 5,
+                )
+            val torrentStream = createParsedStream("s3", kind = StreamKind.Torrent)
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(seriesRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(torrentStream))
+            advanceUntilIdle()
+
+            assertEquals(listOf(StreamsEffect.DismissSheet), effects)
+            val current = playbackSessionHolder.current.value
+            assertNotNull(current)
+            val source = current?.source as? PlaybackSource.Torrent
+            assertNotNull(source)
+            assertEquals(2, source?.request?.episodeHint?.season)
+            assertEquals(5, source?.request?.episodeHint?.episode)
+
+            job.cancel()
+        }
+
+    @Test
+    fun SV_P4_externalLinkStream_emitsOpenExternalUrl() =
+        runTest {
+            val extStream = createParsedStream("s4", kind = StreamKind.ExternalLink)
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(extStream))
+            advanceUntilIdle()
+
+            assertEquals(listOf(StreamsEffect.OpenExternalUrl("https://example.com/video.mp4")), effects)
+            assertNull(playbackSessionHolder.current.value)
+
+            job.cancel()
+        }
+
+    @Test
+    fun SV_P5_unsupportedStream_emitsMessage_andNoHolderCall() =
+        runTest {
+            val torrentStream = createParsedStream("s5", kind = StreamKind.Torrent)
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = false))
             val effects = mutableListOf<StreamsEffect>()
             val job = launch { viewModel.effects.toList(effects) }
 
@@ -533,6 +650,37 @@ class StreamsViewModelTest {
                 R.string.streams_torrent_engine_notice,
                 (effects.first() as StreamsEffect.ShowMessage).messageRes,
             )
+            assertNull(playbackSessionHolder.current.value)
+
+            job.cancel()
+        }
+
+    @Test
+    fun SV_P6_quickPlay_picksStream_andReachesSameHolderCall() =
+        runTest {
+            quickPlayFlow.value = true
+            val s1 = createParsedStream("s1", kind = StreamKind.Direct, resolution = 1080)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(sampleRequest.type, sampleRequest.videoId, false, null) } returns
+                streamFlow
+
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            advanceUntilIdle()
+
+            streamFlow.emit(StreamsState(listOf(s1), 2, 2, emptyList(), done = true))
+            advanceUntilIdle()
+
+            assertEquals(listOf(StreamsEffect.DismissSheet), effects)
+            val current = playbackSessionHolder.current.value
+            assertNotNull(current)
+            assertEquals("Test Movie", current?.title)
+            val source = current?.source as? PlaybackSource.Direct
+            assertNotNull(source)
+            assertEquals("https://example.com/video.mp4", source?.url)
 
             job.cancel()
         }

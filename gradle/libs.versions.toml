@@ -25,6 +25,7 @@ kotlinxSerializationJson = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 coil = "3.6.3"
 jlibtorrent = "2.0.12.9"
+libvlc = "3.7.6"
 
 # Tests
 junit = "4.13.2"
@@ -66,6 +67,7 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 jlibtorrent = { module = "com.frostwire:jlibtorrent", version.ref = "jlibtorrent" }
 jlibtorrent-android-arm64 = { module = "com.frostwire:jlibtorrent-android-arm64", version.ref = "jlibtorrent" }
+libvlc-all = { module = "org.videolan.android:libvlc-all", version.ref = "libvlc" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

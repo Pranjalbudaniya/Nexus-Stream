@@ -1,8 +1,10 @@
 package com.nexus.stream.dev
 
 import androidx.lifecycle.ViewModel
+import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -14,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -22,12 +25,13 @@ import org.junit.Test
 class ProxyTesterViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val fakeProxy = FakeStreamProxy()
+    private val fakeHolder = PlaybackSessionHolder()
     private lateinit var viewModel: ProxyTesterViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        viewModel = ProxyTesterViewModel(fakeProxy)
+        viewModel = ProxyTesterViewModel(fakeProxy, fakeHolder)
     }
 
     @After
@@ -202,6 +206,51 @@ class ProxyTesterViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, fakeProxy.closedCount)
+        }
+
+    @Test
+    fun PV8_playInApp_startsHolderWithDirectOrDirectWithHeaders_andZeroLeakage() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            // With headers
+            viewModel.onEvent(ProxyTesterEvent.UrlChanged(url))
+            viewModel.onEvent(ProxyTesterEvent.HeadersChanged("X-Test: abc"))
+            viewModel.onEvent(ProxyTesterEvent.PlayInApp)
+            advanceUntilIdle()
+
+            val currentWithHeaders = fakeHolder.current.value
+            assertNotNull(currentWithHeaders)
+            assertEquals("Proxy test", currentWithHeaders?.title)
+            val sourceWithHeaders = currentWithHeaders?.source as? PlaybackSource.DirectWithHeaders
+            assertNotNull(sourceWithHeaders)
+            assertEquals(url, sourceWithHeaders?.url)
+            assertEquals(mapOf("X-Test" to "abc"), sourceWithHeaders?.headers)
+            assertFalse(
+                viewModel.uiState.value
+                    .toString()
+                    .contains(url),
+            )
+            assertFalse(
+                viewModel.uiState.value
+                    .toString()
+                    .contains("abc"),
+            )
+
+            // Without headers
+            viewModel.onEvent(ProxyTesterEvent.HeadersChanged(""))
+            viewModel.onEvent(ProxyTesterEvent.PlayInApp)
+            advanceUntilIdle()
+
+            val currentDirect = fakeHolder.current.value
+            assertNotNull(currentDirect)
+            val sourceDirect = currentDirect?.source as? PlaybackSource.Direct
+            assertNotNull(sourceDirect)
+            assertEquals(url, sourceDirect?.url)
+            assertFalse(
+                viewModel.uiState.value
+                    .toString()
+                    .contains(url),
+            )
         }
 
     private class FakeStreamProxy : StreamProxy {

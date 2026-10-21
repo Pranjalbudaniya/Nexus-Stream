@@ -28,3 +28,6 @@ data class Detail(
     val type: String,
     val id: String,
 )
+
+@Serializable
+data object Player

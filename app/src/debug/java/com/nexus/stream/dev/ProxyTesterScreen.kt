@@ -197,6 +197,14 @@ fun ProxyTesterScreen(
                         }
                     }
 
+                    NexusButton(
+                        onClick = { onEvent(ProxyTesterEvent.PlayInApp) },
+                        enabled = state.url.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.proxy_tester_play_in_app))
+                    }
+
                     NexusOutlinedButton(
                         onClick = { onEvent(ProxyTesterEvent.Stop) },
                         enabled = state.isSessionActive,

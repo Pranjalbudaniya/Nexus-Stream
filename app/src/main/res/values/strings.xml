@@ -421,5 +421,26 @@
 
     <!-- Metered network blocked error -->
     <string name="error_metered_blocked">Wi-Fi only is on and this network is metered.</string>
+
+    <!-- Player strings -->
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_seek_bar">Playback progress</string>
+    <string name="player_preparing">Preparing…</string>
+    <string name="player_fetching_metadata">Finding video details…</string>
+    <string name="player_buffering">Buffering %1$d%% (%2$d peers)</string>
+    <string name="player_buffering_no_peers">Buffering %1$d%%</string>
+    <string name="player_pick_file_title">Select video file</string>
+    <string name="player_allow_metered_once">Allow once</string>
+    <string name="error_player_unplayable">This stream cannot be played.</string>
+    <string name="error_player_failed">Playback failed.</string>
+    <string name="error_torrent_timeout">Finding video took too long.</string>
+    <string name="error_torrent_no_video">No playable video file in this torrent.</string>
+    <string name="error_torrent_storage">Not enough storage for playback buffer.</string>
+    <string name="error_torrent_engine_unavailable">Torrent engine is not available.</string>
+    <string name="error_player_other">An unexpected playback error occurred.</string>
+
+    <!-- Proxy tester strings -->
+    <string name="proxy_tester_play_in_app">Play in app</string>
 </resources>
 

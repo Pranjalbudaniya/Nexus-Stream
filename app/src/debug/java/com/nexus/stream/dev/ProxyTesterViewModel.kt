@@ -2,8 +2,11 @@ package com.nexus.stream.dev
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
+import com.nexus.stream.presentation.feature.player.PlaybackSelection
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +42,8 @@ sealed interface ProxyTesterEvent {
     data object OpenInBrowser : ProxyTesterEvent
 
     data object PlayInOtherApp : ProxyTesterEvent
+
+    data object PlayInApp : ProxyTesterEvent
 
     data object Stop : ProxyTesterEvent
 }
@@ -78,6 +83,7 @@ class ProxyTesterViewModel
     @Inject
     constructor(
         private val proxy: StreamProxy,
+        private val holder: PlaybackSessionHolder,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ProxyTesterUiState())
         val uiState: StateFlow<ProxyTesterUiState> = _uiState.asStateFlow()
@@ -112,10 +118,38 @@ class ProxyTesterViewModel
                     openSession(asVideo = true)
                 }
 
+                ProxyTesterEvent.PlayInApp -> {
+                    playInApp()
+                }
+
                 ProxyTesterEvent.Stop -> {
                     stopSession()
                 }
             }
+        }
+
+        private fun playInApp() {
+            val currentUrl = _uiState.value.url.trim()
+            if (currentUrl.isEmpty()) {
+                _uiState.update { it.copy(isSessionActive = false, statusText = "Error: invalid URL") }
+                return
+            }
+            val (headers, _) = parseHeadersText(_uiState.value.headersText)
+            val source =
+                if (headers.isEmpty()) {
+                    PlaybackSource.Direct(currentUrl)
+                } else {
+                    PlaybackSource.DirectWithHeaders(currentUrl, headers)
+                }
+            holder.start(
+                PlaybackSelection(
+                    title = "Proxy test",
+                    source = source,
+                    type = "movie",
+                    metaId = "debug",
+                    videoId = "debug",
+                ),
+            )
         }
 
         private fun openSession(asVideo: Boolean) {

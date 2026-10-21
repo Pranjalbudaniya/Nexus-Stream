@@ -80,6 +80,6 @@ interface RepositoryModule {
     companion object {
         @Provides
         @Singleton
-        fun providePlaybackCapabilities(): PlaybackCapabilities = PlaybackCapabilities(supportsTorrent = false)
+        fun providePlaybackCapabilities(): PlaybackCapabilities = PlaybackCapabilities(supportsTorrent = true)
     }
 }

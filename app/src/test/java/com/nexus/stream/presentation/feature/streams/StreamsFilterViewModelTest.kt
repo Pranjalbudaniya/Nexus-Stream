@@ -7,6 +7,7 @@ import com.nexus.stream.domain.model.DebridMark
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
+import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.ResourceSpec
 import com.nexus.stream.domain.model.Stream
 import com.nexus.stream.domain.model.StreamKind
@@ -19,6 +20,7 @@ import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.presentation.common.PlaybackRequest
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -48,6 +50,7 @@ class StreamsFilterViewModelTest {
     private val streamRepository = mockk<StreamRepository>()
     private val addonRepository = mockk<AddonRepository>()
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
+    private val playbackSessionHolder = PlaybackSessionHolder()
 
     private val quickPlayFlow = MutableStateFlow(false)
     private val sortFlow = MutableStateFlow(StreamSort.BEST)
@@ -164,6 +167,7 @@ class StreamsFilterViewModelTest {
             addonRepository = addonRepository,
             playerPrefsRepository = playerPrefsRepository,
             playbackCapabilities = defaultCapabilities,
+            playbackSessionHolder = playbackSessionHolder,
             defaultDispatcher = testDispatcher,
         )
 
@@ -306,9 +310,12 @@ class StreamsFilterViewModelTest {
             viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
             advanceUntilIdle()
 
-            val openVideo = effects.filterIsInstance<StreamsEffect.OpenVideo>().firstOrNull()
-            assertNotNull(openVideo)
-            assertEquals("https://example.com/s2.mp4", openVideo?.url)
+            val dismiss = effects.filterIsInstance<StreamsEffect.DismissSheet>().firstOrNull()
+            assertNotNull(dismiss)
+            val current = playbackSessionHolder.current.value
+            assertNotNull(current)
+            val source = current?.source as? PlaybackSource.Direct
+            assertEquals("https://example.com/s2.mp4", source?.url)
 
             job.cancel()
         }

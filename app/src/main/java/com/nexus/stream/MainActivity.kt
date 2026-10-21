@@ -12,16 +12,21 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.nexus.stream.data.remote.addon.AddonUrlBuilder
 import com.nexus.stream.presentation.common.OneShot
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import com.nexus.stream.presentation.navigation.NexusApp
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.ThemeUiState
 import com.nexus.stream.presentation.theme.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
     private val deepLinkHolder = OneShot<String>()
+
+    @Inject
+    lateinit var playbackSessionHolder: PlaybackSessionHolder
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,7 +44,10 @@ class MainActivity : ComponentActivity() {
                         )
                     NexusTheme(settings = effectiveSettings) {
                         Surface(color = MaterialTheme.colorScheme.background) {
-                            NexusApp(deepLinkHolder = deepLinkHolder)
+                            NexusApp(
+                                deepLinkHolder = deepLinkHolder,
+                                playbackSessionHolder = playbackSessionHolder,
+                            )
                         }
                     }
                 }

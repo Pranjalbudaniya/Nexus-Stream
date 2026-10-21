@@ -22,12 +22,14 @@ import androidx.navigation.compose.rememberNavController
 import com.nexus.stream.presentation.common.OneShot
 import com.nexus.stream.presentation.common.PosterActionsHost
 import com.nexus.stream.presentation.common.StreamsSheetHost
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 
 @Composable
 fun NexusApp(
     deepLinkHolder: OneShot<String>,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    playbackSessionHolder: PlaybackSessionHolder? = null,
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -101,6 +103,7 @@ fun NexusApp(
                         Modifier
                             .padding(innerPadding)
                             .consumeWindowInsets(innerPadding),
+                    playbackSessionHolder = playbackSessionHolder,
                 )
             }
         }
