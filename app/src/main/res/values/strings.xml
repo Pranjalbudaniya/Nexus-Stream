@@ -425,6 +425,8 @@
     <!-- Player strings -->
     <string name="player_play">Play</string>
     <string name="player_pause">Pause</string>
+    <string name="player_gesture_brightness">Brightness</string>
+    <string name="player_gesture_volume">Volume</string>
     <string name="player_seek_bar">Playback progress</string>
     <string name="player_preparing">Preparing…</string>
     <string name="player_fetching_metadata">Finding video details…</string>

@@ -3,6 +3,8 @@ package com.nexus.stream.presentation.feature.player
 import android.content.Context
 import android.view.View
 import androidx.lifecycle.ViewModel
+import com.nexus.stream.data.player.AudioFocusController
+import com.nexus.stream.data.player.AudioFocusEvent
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
@@ -21,6 +23,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
@@ -40,12 +43,14 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class PlayerViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val holder = PlaybackSessionHolder()
     private val fakeFactory = FakePlayerControllerFactory()
     private val fakeProxy = FakeStreamProxy()
     private val fakeEngine = FakeTorrentEngine()
+    private val fakeAudioFocus = FakeAudioFocusController()
     private val statsHub =
         com.nexus.stream.data.torrent
             .StreamStatsHub()
@@ -67,6 +72,7 @@ class PlayerViewModelTest {
             streamProxy = fakeProxy,
             torrentEngine = fakeEngine,
             statsHub = statsHub,
+            audioFocusController = fakeAudioFocus,
             mainDispatcher = testDispatcher,
         )
 
@@ -715,6 +721,301 @@ class PlayerViewModelTest {
             assertEquals(dummyStats, vmTorrent.uiState.value.stats)
         }
 
+    @Test
+    fun PL23_firstPlayingSnapshot_requestsFocusOnce_deniedCallsPause() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = false
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            assertEquals(0, fakeAudioFocus.requestCount)
+            assertEquals(0, ctrl.pauseCallCount)
+
+            // Emit first playing snapshot
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            assertEquals(1, fakeAudioFocus.requestCount)
+            assertEquals(1, ctrl.pauseCallCount)
+
+            // Subsequent playing snapshot does not request again
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, positionMs = 5000L)
+            advanceUntilIdle()
+            assertEquals(1, fakeAudioFocus.requestCount)
+        }
+
+    @Test
+    fun PL24_focusLostWhilePlaying_pausesAndAbandons_laterGainedDoesNotResume() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = true
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            val pauseBefore = ctrl.pauseCallCount
+            val abandonBefore = fakeAudioFocus.abandonCount
+            val resumeBefore = ctrl.resumeCallCount
+
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.LOST)
+            advanceUntilIdle()
+
+            assertEquals(pauseBefore + 1, ctrl.pauseCallCount)
+            assertEquals(abandonBefore + 1, fakeAudioFocus.abandonCount)
+
+            // Later GAINED does not resume
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.GAINED)
+            advanceUntilIdle()
+            assertEquals(resumeBefore, ctrl.resumeCallCount)
+        }
+
+    @Test
+    fun PL25_focusLostTransientWhilePlaying_resumesOnGained_staysPausedIfUserPaused() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = true
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            val pauseBefore = ctrl.pauseCallCount
+            val resumeBefore = ctrl.resumeCallCount
+
+            // 1. Lost transient while playing
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.LOST_TRANSIENT)
+            advanceUntilIdle()
+            assertEquals(pauseBefore + 1, ctrl.pauseCallCount)
+
+            // Gained -> resumes
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.GAINED)
+            advanceUntilIdle()
+            assertEquals(resumeBefore + 1, ctrl.resumeCallCount)
+
+            // 2. While user-paused (isPlaying is false)
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = false)
+            advanceUntilIdle()
+
+            val resumeCountBefore = ctrl.resumeCallCount
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.LOST_TRANSIENT)
+            advanceUntilIdle()
+
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.GAINED)
+            advanceUntilIdle()
+            assertEquals(resumeCountBefore, ctrl.resumeCallCount)
+        }
+
+    @Test
+    fun PL26_canDuck_noCalls() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = true
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            val pauseBefore = ctrl.pauseCallCount
+            val resumeBefore = ctrl.resumeCallCount
+            val abandonBefore = fakeAudioFocus.abandonCount
+
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.CAN_DUCK)
+            advanceUntilIdle()
+
+            assertEquals(pauseBefore, ctrl.pauseCallCount)
+            assertEquals(resumeBefore, ctrl.resumeCallCount)
+            assertEquals(abandonBefore, fakeAudioFocus.abandonCount)
+        }
+
+    @Test
+    fun PL27_becomingNoisyWhilePlaying_pauses_noResumeOnGain_whilePausedNothing() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = true
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            val pauseBefore = ctrl.pauseCallCount
+            val resumeBefore = ctrl.resumeCallCount
+
+            // Becoming noisy while playing -> pauses
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.BECOMING_NOISY)
+            advanceUntilIdle()
+            assertEquals(pauseBefore + 1, ctrl.pauseCallCount)
+
+            // Later GAINED does NOT resume
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.GAINED)
+            advanceUntilIdle()
+            assertEquals(resumeBefore, ctrl.resumeCallCount)
+
+            // While paused (isPlaying is false) -> nothing
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = false)
+            advanceUntilIdle()
+            val pauseCount = ctrl.pauseCallCount
+            fakeAudioFocus.eventsFlow.emit(AudioFocusEvent.BECOMING_NOISY)
+            advanceUntilIdle()
+            assertEquals(pauseCount, ctrl.pauseCallCount)
+        }
+
+    @Test
+    fun PL28_togglePlayToResume_requestsFocusFirst_deniedStaysPaused() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            fakeAudioFocus.requestResult = true
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            // User pauses
+            vm.onEvent(PlayerEvent.TogglePlay)
+            advanceUntilIdle()
+            assertEquals(1, ctrl.pauseCallCount)
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = false)
+            advanceUntilIdle()
+
+            // Now deny focus on resume attempt
+            fakeAudioFocus.requestResult = false
+            val reqBefore = fakeAudioFocus.requestCount
+            val resumeBefore = ctrl.resumeCallCount
+
+            vm.onEvent(PlayerEvent.TogglePlay)
+            advanceUntilIdle()
+
+            assertEquals(reqBefore + 1, fakeAudioFocus.requestCount)
+            assertEquals(resumeBefore, ctrl.resumeCallCount) // Stays paused
+
+            // When focus granted -> resumes
+            fakeAudioFocus.requestResult = true
+            vm.onEvent(PlayerEvent.TogglePlay)
+            advanceUntilIdle()
+            assertEquals(resumeBefore + 1, ctrl.resumeCallCount)
+        }
+
+    @Test
+    fun PL29_onCleared_abandonsFocusOnce() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val abandonBefore = fakeAudioFocus.abandonCount
+            vm.onCleared()
+            assertEquals(abandonBefore + 1, fakeAudioFocus.abandonCount)
+        }
+
+    @Test
+    fun PL30_seekBy_seeksWhenSeekableAndPlaying_ignoredOtherwise() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            // 1. In Preparing: ignored
+            vm.onEvent(PlayerEvent.SeekBy(10_000L))
+            advanceUntilIdle()
+            assertTrue(ctrl.seekPositions.isEmpty())
+
+            // 2. In Playing but not seekable: ignored
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = false, positionMs = 20_000L, durationMs = 100_000L)
+            advanceUntilIdle()
+            vm.onEvent(PlayerEvent.SeekBy(10_000L))
+            advanceUntilIdle()
+            assertTrue(ctrl.seekPositions.isEmpty())
+
+            // 3. In Playing and seekable: seeks
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, positionMs = 20_000L, durationMs = 100_000L)
+            advanceUntilIdle()
+            vm.onEvent(PlayerEvent.SeekBy(10_000L))
+            advanceUntilIdle()
+            assertEquals(listOf(30_000L), ctrl.seekPositions)
+
+            // 4. In Error: ignored
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            val countBefore = ctrl.seekPositions.size
+            vm.onEvent(PlayerEvent.SeekBy(10_000L))
+            advanceUntilIdle()
+            assertEquals(countBefore, ctrl.seekPositions.size)
+        }
+
+    @Test
+    fun PL31_seekBy_clampsToZeroAndDuration() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, positionMs = 5_000L, durationMs = 100_000L)
+            advanceUntilIdle()
+
+            // Seek backward past 0 -> clamps to 0
+            vm.onEvent(PlayerEvent.SeekBy(-10_000L))
+            advanceUntilIdle()
+            assertEquals(listOf(0L), ctrl.seekPositions)
+
+            // Seek forward past duration -> clamps to duration
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, positionMs = 95_000L, durationMs = 100_000L)
+            advanceUntilIdle()
+            vm.onEvent(PlayerEvent.SeekBy(10_000L))
+            advanceUntilIdle()
+            assertEquals(listOf(0L, 100_000L), ctrl.seekPositions)
+        }
+
+    @Test
+    fun PL32_privacyCheck_uiStateToStringContainsNoUrlHashOrHeader() =
+        runTest(testDispatcher) {
+            val secretUrl = "https://secret.stream.provider.com/playlist.m3u8?token=xyz123"
+            val secretHeaderVal = "Bearer secret_jwt_token_987654"
+            val secretHash = "4a5b6c7d8e9f0123456789abcdef0123456789ab"
+            holder.start(
+                PlaybackSelection(
+                    title = "Secret Movie",
+                    source = PlaybackSource.DirectWithHeaders(secretUrl, mapOf("Authorization" to secretHeaderVal)),
+                    type = "movie",
+                    metaId = "tt123",
+                    videoId = "tt123",
+                ),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val str = vm.uiState.value.toString()
+            assertFalse(str.contains(secretUrl))
+            assertFalse(str.contains(secretHeaderVal))
+            assertFalse(str.contains(secretHash))
+        }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
@@ -808,6 +1109,23 @@ class PlayerViewModelTest {
 
         override suspend fun stop(infoHash: String) {
             // No-op for tests
+        }
+    }
+
+    private class FakeAudioFocusController : AudioFocusController {
+        val eventsFlow = MutableSharedFlow<AudioFocusEvent>(extraBufferCapacity = 8)
+        override val events: SharedFlow<AudioFocusEvent> = eventsFlow
+        var requestResult: Boolean = true
+        var requestCount: Int = 0
+        var abandonCount: Int = 0
+
+        override fun request(): Boolean {
+            requestCount++
+            return requestResult
+        }
+
+        override fun abandon() {
+            abandonCount++
         }
     }
 }

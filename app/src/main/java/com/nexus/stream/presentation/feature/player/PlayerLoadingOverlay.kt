@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -37,10 +37,11 @@ import com.nexus.stream.domain.model.StreamStats
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.presentation.theme.NexusTheme
-import com.nexus.stream.presentation.theme.tokens.AmoledTokens
+import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 
 private const val PULSE_DURATION_MS = 1200
-private const val LOGO_MAX_WIDTH_FRACTION = 0.60f
+private const val LOGO_MAX_WIDTH_FRACTION = 0.20f
+private const val LOGO_MAX_HEIGHT_FRACTION = 0.25f
 private const val BACKGROUND_ALPHA = 0.35f
 private const val SEEKING_SCRIM_ALPHA = 0.60f
 
@@ -72,7 +73,7 @@ fun PlayerLoadingOverlay(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(PlayerOverlayColors.Scrim),
         contentAlignment = Alignment.Center,
     ) {
         if (!backgroundUrl.isNullOrBlank()) {
@@ -91,7 +92,7 @@ fun PlayerLoadingOverlay(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = scrimAlpha)),
+                    .background(PlayerOverlayColors.Scrim.copy(alpha = scrimAlpha)),
         )
 
         Column(
@@ -101,30 +102,35 @@ fun PlayerLoadingOverlay(
         ) {
             var logoFailed by remember(logoUrl) { mutableStateOf(false) }
 
-            if (!logoUrl.isNullOrBlank() && !logoFailed) {
-                AsyncImage(
-                    model = logoUrl,
-                    contentDescription = title,
-                    contentScale = ContentScale.Fit,
-                    onError = { logoFailed = true },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth(LOGO_MAX_WIDTH_FRACTION)
-                            .graphicsLayer { alpha = pulseAlpha },
-                )
-            } else {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth(LOGO_MAX_WIDTH_FRACTION)
-                            .graphicsLayer { alpha = pulseAlpha },
-                )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(LOGO_MAX_WIDTH_FRACTION)
+                        .fillMaxHeight(LOGO_MAX_HEIGHT_FRACTION),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!logoUrl.isNullOrBlank() && !logoFailed) {
+                    AsyncImage(
+                        model = logoUrl,
+                        contentDescription = title,
+                        contentScale = ContentScale.Fit,
+                        onError = { logoFailed = true },
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = pulseAlpha },
+                    )
+                } else {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = PlayerOverlayColors.Content,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer { alpha = pulseAlpha },
+                    )
+                }
             }
 
             val statusText = buildStatusText(phase, stats)
@@ -133,7 +139,7 @@ fun PlayerLoadingOverlay(
                 Text(
                     text = statusText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = PlayerOverlayColors.ContentSecondary,
                     textAlign = TextAlign.Center,
                 )
             }

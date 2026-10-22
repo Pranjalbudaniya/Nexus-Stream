@@ -2,6 +2,8 @@ package com.nexus.stream.presentation.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.data.player.AudioFocusController
+import com.nexus.stream.data.player.AudioFocusEvent
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.torrent.StreamStatsHub
@@ -114,6 +116,10 @@ sealed interface PlayerEvent {
         val ms: Long,
     ) : PlayerEvent
 
+    data class SeekBy(
+        val deltaMs: Long,
+    ) : PlayerEvent
+
     data object ToggleControls : PlayerEvent
 
     data object AppStopped : PlayerEvent
@@ -141,6 +147,7 @@ class PlayerViewModel
         private val streamProxy: StreamProxy,
         private val torrentEngine: TorrentEngine,
         private val statsHub: StreamStatsHub,
+        private val audioFocusController: AudioFocusController,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PlayerUiState())
@@ -158,6 +165,8 @@ class PlayerViewModel
         private var lastRecoveryMs: Long = -RECOVERY_WINDOW_MS
         private var pendingResumePositionMs: Long? = null
         private var currentStreamUrl: String? = null
+        private var focusRequestedForCurrentPlayback = false
+        private var resumeOnGain = false
 
         init {
             val selection = holder.current.value
@@ -188,6 +197,42 @@ class PlayerViewModel
                     }
                 }
             }
+
+            viewModelScope.launch(mainDispatcher) {
+                audioFocusController.events.collect { event ->
+                    when (event) {
+                        AudioFocusEvent.LOST -> {
+                            resumeOnGain = false
+                            controller?.pause()
+                            audioFocusController.abandon()
+                        }
+
+                        AudioFocusEvent.LOST_TRANSIENT -> {
+                            val wasPlaying = controller?.snapshot?.value?.isPlaying == true
+                            resumeOnGain = wasPlaying
+                            controller?.pause()
+                        }
+
+                        AudioFocusEvent.GAINED -> {
+                            if (resumeOnGain) {
+                                resumeOnGain = false
+                                controller?.resume()
+                            }
+                        }
+
+                        AudioFocusEvent.CAN_DUCK -> {
+                            // Ignored per spec §4.3
+                        }
+
+                        AudioFocusEvent.BECOMING_NOISY -> {
+                            if (controller?.snapshot?.value?.isPlaying == true) {
+                                resumeOnGain = false
+                                controller?.pause()
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         fun getController(): PlayerController? = controller
@@ -196,6 +241,7 @@ class PlayerViewModel
             when (event) {
                 PlayerEvent.TogglePlay -> handleTogglePlay()
                 is PlayerEvent.SeekTo -> handleSeekTo(event.ms)
+                is PlayerEvent.SeekBy -> handleSeekBy(event.deltaMs)
                 PlayerEvent.ToggleControls -> handleToggleControls()
                 PlayerEvent.AppStopped -> handleAppStopped()
                 is PlayerEvent.PickFile -> handlePickFile(event.index)
@@ -211,7 +257,10 @@ class PlayerViewModel
                 if (ctrl.snapshot.value.isPlaying) {
                     ctrl.pause()
                 } else {
-                    ctrl.resume()
+                    val granted = audioFocusController.request()
+                    if (granted) {
+                        ctrl.resume()
+                    }
                 }
             }
         }
@@ -220,7 +269,18 @@ class PlayerViewModel
             controller?.let { ctrl ->
                 if (ctrl.snapshot.value.isSeekable) {
                     ctrl.seekTo(ms)
+                    handleControlsTimer()
                 }
+            }
+        }
+
+        private fun handleSeekBy(deltaMs: Long) {
+            val state = _uiState.value
+            val validPhase = state.phase is PlayerPhase.Playing || state.phase is PlayerPhase.Ended
+            if (state.isSeekable && validPhase) {
+                val target = seekTarget(state.positionMs, state.durationMs, deltaMs)
+                controller?.seekTo(target)
+                handleControlsTimer()
             }
         }
 
@@ -269,7 +329,7 @@ class PlayerViewModel
                         controller = it
                         observeSnapshot(it)
                     }
-                ctrl.play(url)
+                playUrl(ctrl, url)
             } else {
                 holder.current.value?.let { selection ->
                     playedOnce = false
@@ -294,7 +354,7 @@ class PlayerViewModel
                     observeSnapshot(ctrl)
                     _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
                     currentStreamUrl = source.url
-                    ctrl.play(source.url)
+                    playUrl(ctrl, source.url)
                 }
 
                 is PlaybackSource.DirectWithHeaders -> {
@@ -306,7 +366,7 @@ class PlayerViewModel
                         observeSnapshot(ctrl)
                         _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
                         currentStreamUrl = session.url
-                        ctrl.play(session.url)
+                        playUrl(ctrl, session.url)
                     } catch (_: IllegalArgumentException) {
                         _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.UNPLAYABLE)) }
                     }
@@ -379,7 +439,7 @@ class PlayerViewModel
                             controller = it
                             observeSnapshot(it)
                         }
-                    ctrl.play(localUrl)
+                    playUrl(ctrl, localUrl)
                 }
             } else {
                 _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.OTHER)) }
@@ -412,6 +472,14 @@ class PlayerViewModel
                 }
             }
 
+        private fun playUrl(
+            ctrl: PlayerController,
+            url: String,
+        ) {
+            focusRequestedForCurrentPlayback = false
+            ctrl.play(url)
+        }
+
         private fun observeSnapshot(ctrl: PlayerController) {
             viewModelScope.launch(mainDispatcher) {
                 ctrl.snapshot.collect { snap ->
@@ -421,6 +489,13 @@ class PlayerViewModel
                     }
 
                     if (snap.isPlaying) {
+                        if (!focusRequestedForCurrentPlayback) {
+                            focusRequestedForCurrentPlayback = true
+                            val granted = audioFocusController.request()
+                            if (!granted) {
+                                ctrl.pause()
+                            }
+                        }
                         pendingResumePositionMs?.let { target ->
                             if (snap.isSeekable) {
                                 pendingResumePositionMs = null
@@ -476,7 +551,7 @@ class PlayerViewModel
                 lastRecoveryMs = now
                 pendingResumePositionMs = _uiState.value.positionMs
                 _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
-                currentStreamUrl?.let { ctrl.play(it) }
+                currentStreamUrl?.let { playUrl(ctrl, it) }
                 return
             }
 
@@ -543,12 +618,13 @@ class PlayerViewModel
             }
         }
 
-        override fun onCleared() {
+        public override fun onCleared() {
             super.onCleared()
             controlsTimerJob?.cancel()
             torrentJob?.cancel()
             proxySession?.close()
             proxySession = null
+            audioFocusController.abandon()
             controller?.release()
             controller = null
             holder.clear()

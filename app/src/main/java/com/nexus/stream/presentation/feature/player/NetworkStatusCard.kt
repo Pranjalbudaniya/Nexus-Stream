@@ -28,7 +28,7 @@ import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
-import com.nexus.stream.presentation.theme.tokens.AmoledTokens
+import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 
 private const val PERCENT_MULTIPLIER = 100
 private const val WAIT_MS_THRESHOLD = 1000L
@@ -45,7 +45,7 @@ fun NetworkStatusCard(
         shape = NexusTheme.shapes.card,
         colors =
             CardDefaults.cardColors(
-                containerColor = AmoledTokens.surfaceContainerHigh.copy(alpha = 0.92f),
+                containerColor = PlayerOverlayColors.Card,
             ),
         modifier = modifier.widthIn(max = CARD_MAX_WIDTH),
     ) {
@@ -61,7 +61,7 @@ fun NetworkStatusCard(
                 Text(
                     text = stringResource(R.string.player_diag_title),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = PlayerOverlayColors.Content,
                 )
                 NexusIconButton(
                     onClick = onDismiss,
@@ -69,7 +69,7 @@ fun NetworkStatusCard(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = stringResource(R.string.btn_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = PlayerOverlayColors.ContentSecondary,
                     )
                 }
             }
@@ -80,7 +80,7 @@ fun NetworkStatusCard(
                 Text(
                     text = stringResource(R.string.player_status_waiting_for_stats),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = PlayerOverlayColors.ContentSecondary,
                 )
             } else {
                 val speedText = formatFileSize(stats.speedBps) + "/s"
@@ -126,13 +126,13 @@ private fun StatRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = PlayerOverlayColors.ContentSecondary,
         )
         Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = if (isWarning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            color = if (isWarning) MaterialTheme.colorScheme.error else PlayerOverlayColors.Content,
         )
     }
 }

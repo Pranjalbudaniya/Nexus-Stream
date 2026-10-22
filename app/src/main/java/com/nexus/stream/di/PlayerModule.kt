@@ -1,5 +1,7 @@
 package com.nexus.stream.di
 
+import com.nexus.stream.data.player.AndroidAudioFocusController
+import com.nexus.stream.data.player.AudioFocusController
 import com.nexus.stream.data.player.LibVlcPlayerFactory
 import com.nexus.stream.data.player.PlayerControllerFactory
 import dagger.Binds
@@ -14,4 +16,8 @@ interface PlayerModule {
     @Binds
     @Singleton
     fun bindPlayerControllerFactory(impl: LibVlcPlayerFactory): PlayerControllerFactory
+
+    @Binds
+    @Singleton
+    fun bindAudioFocusController(impl: AndroidAudioFocusController): AudioFocusController
 }

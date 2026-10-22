@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,11 +28,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -61,10 +68,9 @@ import com.nexus.stream.R
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.presentation.common.NexusButton
-import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
-import com.nexus.stream.presentation.theme.tokens.AmoledTokens
+import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 
 private const val PICK_FILE_CARD_WIDTH_FRACTION = 0.7f
 private val PICK_FILE_LIST_MAX_HEIGHT = 200.dp
@@ -91,6 +97,9 @@ fun PlayerScreen(
                     val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                     insetsController.show(WindowInsetsCompat.Type.systemBars())
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    val lp = window.attributes
+                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    window.attributes = lp
                 }
             }
         }
@@ -110,11 +119,24 @@ fun PlayerScreen(
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
         onDispose {
             restoreChrome()
+        }
+    }
+
+    val shouldKeepScreenOn = uiState.isPlaying && uiState.phase is PlayerPhase.Playing
+    DisposableEffect(shouldKeepScreenOn, window) {
+        if (window != null) {
+            if (shouldKeepScreenOn) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -142,6 +164,7 @@ fun PlayerScreen(
         onNavigateUp = handleBack,
         onTogglePlay = { viewModel.onEvent(PlayerEvent.TogglePlay) },
         onSeekTo = { viewModel.onEvent(PlayerEvent.SeekTo(it)) },
+        onSeekBy = { viewModel.onEvent(PlayerEvent.SeekBy(it)) },
         onToggleControls = { viewModel.onEvent(PlayerEvent.ToggleControls) },
         onPickFile = { viewModel.onEvent(PlayerEvent.PickFile(it)) },
         onAllowMeteredOnce = { viewModel.onEvent(PlayerEvent.AllowMeteredOnce) },
@@ -160,6 +183,7 @@ internal fun PlayerScreenContent(
     onNavigateUp: () -> Unit,
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onSeekBy: (Long) -> Unit = {},
     onToggleControls: () -> Unit,
     onPickFile: (Int) -> Unit,
     onAllowMeteredOnce: () -> Unit,
@@ -174,81 +198,78 @@ internal fun PlayerScreenContent(
         uiState.phase is PlayerPhase.Preparing ||
             (uiState.phase is PlayerPhase.Playing && uiState.isBuffering)
 
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(AmoledTokens.background),
-    ) {
-        if (surfaceFactory != null) {
-            AndroidView(
-                factory = surfaceFactory,
-                onRelease = { surfaceRelease?.invoke() },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
+    CompositionLocalProvider(LocalContentColor provides PlayerOverlayColors.Content) {
         Box(
             modifier =
-                Modifier
+                modifier
                     .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        onToggleControls()
-                    },
-        )
-
-        if (showLoadingOverlay) {
-            PlayerLoadingOverlay(
-                title = uiState.title,
-                logoUrl = uiState.logoUrl,
-                backgroundUrl = uiState.backgroundUrl,
-                phase = uiState.phase,
-                stats = uiState.stats,
-            )
-        }
-
-        AnimatedVisibility(
-            visible = uiState.controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize(),
+                    .background(PlayerOverlayColors.Scrim),
         ) {
-            PlayerControlsOverlay(
-                uiState = uiState,
-                showCenterPlay = !showLoadingOverlay,
-                onNavigateUp = onNavigateUp,
-                onTogglePlay = onTogglePlay,
-                onSeekTo = onSeekTo,
-                onToggleNetworkCard = onToggleNetworkCard,
-            )
-        }
-
-        if (uiState.showNetworkCard && uiState.isTorrentSource) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(top = NETWORK_CARD_TOP_PADDING, end = NexusTheme.spacing.md),
-                contentAlignment = Alignment.TopEnd,
-            ) {
-                NetworkStatusCard(
-                    stats = uiState.stats,
-                    onDismiss = onDismissNetworkCard,
+            if (surfaceFactory != null) {
+                AndroidView(
+                    factory = surfaceFactory,
+                    onRelease = { surfaceRelease?.invoke() },
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
 
-        PlayerStateOverlay(
-            phase = uiState.phase,
-            onNavigateUp = onNavigateUp,
-            onPickFile = onPickFile,
-            onAllowMeteredOnce = onAllowMeteredOnce,
-            onRetry = onRetry,
-            modifier = Modifier.align(Alignment.Center),
-        )
+            PlayerGestureLayer(
+                isActive = uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended,
+                isSeekable = uiState.isSeekable,
+                onToggleControls = onToggleControls,
+                onSeekBy = onSeekBy,
+            )
+
+            if (showLoadingOverlay) {
+                PlayerLoadingOverlay(
+                    title = uiState.title,
+                    logoUrl = uiState.logoUrl,
+                    backgroundUrl = uiState.backgroundUrl,
+                    phase = uiState.phase,
+                    stats = uiState.stats,
+                )
+            }
+
+            AnimatedVisibility(
+                visible = uiState.controlsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                PlayerControlsOverlay(
+                    uiState = uiState,
+                    showCenterPlay = !showLoadingOverlay,
+                    onNavigateUp = onNavigateUp,
+                    onTogglePlay = onTogglePlay,
+                    onSeekTo = onSeekTo,
+                    onToggleNetworkCard = onToggleNetworkCard,
+                )
+            }
+
+            if (uiState.showNetworkCard && uiState.isTorrentSource) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(top = NETWORK_CARD_TOP_PADDING, end = NexusTheme.spacing.md),
+                    contentAlignment = Alignment.TopEnd,
+                ) {
+                    NetworkStatusCard(
+                        stats = uiState.stats,
+                        onDismiss = onDismissNetworkCard,
+                    )
+                }
+            }
+
+            PlayerStateOverlay(
+                phase = uiState.phase,
+                onNavigateUp = onNavigateUp,
+                onPickFile = onPickFile,
+                onAllowMeteredOnce = onAllowMeteredOnce,
+                onRetry = onRetry,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
     }
 }
 
@@ -263,17 +284,22 @@ private fun PlayerControlsOverlay(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)),
+        modifier = modifier.fillMaxSize(),
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .padding(NexusTheme.spacing.md),
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    PlayerOverlayColors.Scrim.copy(alpha = 0.60f),
+                                    Color.Transparent,
+                                ),
+                        ),
+                    ).padding(NexusTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NexusIconButton(
@@ -282,14 +308,14 @@ private fun PlayerControlsOverlay(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.navigate_up),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = PlayerOverlayColors.Content,
                 )
             }
             Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
             Text(
                 text = uiState.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = PlayerOverlayColors.Content,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -302,7 +328,7 @@ private fun PlayerControlsOverlay(
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = stringResource(R.string.player_diag_toggle),
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = PlayerOverlayColors.Content,
                     )
                 }
             }
@@ -320,14 +346,14 @@ private fun PlayerControlsOverlay(
                     Icon(
                         painter = painterResource(R.drawable.ic_pause),
                         contentDescription = stringResource(R.string.player_pause),
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = PlayerOverlayColors.Content,
                         modifier = Modifier.size(48.dp),
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = stringResource(R.string.player_play),
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = PlayerOverlayColors.Content,
                         modifier = Modifier.size(48.dp),
                     )
                 }
@@ -339,13 +365,21 @@ private fun PlayerControlsOverlay(
                 Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(NexusTheme.spacing.md),
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    Color.Transparent,
+                                    PlayerOverlayColors.Scrim.copy(alpha = 0.60f),
+                                ),
+                        ),
+                    ).padding(NexusTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = formatPlaybackTime(uiState.positionMs),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = PlayerOverlayColors.Content,
             )
 
             val duration = uiState.durationMs
@@ -367,6 +401,12 @@ private fun PlayerControlsOverlay(
                     }
                 },
                 enabled = uiState.isSeekable && duration > 0,
+                colors =
+                    SliderDefaults.colors(
+                        thumbColor = PlayerOverlayColors.Content,
+                        activeTrackColor = PlayerOverlayColors.Content,
+                        inactiveTrackColor = PlayerOverlayColors.Content.copy(alpha = 0.30f),
+                    ),
                 modifier =
                     Modifier
                         .weight(1f)
@@ -376,7 +416,7 @@ private fun PlayerControlsOverlay(
             Text(
                 text = formatPlaybackTime(duration),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = PlayerOverlayColors.Content,
             )
         }
     }
@@ -416,7 +456,12 @@ private fun PlayerPickFileOverlay(
     onPickFile: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NexusCard(
+    Card(
+        shape = NexusTheme.shapes.card,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = PlayerOverlayColors.Card,
+            ),
         modifier =
             modifier
                 .padding(NexusTheme.spacing.xl)
@@ -429,7 +474,7 @@ private fun PlayerPickFileOverlay(
             Text(
                 text = stringResource(R.string.player_pick_file_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = PlayerOverlayColors.Content,
             )
             LazyColumn(
                 modifier = Modifier.heightIn(max = PICK_FILE_LIST_MAX_HEIGHT),
@@ -448,7 +493,7 @@ private fun PlayerPickFileOverlay(
                         Text(
                             text = file.name,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = PlayerOverlayColors.Content,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -456,7 +501,7 @@ private fun PlayerPickFileOverlay(
                         Text(
                             text = formatFileSize(file.sizeBytes),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = PlayerOverlayColors.ContentSecondary,
                         )
                     }
                 }
@@ -484,43 +529,67 @@ private fun PlayerErrorOverlay(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Card(
+        shape = NexusTheme.shapes.card,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = PlayerOverlayColors.Card,
+            ),
         modifier = modifier.padding(NexusTheme.spacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
     ) {
-        val errorMessage = resolveErrorMessage(phase)
-        Text(
-            text = errorMessage,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
+        Column(
+            modifier = Modifier.padding(NexusTheme.spacing.lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
         ) {
-            NexusButton(
-                onClick = onNavigateUp,
+            val errorMessage = resolveErrorMessage(phase)
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodyLarge,
+                color = PlayerOverlayColors.Content,
+                textAlign = TextAlign.Center,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
             ) {
-                Text(text = stringResource(R.string.navigate_up))
-            }
-            NexusButton(
-                onClick = onRetry,
-            ) {
-                Text(text = stringResource(R.string.player_retry))
-            }
-            if (phase.kind == PlayerError.METERED_BLOCKED) {
                 NexusButton(
-                    onClick = onAllowMeteredOnce,
+                    onClick = onNavigateUp,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = PlayerOverlayColors.Content,
+                            contentColor = PlayerOverlayColors.OnContent,
+                        ),
                 ) {
-                    Text(text = stringResource(R.string.player_allow_metered_once))
+                    Text(text = stringResource(R.string.navigate_up))
+                }
+                NexusButton(
+                    onClick = onRetry,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = PlayerOverlayColors.Content,
+                            contentColor = PlayerOverlayColors.OnContent,
+                        ),
+                ) {
+                    Text(text = stringResource(R.string.player_retry))
+                }
+                if (phase.kind == PlayerError.METERED_BLOCKED) {
+                    NexusButton(
+                        onClick = onAllowMeteredOnce,
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = PlayerOverlayColors.Content,
+                                contentColor = PlayerOverlayColors.OnContent,
+                            ),
+                    ) {
+                        Text(text = stringResource(R.string.player_allow_metered_once))
+                    }
                 }
             }
         }
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? =
+internal tailrec fun Context.findActivity(): Activity? =
     when (this) {
         is Activity -> this
         is ContextWrapper -> baseContext.findActivity()
