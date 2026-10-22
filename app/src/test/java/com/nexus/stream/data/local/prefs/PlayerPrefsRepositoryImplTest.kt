@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nexus.stream.domain.model.StreamSort
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,31 @@ class PlayerPrefsRepositoryImplTest {
             assertNull(repo.preferredLanguage.first())
             assertNull(repo.preferredQuality.first())
             assertFalse(repo.hideCam.first())
+            assertEquals(10, repo.seekStepSeconds.first())
+        }
+
+    @Test
+    fun PP1_PP2_PP3_PP4_seekStepSecondsBehavior() =
+        runTest {
+            val (repo, dataStore) = createRepository(this, "seek_step_prefs.preferences_pb")
+            // PP1: default 10
+            assertEquals(10, repo.seekStepSeconds.first())
+
+            // PP2: set 15 reads 15
+            repo.setSeekStepSeconds(15)
+            assertEquals(15, repo.seekStepSeconds.first())
+
+            // PP3: stored 7 reads 10
+            dataStore.edit { prefs ->
+                prefs[intPreferencesKey("seek_step_seconds")] = 7
+            }
+            assertEquals(10, repo.seekStepSeconds.first())
+
+            // PP4: setSeekStepSeconds(7) is ignored
+            repo.setSeekStepSeconds(20)
+            assertEquals(20, repo.seekStepSeconds.first())
+            repo.setSeekStepSeconds(7)
+            assertEquals(20, repo.seekStepSeconds.first())
         }
 
     @Test

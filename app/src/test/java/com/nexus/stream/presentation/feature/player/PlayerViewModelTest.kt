@@ -10,10 +10,12 @@ import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
+import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
@@ -51,6 +53,7 @@ class PlayerViewModelTest {
     private val fakeProxy = FakeStreamProxy()
     private val fakeEngine = FakeTorrentEngine()
     private val fakeAudioFocus = FakeAudioFocusController()
+    private val fakePrefs = FakePlayerPrefsRepository()
     private val statsHub =
         com.nexus.stream.data.torrent
             .StreamStatsHub()
@@ -73,6 +76,7 @@ class PlayerViewModelTest {
             torrentEngine = fakeEngine,
             statsHub = statsHub,
             audioFocusController = fakeAudioFocus,
+            playerPrefsRepository = fakePrefs,
             mainDispatcher = testDispatcher,
         )
 
@@ -1016,6 +1020,165 @@ class PlayerViewModelTest {
             assertFalse(str.contains(secretHash))
         }
 
+    @Test
+    fun PL33_holdSpeed_whilePlaying_startsAndReleases() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val viewModel = createViewModel()
+            val ctrl = fakeFactory.createdControllers.first()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f), ctrl.rateCalls)
+            assertTrue(viewModel.uiState.value.holdSpeed)
+
+            viewModel.onEvent(PlayerEvent.HoldSpeed(false))
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f, 1.0f), ctrl.rateCalls)
+            assertFalse(viewModel.uiState.value.holdSpeed)
+        }
+
+    @Test
+    fun PL34_holdSpeed_whileNotPlaying_ignored() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val viewModel = createViewModel()
+            val ctrl = fakeFactory.createdControllers.first()
+
+            // 1. Preparing
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertTrue(ctrl.rateCalls.isEmpty())
+            assertFalse(viewModel.uiState.value.holdSpeed)
+
+            // 2. Buffering before play (isPlaying = false, isBuffering = true)
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = false, isBuffering = true)
+            advanceUntilIdle()
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertTrue(ctrl.rateCalls.isEmpty())
+            assertFalse(viewModel.uiState.value.holdSpeed)
+
+            // 3. Paused (phase Playing, but isPlaying = false)
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = false)
+            advanceUntilIdle()
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertTrue(ctrl.rateCalls.isEmpty())
+            assertFalse(viewModel.uiState.value.holdSpeed)
+
+            // 4. Ended
+            ctrl.snapshotFlow.value = PlayerSnapshot(ended = true, isPlaying = false)
+            advanceUntilIdle()
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertTrue(ctrl.rateCalls.isEmpty())
+            assertFalse(viewModel.uiState.value.holdSpeed)
+        }
+
+    @Test
+    fun PL35_holdActive_thenPauseOrEndOrFailure_resetsRate() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val viewModel = createViewModel()
+            val ctrl = fakeFactory.createdControllers.first()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            // Active hold
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f), ctrl.rateCalls)
+            assertTrue(viewModel.uiState.value.holdSpeed)
+
+            // Pause via TogglePlay
+            viewModel.onEvent(PlayerEvent.TogglePlay)
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f, 1.0f), ctrl.rateCalls)
+            assertFalse(viewModel.uiState.value.holdSpeed)
+
+            // Resume, hold again, then snapshot ended
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f, 1.0f, 2.0f), ctrl.rateCalls)
+            assertTrue(viewModel.uiState.value.holdSpeed)
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(ended = true, isPlaying = false)
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f, 1.0f, 2.0f, 1.0f), ctrl.rateCalls)
+            assertFalse(viewModel.uiState.value.holdSpeed)
+        }
+
+    @Test
+    fun PL36_holdSpeed_quickCycles_finalRateOne() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val viewModel = createViewModel()
+            val ctrl = fakeFactory.createdControllers.first()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            // Cycle 1
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            viewModel.onEvent(PlayerEvent.HoldSpeed(false))
+            // Cycle 2
+            viewModel.onEvent(PlayerEvent.HoldSpeed(true))
+            viewModel.onEvent(PlayerEvent.HoldSpeed(false))
+            advanceUntilIdle()
+
+            assertEquals(listOf(2.0f, 1.0f, 2.0f, 1.0f), ctrl.rateCalls)
+            assertFalse(viewModel.uiState.value.holdSpeed)
+        }
+
+    @Test
+    fun PL37_seekStepMs_followsRepository() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            assertEquals(10_000L, viewModel.uiState.value.seekStepMs)
+
+            fakePrefs.seekStepSecondsFlow.value = 15
+            advanceUntilIdle()
+            assertEquals(15_000L, viewModel.uiState.value.seekStepMs)
+        }
+
+    @Test
+    fun PL38_uiStateToString_containsNoSensitiveData() =
+        runTest(testDispatcher) {
+            val secretUrl = "https://token.stream.example.org/path/video.mp4"
+            val secretHeaderVal = "Bearer SecretTokenXYZ"
+            val secretHash = "4a5b6c7d8e9f00112233445566778899aabbccdd"
+            holder.start(
+                PlaybackSelection(
+                    title = "Secret Movie",
+                    source = PlaybackSource.DirectWithHeaders(secretUrl, mapOf("Authorization" to secretHeaderVal)),
+                    type = "movie",
+                    metaId = "m1",
+                    videoId = secretHash,
+                ),
+            )
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            val str = viewModel.uiState.value.toString()
+            assertFalse(str.contains(secretUrl))
+            assertFalse(str.contains(secretHeaderVal))
+            assertFalse(str.contains(secretHash))
+        }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
@@ -1024,6 +1187,7 @@ class PlayerViewModelTest {
         var pauseCallCount = 0
         var resumeCallCount = 0
         val seekPositions = mutableListOf<Long>()
+        val rateCalls = mutableListOf<Float>()
         var releaseCallCount = 0
 
         override fun createSurface(context: Context): View = View(context)
@@ -1048,6 +1212,10 @@ class PlayerViewModelTest {
             seekPositions.add(positionMs)
         }
 
+        override fun setRate(rate: Float) {
+            rateCalls.add(rate)
+        }
+
         override fun release() {
             releaseCallCount++
         }
@@ -1060,6 +1228,40 @@ class PlayerViewModelTest {
             val ctrl = FakePlayerController()
             createdControllers.add(ctrl)
             return ctrl
+        }
+    }
+
+    private class FakePlayerPrefsRepository : PlayerPrefsRepository {
+        val seekStepSecondsFlow = MutableStateFlow(10)
+        override val seekStepSeconds: Flow<Int> = seekStepSecondsFlow
+        override val quickPlay: Flow<Boolean> = MutableStateFlow(false)
+        override val sort: Flow<StreamSort> = MutableStateFlow(StreamSort.BEST)
+        override val preferredLanguage: Flow<String?> = MutableStateFlow(null)
+        override val preferredQuality: Flow<Int?> = MutableStateFlow(null)
+        override val hideCam: Flow<Boolean> = MutableStateFlow(false)
+
+        override suspend fun setQuickPlay(enabled: Boolean) {
+            // No-op for tests
+        }
+
+        override suspend fun setSort(sort: StreamSort) {
+            // No-op for tests
+        }
+
+        override suspend fun setPreferredLanguage(code: String?) {
+            // No-op for tests
+        }
+
+        override suspend fun setPreferredQuality(quality: Int?) {
+            // No-op for tests
+        }
+
+        override suspend fun setHideCam(hideCam: Boolean) {
+            // No-op for tests
+        }
+
+        override suspend fun setSeekStepSeconds(seconds: Int) {
+            seekStepSecondsFlow.value = seconds
         }
     }
 

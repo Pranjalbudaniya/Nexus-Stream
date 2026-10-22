@@ -74,6 +74,7 @@ internal fun SettingsContent(
     var showDisableDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showSkipLengthDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -138,18 +139,48 @@ internal fun SettingsContent(
                 hideCam = uiState.hideCam,
                 onToggle = { onEvent(SettingsEvent.SetHideCam(it)) },
             )
-            AppearanceComingSoonCard()
+            SkipLengthCard(
+                seekStepSeconds = uiState.seekStepSeconds,
+                onClick = { showSkipLengthDialog = true },
+            )
+            NexusCard(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .alpha(DISABLED_ALPHA),
+            ) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(spacing.md),
+                    verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_appearance_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_appearance_coming_soon),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         SettingsDialogs(
             showDisableDialog = showDisableDialog,
             showLanguageDialog = showLanguageDialog,
             showQualityDialog = showQualityDialog,
+            showSkipLengthDialog = showSkipLengthDialog,
             uiState = uiState,
             onEvent = onEvent,
             onDismissDisable = { showDisableDialog = false },
             onDismissLanguage = { showLanguageDialog = false },
             onDismissQuality = { showQualityDialog = false },
+            onDismissSkipLength = { showSkipLengthDialog = false },
         )
     }
 }
@@ -383,31 +414,38 @@ private fun HideCamCard(
 }
 
 @Composable
-private fun AppearanceComingSoonCard() {
+private fun SkipLengthCard(
+    seekStepSeconds: Int,
+    onClick: () -> Unit,
+) {
     val spacing = NexusTheme.spacing
     NexusCard(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .alpha(DISABLED_ALPHA),
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
     ) {
-        Column(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(spacing.md),
-            verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                text = stringResource(R.string.settings_appearance_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(R.string.settings_appearance_coming_soon),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_player_skip_length_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_player_skip_length_seconds, seekStepSeconds),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -126,6 +126,10 @@ class LibVlcPlayer(
         mediaPlayer.time = positionMs
     }
 
+    override fun setRate(rate: Float) {
+        mediaPlayer.rate = rate
+    }
+
     override fun release() {
         if (released.compareAndSet(false, true)) {
             mediaPlayer.setEventListener(null)

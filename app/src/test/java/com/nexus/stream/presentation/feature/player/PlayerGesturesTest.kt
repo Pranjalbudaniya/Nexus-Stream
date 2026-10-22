@@ -2,6 +2,7 @@ package com.nexus.stream.presentation.feature.player
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -156,5 +157,61 @@ class PlayerGesturesTest {
         assertEquals("+30 s", seekChipLabel(30_000L))
         assertEquals("-20 s", seekChipLabel(-20_000L))
         assertEquals("+10 s", seekChipLabel(10_000L))
+    }
+
+    @Test
+    fun PG11_seekChipState_tapAndTimeout() {
+        val initial = SeekChipState()
+        assertFalse(initial.visible)
+        assertEquals(0L, initial.deltaMs)
+
+        val tapped = initial.onTap(10_000L)
+        assertTrue(tapped.visible)
+        assertEquals(10_000L, tapped.deltaMs)
+
+        val timedOut = tapped.onTimeout()
+        assertFalse(timedOut.visible)
+        assertEquals(10_000L, timedOut.deltaMs)
+
+        val newTap = timedOut.onTap(10_000L)
+        assertTrue(newTap.visible)
+        assertEquals(10_000L, newTap.deltaMs)
+    }
+
+    @Test
+    fun PG12_seekChipState_labelOrNull() {
+        val zeroState = SeekChipState(deltaMs = 0L, visible = true)
+        assertNull(zeroState.labelOrNull())
+
+        val nonZeroState = SeekChipState(deltaMs = 10_000L, visible = true)
+        assertEquals("+10 s", nonZeroState.labelOrNull())
+
+        val timedOut = nonZeroState.onTimeout()
+        assertEquals("+10 s", timedOut.labelOrNull())
+    }
+
+    @Test
+    fun PG13_normalizeSeekStep_andAllowedSteps() {
+        assertEquals(listOf(5, 10, 15, 20, 30), ALLOWED_SEEK_STEPS)
+        assertEquals(10, normalizeSeekStep(7))
+        assertEquals(15, normalizeSeekStep(15))
+        assertEquals(10, normalizeSeekStep(0))
+        assertEquals(10, normalizeSeekStep(null))
+    }
+
+    @Test
+    fun PG14_indicatorSide_oppositeZone() {
+        assertEquals(GestureZone.RIGHT, indicatorSide(GestureZone.LEFT))
+        assertEquals(GestureZone.LEFT, indicatorSide(GestureZone.RIGHT))
+    }
+
+    @Test
+    fun PG15_shouldShowLoadingArtwork_phaseFiltering() {
+        assertTrue(shouldShowLoadingArtwork(PlayerPhase.Preparing(PreparingLabel.OPENING)))
+        assertFalse(shouldShowLoadingArtwork(PlayerPhase.Playing))
+        assertFalse(shouldShowLoadingArtwork(PlayerPhase.Ended))
+        assertFalse(shouldShowLoadingArtwork(PlayerPhase.Error(PlayerError.UNPLAYABLE)))
+        assertFalse(shouldShowLoadingArtwork(PlayerPhase.PickFile(emptyList())))
+        assertFalse(shouldShowLoadingArtwork(PlayerPhase.Empty))
     }
 }

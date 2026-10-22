@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
 import com.nexus.stream.domain.usecase.LanguageCodes
 import com.nexus.stream.presentation.common.NexusTextButton
+import com.nexus.stream.presentation.feature.player.ALLOWED_SEEK_STEPS
 
 private const val RES_4K = 2160
 private const val RES_1080P = 1080
@@ -33,11 +34,13 @@ internal fun SettingsDialogs(
     showDisableDialog: Boolean,
     showLanguageDialog: Boolean,
     showQualityDialog: Boolean,
+    showSkipLengthDialog: Boolean,
     uiState: SettingsUiState,
     onEvent: (SettingsEvent) -> Unit,
     onDismissDisable: () -> Unit,
     onDismissLanguage: () -> Unit,
     onDismissQuality: () -> Unit,
+    onDismissSkipLength: () -> Unit,
 ) {
     if (showDisableDialog) {
         FamilyModeDisableDialog(
@@ -68,6 +71,17 @@ internal fun SettingsDialogs(
                 onDismissQuality()
             },
             onDismiss = onDismissQuality,
+        )
+    }
+
+    if (showSkipLengthDialog) {
+        SkipLengthSelectDialog(
+            selectedSeconds = uiState.seekStepSeconds,
+            onSelect = {
+                onEvent(SettingsEvent.SetSeekStepSeconds(it))
+                onDismissSkipLength()
+            },
+            onDismiss = onDismissSkipLength,
         )
     }
 }
@@ -203,4 +217,33 @@ private fun RadioOptionRow(
         )
         RadioButton(selected = selected, onClick = null)
     }
+}
+
+@Composable
+private fun SkipLengthSelectDialog(
+    selectedSeconds: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_player_skip_length_title)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ALLOWED_SEEK_STEPS.forEach { seconds ->
+                    RadioOptionRow(
+                        label = stringResource(R.string.settings_player_skip_length_seconds, seconds),
+                        selected = selectedSeconds == seconds,
+                        onClick = { onSelect(seconds) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            NexusTextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.btn_cancel))
+            }
+        },
+    )
 }

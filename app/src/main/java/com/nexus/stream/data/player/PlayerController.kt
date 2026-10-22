@@ -29,6 +29,8 @@ interface PlayerController {
 
     fun seekTo(positionMs: Long)
 
+    fun setRate(rate: Float)
+
     fun release() // idempotent; never blocks the main thread
 }
 

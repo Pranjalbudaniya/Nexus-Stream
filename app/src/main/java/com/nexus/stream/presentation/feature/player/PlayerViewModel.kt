@@ -6,6 +6,7 @@ import com.nexus.stream.data.player.AudioFocusController
 import com.nexus.stream.data.player.AudioFocusEvent
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
+import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.data.torrent.StreamStatsHub
 import com.nexus.stream.di.MainDispatcher
 import com.nexus.stream.domain.model.AppError
@@ -14,6 +15,7 @@ import com.nexus.stream.domain.model.StreamStats
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
@@ -30,6 +32,8 @@ import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
 private const val RECOVERY_WINDOW_MS = 60_000L
+private const val HOLD_SPEED = 2.0f
+private const val NORMAL_SPEED = 1.0f
 
 private val HTTP_REFUSED_STATUSES = setOf(401, 403, 429)
 private val HTTP_NOT_FOUND_STATUSES = setOf(404, 410)
@@ -102,11 +106,14 @@ data class PlayerUiState(
     val stats: StreamStats? = null,
     val showNetworkCard: Boolean = false,
     val isTorrentSource: Boolean = false,
+    val seekStepMs: Long = 10_000L,
+    val holdSpeed: Boolean = false,
 ) {
     override fun toString(): String =
         "PlayerUiState(title=$title, phase=$phase, pos=$positionMs, dur=$durationMs, " +
             "playing=$isPlaying, buffering=$isBuffering, seekable=$isSeekable, controls=$controlsVisible, " +
-            "showNetworkCard=$showNetworkCard, hasStats=${stats != null})"
+            "showNetworkCard=$showNetworkCard, hasStats=${stats != null}, " +
+            "seekStepMs=$seekStepMs, holdSpeed=$holdSpeed)"
 }
 
 sealed interface PlayerEvent {
@@ -118,6 +125,10 @@ sealed interface PlayerEvent {
 
     data class SeekBy(
         val deltaMs: Long,
+    ) : PlayerEvent
+
+    data class HoldSpeed(
+        val active: Boolean,
     ) : PlayerEvent
 
     data object ToggleControls : PlayerEvent
@@ -148,6 +159,7 @@ class PlayerViewModel
         private val torrentEngine: TorrentEngine,
         private val statsHub: StreamStatsHub,
         private val audioFocusController: AudioFocusController,
+        private val playerPrefsRepository: PlayerPrefsRepository,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PlayerUiState())
@@ -203,6 +215,7 @@ class PlayerViewModel
                     when (event) {
                         AudioFocusEvent.LOST -> {
                             resumeOnGain = false
+                            cancelHoldSpeed()
                             controller?.pause()
                             audioFocusController.abandon()
                         }
@@ -210,6 +223,7 @@ class PlayerViewModel
                         AudioFocusEvent.LOST_TRANSIENT -> {
                             val wasPlaying = controller?.snapshot?.value?.isPlaying == true
                             resumeOnGain = wasPlaying
+                            cancelHoldSpeed()
                             controller?.pause()
                         }
 
@@ -227,10 +241,17 @@ class PlayerViewModel
                         AudioFocusEvent.BECOMING_NOISY -> {
                             if (controller?.snapshot?.value?.isPlaying == true) {
                                 resumeOnGain = false
+                                cancelHoldSpeed()
                                 controller?.pause()
                             }
                         }
                     }
+                }
+            }
+
+            viewModelScope.launch(mainDispatcher) {
+                playerPrefsRepository.seekStepSeconds.collect { seconds ->
+                    _uiState.update { it.copy(seekStepMs = seconds * 1000L) }
                 }
             }
         }
@@ -242,6 +263,7 @@ class PlayerViewModel
                 PlayerEvent.TogglePlay -> handleTogglePlay()
                 is PlayerEvent.SeekTo -> handleSeekTo(event.ms)
                 is PlayerEvent.SeekBy -> handleSeekBy(event.deltaMs)
+                is PlayerEvent.HoldSpeed -> handleHoldSpeed(event.active)
                 PlayerEvent.ToggleControls -> handleToggleControls()
                 PlayerEvent.AppStopped -> handleAppStopped()
                 is PlayerEvent.PickFile -> handlePickFile(event.index)
@@ -255,6 +277,7 @@ class PlayerViewModel
         private fun handleTogglePlay() {
             controller?.let { ctrl ->
                 if (ctrl.snapshot.value.isPlaying) {
+                    cancelHoldSpeed()
                     ctrl.pause()
                 } else {
                     val granted = audioFocusController.request()
@@ -262,6 +285,25 @@ class PlayerViewModel
                         ctrl.resume()
                     }
                 }
+            }
+        }
+
+        private fun handleHoldSpeed(active: Boolean) {
+            if (active) {
+                val state = _uiState.value
+                if (state.phase is PlayerPhase.Playing && state.isPlaying) {
+                    controller?.setRate(HOLD_SPEED)
+                    _uiState.update { it.copy(holdSpeed = true) }
+                }
+            } else {
+                cancelHoldSpeed()
+            }
+        }
+
+        private fun cancelHoldSpeed() {
+            if (_uiState.value.holdSpeed) {
+                controller?.setRate(NORMAL_SPEED)
+                _uiState.update { it.copy(holdSpeed = false) }
             }
         }
 
@@ -295,6 +337,7 @@ class PlayerViewModel
         }
 
         private fun handleAppStopped() {
+            cancelHoldSpeed()
             controller?.let { ctrl ->
                 if (ctrl.snapshot.value.isPlaying) {
                     ctrl.pause()
@@ -319,6 +362,7 @@ class PlayerViewModel
         }
 
         private fun handleRetry() {
+            cancelHoldSpeed()
             val url = currentStreamUrl
             if (url != null) {
                 lastRecoveryMs = nowMs()
@@ -484,8 +528,13 @@ class PlayerViewModel
             viewModelScope.launch(mainDispatcher) {
                 ctrl.snapshot.collect { snap ->
                     if (snap.failed) {
+                        cancelHoldSpeed()
                         handlePlaybackFailed(ctrl)
                         return@collect
+                    }
+
+                    if (snap.ended || !snap.isPlaying) {
+                        cancelHoldSpeed()
                     }
 
                     if (snap.isPlaying) {
@@ -505,34 +554,13 @@ class PlayerViewModel
                     }
 
                     _uiState.update { current ->
-                        val newPhase =
-                            when {
-                                snap.ended -> {
-                                    PlayerPhase.Ended
-                                }
-
-                                snap.isPlaying || snap.isBuffering -> {
-                                    if (current.phase is PlayerPhase.Preparing ||
-                                        current.phase is PlayerPhase.PickFile
-                                    ) {
-                                        PlayerPhase.Playing
-                                    } else {
-                                        current.phase
-                                    }
-                                }
-
-                                else -> {
-                                    current.phase
-                                }
-                            }
-
                         current.copy(
                             positionMs = snap.positionMs,
                             durationMs = snap.durationMs,
                             isPlaying = snap.isPlaying,
                             isBuffering = snap.isBuffering,
                             isSeekable = snap.isSeekable,
-                            phase = newPhase,
+                            phase = resolvePlaybackPhase(current.phase, snap),
                         )
                     }
                     handleControlsTimer()
@@ -540,7 +568,27 @@ class PlayerViewModel
             }
         }
 
+        private fun resolvePlaybackPhase(
+            currentPhase: PlayerPhase,
+            snap: PlayerSnapshot,
+        ): PlayerPhase =
+            when {
+                snap.ended -> {
+                    PlayerPhase.Ended
+                }
+
+                (snap.isPlaying || snap.isBuffering) &&
+                    (currentPhase is PlayerPhase.Preparing || currentPhase is PlayerPhase.PickFile) -> {
+                    PlayerPhase.Playing
+                }
+
+                else -> {
+                    currentPhase
+                }
+            }
+
         private fun handlePlaybackFailed(ctrl: PlayerController) {
+            cancelHoldSpeed()
             val source = holder.current.value?.source
             val isRecoverableSource =
                 source is PlaybackSource.Torrent || source is PlaybackSource.DirectWithHeaders

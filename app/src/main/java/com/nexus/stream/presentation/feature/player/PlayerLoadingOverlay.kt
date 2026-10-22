@@ -53,6 +53,7 @@ fun PlayerLoadingOverlay(
     phase: PlayerPhase,
     stats: StreamStats?,
     modifier: Modifier = Modifier,
+    showArtwork: Boolean = shouldShowLoadingArtwork(phase),
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -67,7 +68,7 @@ fun PlayerLoadingOverlay(
     )
 
     val isPreparing = phase is PlayerPhase.Preparing
-    val scrimAlpha = if (isPreparing) 1.0f else SEEKING_SCRIM_ALPHA
+    val scrimAlpha = if (showArtwork && isPreparing) 1.0f else SEEKING_SCRIM_ALPHA
 
     Box(
         modifier =
@@ -76,7 +77,7 @@ fun PlayerLoadingOverlay(
                 .background(PlayerOverlayColors.Scrim),
         contentAlignment = Alignment.Center,
     ) {
-        if (!backgroundUrl.isNullOrBlank()) {
+        if (showArtwork && !backgroundUrl.isNullOrBlank()) {
             AsyncImage(
                 model = backgroundUrl,
                 contentDescription = null,

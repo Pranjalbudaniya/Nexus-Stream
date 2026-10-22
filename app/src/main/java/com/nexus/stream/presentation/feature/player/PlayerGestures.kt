@@ -89,3 +89,28 @@ fun seekChipLabel(deltaMs: Long): String {
         "$seconds s"
     }
 }
+
+data class SeekChipState(
+    val deltaMs: Long = 0,
+    val visible: Boolean = false,
+) {
+    fun onTap(newDeltaMs: Long): SeekChipState = copy(deltaMs = newDeltaMs, visible = true)
+
+    fun onTimeout(): SeekChipState = copy(visible = false)
+
+    fun labelOrNull(): String? = if (deltaMs == 0L) null else seekChipLabel(deltaMs)
+}
+
+val ALLOWED_SEEK_STEPS = listOf(5, 10, 15, 20, 30)
+private const val DEFAULT_SEEK_STEP_SECONDS = 10
+
+fun normalizeSeekStep(value: Int?): Int =
+    if (value != null && value in ALLOWED_SEEK_STEPS) value else DEFAULT_SEEK_STEP_SECONDS
+
+fun indicatorSide(zone: GestureZone): GestureZone =
+    when (zone) {
+        GestureZone.LEFT -> GestureZone.RIGHT
+        GestureZone.RIGHT -> GestureZone.LEFT
+    }
+
+fun shouldShowLoadingArtwork(phase: PlayerPhase): Boolean = phase is PlayerPhase.Preparing

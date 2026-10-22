@@ -20,6 +20,7 @@ data class SettingsUiState(
     val preferredLanguage: String? = null,
     val preferredQuality: Int? = null,
     val hideCam: Boolean = false,
+    val seekStepSeconds: Int = 10,
 )
 
 sealed interface SettingsEvent {
@@ -42,6 +43,10 @@ sealed interface SettingsEvent {
     data class SetHideCam(
         val enabled: Boolean,
     ) : SettingsEvent
+
+    data class SetSeekStepSeconds(
+        val seconds: Int,
+    ) : SettingsEvent
 }
 
 private data class PlayerSettings(
@@ -49,6 +54,7 @@ private data class PlayerSettings(
     val preferredLanguage: String?,
     val preferredQuality: Int?,
     val hideCam: Boolean,
+    val seekStepSeconds: Int,
 )
 
 @HiltViewModel
@@ -65,8 +71,9 @@ class SettingsViewModel
                 playerPrefsRepository.preferredLanguage,
                 playerPrefsRepository.preferredQuality,
                 playerPrefsRepository.hideCam,
-            ) { quickPlay, lang, quality, hideCam ->
-                PlayerSettings(quickPlay, lang, quality, hideCam)
+                playerPrefsRepository.seekStepSeconds,
+            ) { quickPlay, lang, quality, hideCam, seekStepSeconds ->
+                PlayerSettings(quickPlay, lang, quality, hideCam, seekStepSeconds)
             }
 
         val uiState: StateFlow<SettingsUiState> =
@@ -83,6 +90,7 @@ class SettingsViewModel
                     preferredLanguage = player.preferredLanguage,
                     preferredQuality = player.preferredQuality,
                     hideCam = player.hideCam,
+                    seekStepSeconds = player.seekStepSeconds,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -119,6 +127,12 @@ class SettingsViewModel
                 is SettingsEvent.SetHideCam -> {
                     viewModelScope.launch {
                         playerPrefsRepository.setHideCam(event.enabled)
+                    }
+                }
+
+                is SettingsEvent.SetSeekStepSeconds -> {
+                    viewModelScope.launch {
+                        playerPrefsRepository.setSeekStepSeconds(event.seconds)
                     }
                 }
             }

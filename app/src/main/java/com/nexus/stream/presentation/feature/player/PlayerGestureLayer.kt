@@ -13,7 +13,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,10 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
 import com.nexus.stream.presentation.theme.NexusTheme
@@ -56,6 +62,11 @@ private const val MIN_BRIGHTNESS = 0.02f
 private val PILL_BAR_HEIGHT = 80.dp
 private val PILL_BAR_WIDTH = 4.dp
 private val PILL_ICON_SIZE = 20.dp
+private val PILL_WIDTH = 72.dp
+private val PILL_HEIGHT = 160.dp
+private val PILL_PERCENT_BOX_WIDTH = 48.dp
+private val HOLD_PILL_WIDTH = 72.dp
+private val HOLD_PILL_HEIGHT = 32.dp
 
 @Composable
 fun PlayerGestureLayer(
@@ -64,22 +75,24 @@ fun PlayerGestureLayer(
     onToggleControls: () -> Unit,
     onSeekBy: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    seekStepMs: Long = 10_000L,
+    holdSpeed: Boolean = false,
+    onHoldSpeed: (Boolean) -> Unit = {},
     window: Window? = LocalContext.current.findActivity()?.window,
     clock: () -> Long = { SystemClock.uptimeMillis() },
 ) {
     val context = LocalContext.current
-    val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
 
     val state =
-        remember(context, audioManager, window, clock, coroutineScope, onToggleControls, onSeekBy) {
+        remember(context, window, clock, coroutineScope, onToggleControls, onSeekBy, onHoldSpeed) {
             PlayerGestureState(
                 context = context,
-                audioManager = audioManager,
                 window = window,
                 clock = clock,
                 coroutineScope = coroutineScope,
                 onSeekBy = onSeekBy,
+                onHoldSpeed = onHoldSpeed,
             )
         }
 
@@ -91,46 +104,83 @@ fun PlayerGestureLayer(
                     if (!isActive) return@pointerInput
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
+                            if (state.isHoldingSpeed) return@detectVerticalDragGestures
                             state.onDragStart(offset.y, offset.x, size.height.toFloat(), size.width.toFloat())
                         },
                         onDragEnd = { state.onDragFinish() },
                         onDragCancel = { state.onDragFinish() },
                         onVerticalDrag = { change, dragAmount ->
+                            if (state.isHoldingSpeed) return@detectVerticalDragGestures
                             change.consume()
                             state.onDragMove(dragAmount, size.height.toFloat())
                         },
                     )
-                }.pointerInput(isActive, isSeekable) {
+                }.pointerInput(isActive, isSeekable, seekStepMs) {
                     detectTapGestures(
-                        onTap = { onToggleControls() },
+                        onPress = {
+                            tryAwaitRelease()
+                            if (state.isHoldingSpeed) {
+                                state.onHoldRelease()
+                            }
+                        },
+                        onLongPress = {
+                            if (isActive) {
+                                state.onLongPress()
+                            }
+                        },
+                        onTap = {
+                            if (!state.isHoldingSpeed) {
+                                onToggleControls()
+                            }
+                        },
                         onDoubleTap =
                             if (!isActive || !isSeekable) {
                                 null
                             } else {
-                                { offset -> state.onDoubleTap(offset.x, size.width.toFloat()) }
+                                { offset ->
+                                    if (!state.isHoldingSpeed) {
+                                        state.onDoubleTap(offset.x, offset.y, size.width.toFloat(), seekStepMs)
+                                    }
+                                }
                             },
                     )
                 },
     ) {
-        SeekChipOverlay(visible = state.isChipVisible, zone = state.chipZone, deltaMs = state.accumulatedDelta)
-        IndicatorPillOverlay(visible = state.isPillVisible, zone = state.activePillZone, level = state.currentLevel)
+        SeekFeedback(
+            state = state.seekChipState,
+            zone = state.seekChipZone,
+            tapPoint = state.seekTapPoint,
+            triggerCount = state.seekTriggerCount,
+        )
+        IndicatorPillOverlay(
+            visible = state.isPillVisible,
+            zone = state.activePillZone,
+            level = state.currentLevel,
+        )
+        HoldSpeedPillOverlay(
+            visible = holdSpeed,
+        )
     }
 }
 
 private class PlayerGestureState(
     private val context: Context,
-    private val audioManager: AudioManager,
     private val window: Window?,
     private val clock: () -> Long,
     private val coroutineScope: CoroutineScope,
     private val onSeekBy: (Long) -> Unit,
+    private val onHoldSpeed: (Boolean) -> Unit,
 ) {
-    var accumulatedDelta by mutableLongStateOf(0L)
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    var seekChipState by mutableStateOf(SeekChipState())
+    var seekChipZone by mutableStateOf(GestureZone.RIGHT)
+    var seekTapPoint by mutableStateOf(Offset.Zero)
+    var seekTriggerCount by mutableIntStateOf(0)
     var lastTapMs by mutableLongStateOf(0L)
     var alreadyAppliedDelta by mutableLongStateOf(0L)
-    var chipZone by mutableStateOf(GestureZone.RIGHT)
-    var isChipVisible by mutableStateOf(false)
     private var chipDismissJob: Job? = null
+
+    var isHoldingSpeed by mutableStateOf(false)
 
     var isDragAllowed by mutableStateOf(false)
     private var dragStartLevel by mutableFloatStateOf(0f)
@@ -141,13 +191,27 @@ private class PlayerGestureState(
     var isPillVisible by mutableStateOf(false)
     private var pillDismissJob: Job? = null
 
+    fun onLongPress() {
+        if (!isDragAllowed) {
+            isHoldingSpeed = true
+            onHoldSpeed(true)
+        }
+    }
+
+    fun onHoldRelease() {
+        if (isHoldingSpeed) {
+            isHoldingSpeed = false
+            onHoldSpeed(false)
+        }
+    }
+
     fun onDragStart(
         offsetY: Float,
         offsetX: Float,
         height: Float,
         width: Float,
     ) {
-        if (!dragStartAllowed(offsetY, height)) {
+        if (isHoldingSpeed || !dragStartAllowed(offsetY, height)) {
             isDragAllowed = false
             return
         }
@@ -173,7 +237,7 @@ private class PlayerGestureState(
         dragAmount: Float,
         height: Float,
     ) {
-        if (!isDragAllowed) return
+        if (!isDragAllowed || isHoldingSpeed) return
         totalDragDeltaY += dragAmount
         currentLevel =
             if (dragZone == GestureZone.LEFT) {
@@ -197,40 +261,44 @@ private class PlayerGestureState(
 
     fun onDoubleTap(
         offsetX: Float,
+        offsetY: Float,
         width: Float,
+        stepMs: Long,
     ) {
+        if (isHoldingSpeed) return
         val zone = zoneOf(offsetX, width)
         val direction = if (zone == GestureZone.LEFT) -1 else 1
         val now = clock()
         val totalDelta =
             accumulatedSeek(
-                prevDeltaMs = accumulatedDelta,
+                prevDeltaMs = seekChipState.deltaMs,
                 prevTapMs = lastTapMs,
                 nowMs = now,
                 direction = direction,
+                stepMs = stepMs,
             )
         val isRestarted =
             (now - lastTapMs > DISMISS_DELAY_MS) ||
-                (accumulatedDelta != 0L && (accumulatedDelta > 0 != direction > 0))
+                (seekChipState.deltaMs != 0L && (seekChipState.deltaMs > 0 != direction > 0))
         if (isRestarted) {
             alreadyAppliedDelta = 0L
         }
 
         val deltaToSend = totalDelta - alreadyAppliedDelta
         alreadyAppliedDelta = totalDelta
-        accumulatedDelta = totalDelta
         lastTapMs = now
 
-        chipZone = zone
-        isChipVisible = true
+        seekChipZone = zone
+        seekTapPoint = Offset(offsetX, offsetY)
+        seekTriggerCount++
+        seekChipState = seekChipState.onTap(totalDelta)
         onSeekBy(deltaToSend)
 
         chipDismissJob?.cancel()
         chipDismissJob =
             coroutineScope.launch {
                 delay(DISMISS_DELAY_MS)
-                isChipVisible = false
-                accumulatedDelta = 0L
+                seekChipState = seekChipState.onTimeout()
                 alreadyAppliedDelta = 0L
             }
     }
@@ -301,45 +369,57 @@ private fun updateVolume(
 }
 
 @Composable
-private fun SeekChipOverlay(
-    visible: Boolean,
-    zone: GestureZone,
-    deltaMs: Long,
-) {
+private fun BoxScope.HoldSpeedPillOverlay(visible: Boolean) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(),
         exit = fadeOut(),
         modifier =
             Modifier
-                .fillMaxSize()
-                .padding(horizontal = NexusTheme.spacing.xxl),
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp),
     ) {
         Box(
-            contentAlignment = if (zone == GestureZone.LEFT) Alignment.CenterStart else Alignment.CenterEnd,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
         ) {
             Surface(
                 shape = NexusTheme.shapes.card,
                 color = PlayerOverlayColors.Card,
+                modifier = Modifier.width(HOLD_PILL_WIDTH).height(HOLD_PILL_HEIGHT),
             ) {
-                Text(
-                    text = seekChipLabel(deltaMs),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = PlayerOverlayColors.Content,
-                    modifier =
-                        Modifier.padding(
-                            horizontal = NexusTheme.spacing.lg,
-                            vertical = NexusTheme.spacing.md,
-                        ),
-                )
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "2x",
+                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        color = PlayerOverlayColors.Content,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_seek_chevron),
+                        contentDescription = null,
+                        tint = PlayerOverlayColors.Content,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.ic_seek_chevron),
+                        contentDescription = null,
+                        tint = PlayerOverlayColors.Content,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun IndicatorPillOverlay(
+private fun BoxScope.IndicatorPillOverlay(
     visible: Boolean,
     zone: GestureZone?,
     level: Float,
@@ -351,16 +431,20 @@ private fun IndicatorPillOverlay(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = NexusTheme.spacing.xl),
+                .padding(horizontal = 24.dp),
     ) {
-        val pillZone = zone ?: GestureZone.RIGHT
+        val gestureZone = zone ?: GestureZone.RIGHT
+        val displayZone = indicatorSide(gestureZone)
+        val alignment = if (displayZone == GestureZone.LEFT) Alignment.CenterStart else Alignment.CenterEnd
+
         Box(
-            contentAlignment = if (pillZone == GestureZone.LEFT) Alignment.CenterStart else Alignment.CenterEnd,
+            contentAlignment = alignment,
             modifier = Modifier.fillMaxSize(),
         ) {
             Surface(
                 shape = NexusTheme.shapes.card,
                 color = PlayerOverlayColors.Card,
+                modifier = Modifier.width(PILL_WIDTH).height(PILL_HEIGHT),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -371,7 +455,7 @@ private fun IndicatorPillOverlay(
                             vertical = NexusTheme.spacing.md,
                         ),
                 ) {
-                    if (pillZone == GestureZone.LEFT) {
+                    if (gestureZone == GestureZone.LEFT) {
                         Icon(
                             painter = painterResource(R.drawable.ic_brightness),
                             contentDescription = stringResource(R.string.player_gesture_brightness),
@@ -405,11 +489,21 @@ private fun IndicatorPillOverlay(
                         )
                     }
 
-                    Text(
-                        text = "${levelPercent(level)}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = PlayerOverlayColors.Content,
-                    )
+                    Box(
+                        modifier = Modifier.width(PILL_PERCENT_BOX_WIDTH),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "${levelPercent(level)}%",
+                            style =
+                                MaterialTheme.typography.labelSmall.copy(
+                                    fontFeatureSettings = "tnum",
+                                ),
+                            color = PlayerOverlayColors.Content,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

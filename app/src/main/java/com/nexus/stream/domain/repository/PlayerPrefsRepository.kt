@@ -9,6 +9,7 @@ interface PlayerPrefsRepository {
     val preferredLanguage: Flow<String?>
     val preferredQuality: Flow<Int?>
     val hideCam: Flow<Boolean>
+    val seekStepSeconds: Flow<Int>
 
     suspend fun setQuickPlay(enabled: Boolean)
 
@@ -19,4 +20,6 @@ interface PlayerPrefsRepository {
     suspend fun setPreferredQuality(quality: Int?)
 
     suspend fun setHideCam(hideCam: Boolean)
+
+    suspend fun setSeekStepSeconds(seconds: Int)
 }

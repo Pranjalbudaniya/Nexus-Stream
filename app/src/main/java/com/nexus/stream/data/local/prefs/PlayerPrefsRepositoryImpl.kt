@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
+import com.nexus.stream.presentation.feature.player.ALLOWED_SEEK_STEPS
+import com.nexus.stream.presentation.feature.player.normalizeSeekStep
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -68,6 +70,12 @@ class PlayerPrefsRepositoryImpl
                     prefs[KEY_HIDE_CAM] ?: false
                 }.distinctUntilChanged()
 
+        override val seekStepSeconds: Flow<Int> =
+            safeData
+                .map { prefs ->
+                    normalizeSeekStep(prefs[KEY_SEEK_STEP_SECONDS])
+                }.distinctUntilChanged()
+
         override suspend fun setQuickPlay(enabled: Boolean) {
             dataStore.edit { prefs ->
                 prefs[KEY_QUICK_PLAY] = enabled
@@ -106,11 +114,20 @@ class PlayerPrefsRepositoryImpl
             }
         }
 
+        override suspend fun setSeekStepSeconds(seconds: Int) {
+            if (seconds in ALLOWED_SEEK_STEPS) {
+                dataStore.edit { prefs ->
+                    prefs[KEY_SEEK_STEP_SECONDS] = seconds
+                }
+            }
+        }
+
         companion object {
             val KEY_QUICK_PLAY = booleanPreferencesKey("quick_play")
             val KEY_STREAM_SORT = stringPreferencesKey("stream_sort")
             val KEY_PREFERRED_LANGUAGE = stringPreferencesKey("preferred_language")
             val KEY_PREFERRED_QUALITY = intPreferencesKey("preferred_quality")
             val KEY_HIDE_CAM = booleanPreferencesKey("hide_cam")
+            val KEY_SEEK_STEP_SECONDS = intPreferencesKey("seek_step_seconds")
         }
     }

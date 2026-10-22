@@ -37,6 +37,7 @@ class SettingsViewModelTest {
     private val preferredLanguageFlow = MutableStateFlow<String?>(null)
     private val preferredQualityFlow = MutableStateFlow<Int?>(null)
     private val hideCamFlow = MutableStateFlow(false)
+    private val seekStepSecondsFlow = MutableStateFlow(10)
     private val addonsFlow = MutableStateFlow<List<Addon>>(emptyList())
 
     private val adultAddon =
@@ -105,6 +106,7 @@ class SettingsViewModelTest {
         every { playerPrefsRepository.preferredLanguage } returns preferredLanguageFlow
         every { playerPrefsRepository.preferredQuality } returns preferredQualityFlow
         every { playerPrefsRepository.hideCam } returns hideCamFlow
+        every { playerPrefsRepository.seekStepSeconds } returns seekStepSecondsFlow
         every { addonRepository.observeAll() } returns addonsFlow
     }
 
@@ -214,5 +216,27 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             coVerify { playerPrefsRepository.setHideCam(false) }
+        }
+
+    @Test
+    fun `SS1 seekStepSeconds reflects repository value`() =
+        runTest {
+            seekStepSecondsFlow.value = 15
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertEquals(15, viewModel.uiState.value.seekStepSeconds)
+        }
+
+    @Test
+    fun `SS2 SetSeekStepSeconds event updates repository`() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            viewModel.onEvent(SettingsEvent.SetSeekStepSeconds(20))
+            advanceUntilIdle()
+
+            coVerify { playerPrefsRepository.setSeekStepSeconds(20) }
         }
 }

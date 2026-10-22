@@ -373,6 +373,8 @@
     <string name="settings_player_preferred_quality_sd">SD</string>
     <string name="settings_player_hide_cam_title">Hide CAM streams</string>
     <string name="settings_player_hide_cam_subtitle">Camera recordings are hidden instead of shown last.</string>
+    <string name="settings_player_skip_length_title">Skip length</string>
+    <string name="settings_player_skip_length_seconds">%1$d seconds</string>
     <string name="streams_badge_wrong_episode">Different episode?</string>
     <string name="streams_badge_wrong_season">Different season?</string>
     <string name="streams_badge_wrong_year">Different year?</string>

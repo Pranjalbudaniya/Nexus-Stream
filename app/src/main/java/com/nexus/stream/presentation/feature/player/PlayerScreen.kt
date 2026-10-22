@@ -171,6 +171,7 @@ fun PlayerScreen(
         onRetry = { viewModel.onEvent(PlayerEvent.Retry) },
         onToggleNetworkCard = { viewModel.onEvent(PlayerEvent.ToggleNetworkCard) },
         onDismissNetworkCard = { viewModel.onEvent(PlayerEvent.DismissNetworkCard) },
+        onHoldSpeed = { viewModel.onEvent(PlayerEvent.HoldSpeed(it)) },
         surfaceFactory = controller?.let { ctrl -> { ctx -> ctrl.createSurface(ctx) } },
         surfaceRelease = { controller?.detachSurface() },
         modifier = modifier,
@@ -184,6 +185,7 @@ internal fun PlayerScreenContent(
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onSeekBy: (Long) -> Unit = {},
+    onHoldSpeed: (Boolean) -> Unit = {},
     onToggleControls: () -> Unit,
     onPickFile: (Int) -> Unit,
     onAllowMeteredOnce: () -> Unit,
@@ -216,8 +218,11 @@ internal fun PlayerScreenContent(
             PlayerGestureLayer(
                 isActive = uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended,
                 isSeekable = uiState.isSeekable,
+                seekStepMs = uiState.seekStepMs,
+                holdSpeed = uiState.holdSpeed,
                 onToggleControls = onToggleControls,
                 onSeekBy = onSeekBy,
+                onHoldSpeed = onHoldSpeed,
             )
 
             if (showLoadingOverlay) {
@@ -227,6 +232,7 @@ internal fun PlayerScreenContent(
                     backgroundUrl = uiState.backgroundUrl,
                     phase = uiState.phase,
                     stats = uiState.stats,
+                    showArtwork = shouldShowLoadingArtwork(uiState.phase),
                 )
             }
 
