@@ -484,5 +484,30 @@
     <string name="player_tracks_empty_audio">No alternate audio tracks</string>
     <string name="player_tracks_empty_subtitles">No subtitles</string>
     <string name="player_external_no_app">No app found to open this stream</string>
+
+    <!-- Player drawers, online subtitles, file picker, and delay (P09b.2) -->
+    <string name="player_action_audio">Audio</string>
+    <string name="player_action_subtitles">Subtitles</string>
+    <string name="player_action_speed">Playback speed</string>
+    <string name="player_drawer_audio">Audio</string>
+    <string name="player_drawer_subtitles">Subtitles</string>
+    <string name="player_drawer_speed">Speed</string>
+    <string name="player_drawer_close">Close drawer</string>
+    <string name="player_audio_empty">No other audio tracks</string>
+    <string name="player_subtitles_embedded">Embedded</string>
+    <string name="player_subtitles_add_file">Add from file</string>
+    <string name="player_subtitles_online">Online subtitles</string>
+    <string name="player_subtitles_delay">Delay</string>
+    <string name="player_subtitles_delay_reset">Reset</string>
+    <string name="player_subtitles_delay_decrease">Decrease delay</string>
+    <string name="player_subtitles_delay_increase">Increase delay</string>
+    <string name="player_subtitles_refresh">Refresh online subtitles</string>
+    <string name="player_subtitles_empty_no_addon">Install a subtitle add-on to search online</string>
+    <string name="player_subtitles_empty_none_found">No subtitles found</string>
+    <string name="player_subtitles_error_load">Couldn\'t load subtitles</string>
+    <string name="player_subtitles_error_apply_failed">Couldn\'t apply subtitle</string>
+    <string name="player_subtitles_error_bad_type">This file type is not supported</string>
+    <string name="player_subtitles_error_too_large">This file is too large (5 MB max)</string>
+    <string name="player_subtitles_error_failed">Couldn\'t open this file</string>
 </resources>
 

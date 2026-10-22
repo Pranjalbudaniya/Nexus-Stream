@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.stream.data.player.AudioFocusController
 import com.nexus.stream.data.player.AudioFocusEvent
+import com.nexus.stream.data.player.ImportResult
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.data.player.PlayerTracks
 import com.nexus.stream.data.player.SPEED_OPTIONS
+import com.nexus.stream.data.player.SubtitleFileImporter
 import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.data.player.next
 import com.nexus.stream.data.torrent.StreamStatsHub
@@ -23,7 +25,11 @@ import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
+import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.clampSubtitleDelay
+import com.nexus.stream.domain.usecase.groupByLanguage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -32,9 +38,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
@@ -48,6 +56,46 @@ private val HTTP_NOT_FOUND_STATUSES = setOf(404, 410)
 private val HTTP_UNREACHABLE_STATUSES = setOf(502, 504)
 private const val HTTP_SERVER_ERROR_MIN = 500
 private const val HTTP_SERVER_ERROR_MAX = 599
+
+enum class PlayerDrawer {
+    AUDIO,
+    SUBTITLES,
+    SPEED,
+}
+
+sealed interface OnlineSubtitlesState {
+    data object Idle : OnlineSubtitlesState
+
+    data object Loading : OnlineSubtitlesState
+
+    data class Loaded(
+        val groups: List<SubtitleLanguageGroupUi>,
+    ) : OnlineSubtitlesState
+
+    data class Empty(
+        val noAddonInstalled: Boolean = false,
+    ) : OnlineSubtitlesState
+
+    data object Error : OnlineSubtitlesState
+}
+
+data class SubtitleLanguageGroupUi(
+    val language: String,
+    val items: List<OnlineSubtitleItemUi>,
+)
+
+data class OnlineSubtitleItemUi(
+    val key: String,
+    val label: String,
+    val addonName: String,
+)
+
+enum class SubtitleError {
+    SUBTITLE_LOAD_FAILED,
+    BAD_TYPE,
+    TOO_LARGE,
+    FAILED,
+}
 
 sealed interface PlayerPhase {
     data object Empty : PlayerPhase
@@ -119,16 +167,22 @@ data class PlayerUiState(
     val tracks: PlayerTracks = PlayerTracks(),
     val rate: Float = 1.0f,
     val scale: VideoScale = VideoScale.FIT,
-    val panelOpen: Boolean = false,
+    val drawer: PlayerDrawer? = null,
     val canOpenExternal: Boolean = false,
     val scaleChipLabel: String? = null,
+    val subtitleDelayMs: Long = 0L,
+    val onlineSubtitles: OnlineSubtitlesState = OnlineSubtitlesState.Idle,
+    val applyingSubtitleKey: String? = null,
+    val subtitleError: SubtitleError? = null,
 ) {
     override fun toString(): String =
         "PlayerUiState(title=$title, phase=$phase, pos=$positionMs, dur=$durationMs, " +
             "playing=$isPlaying, buffering=$isBuffering, seekable=$isSeekable, controls=$controlsVisible, " +
             "showNetworkCard=$showNetworkCard, hasStats=${stats != null}, " +
             "seekStepMs=$seekStepMs, holdSpeed=$holdSpeed, " +
-            "rate=$rate, scale=$scale, panelOpen=$panelOpen, canOpenExternal=$canOpenExternal)"
+            "rate=$rate, scale=$scale, drawer=$drawer, canOpenExternal=$canOpenExternal, " +
+            "subtitleDelayMs=$subtitleDelayMs, onlineSubsState=${onlineSubtitles::class.simpleName}, " +
+            "applyingSubtitleKey=$applyingSubtitleKey, subtitleError=$subtitleError)"
 }
 
 sealed interface PlayerEvent {
@@ -162,9 +216,29 @@ sealed interface PlayerEvent {
 
     data object DismissNetworkCard : PlayerEvent
 
-    data object OpenPanel : PlayerEvent
+    data class OpenDrawer(
+        val drawer: PlayerDrawer,
+    ) : PlayerEvent
 
-    data object ClosePanel : PlayerEvent
+    data object CloseDrawer : PlayerEvent
+
+    data class SelectOnlineSubtitle(
+        val key: String,
+    ) : PlayerEvent
+
+    data object RefreshOnlineSubtitles : PlayerEvent
+
+    data class SubtitleFilePicked(
+        val uri: String,
+    ) : PlayerEvent
+
+    data class SubtitleDelay(
+        val deltaMs: Long,
+    ) : PlayerEvent
+
+    data object ResetSubtitleDelay : PlayerEvent
+
+    data object DismissSubtitleError : PlayerEvent
 
     data class SelectAudio(
         val id: String,
@@ -202,6 +276,8 @@ class PlayerViewModel
         private val statsHub: StreamStatsHub,
         private val audioFocusController: AudioFocusController,
         private val playerPrefsRepository: PlayerPrefsRepository,
+        private val loadOnlineSubtitlesUseCase: LoadOnlineSubtitles,
+        private val subtitleFileImporter: SubtitleFileImporter,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PlayerUiState())
@@ -218,6 +294,10 @@ class PlayerViewModel
         private var controlsTimerJob: Job? = null
         private var scaleChipJob: Job? = null
         private var activeTorrentRequest: TorrentRequest? = null
+        private var onlineSubtitlesJob: Job? = null
+        private var applyingSubtitleJob: Job? = null
+        private val onlineSubtitleUrls = mutableMapOf<String, String>()
+        private var onlineSubtitlesKeyCounter = 0
         private var playedOnce = false
 
         private var lastRecoveryMs: Long = -RECOVERY_WINDOW_MS
@@ -318,20 +398,20 @@ class PlayerViewModel
         fun getController(): PlayerController? = controller
 
         fun onEvent(event: PlayerEvent) {
-            if (!handlePanelAndTrackEvent(event)) {
+            if (!handleDrawerAndTrackEvent(event) && !handleSubtitleEvent(event)) {
                 handlePlaybackEvent(event)
             }
         }
 
-        private fun handlePanelAndTrackEvent(event: PlayerEvent): Boolean =
+        private fun handleDrawerAndTrackEvent(event: PlayerEvent): Boolean =
             when (event) {
-                PlayerEvent.OpenPanel -> {
-                    handleOpenPanel()
+                is PlayerEvent.OpenDrawer -> {
+                    handleOpenDrawer(event.drawer)
                     true
                 }
 
-                PlayerEvent.ClosePanel -> {
-                    handleClosePanel()
+                PlayerEvent.CloseDrawer -> {
+                    handleCloseDrawer()
                     true
                 }
 
@@ -357,6 +437,43 @@ class PlayerViewModel
 
                 PlayerEvent.OpenExternal -> {
                     handleOpenExternal()
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
+
+        private fun handleSubtitleEvent(event: PlayerEvent): Boolean =
+            when (event) {
+                is PlayerEvent.SelectOnlineSubtitle -> {
+                    handleSelectOnlineSubtitle(event.key)
+                    true
+                }
+
+                PlayerEvent.RefreshOnlineSubtitles -> {
+                    handleRefreshOnlineSubtitles()
+                    true
+                }
+
+                is PlayerEvent.SubtitleFilePicked -> {
+                    handleSubtitleFilePicked(event.uri)
+                    true
+                }
+
+                is PlayerEvent.SubtitleDelay -> {
+                    handleSubtitleDelay(event.deltaMs)
+                    true
+                }
+
+                PlayerEvent.ResetSubtitleDelay -> {
+                    handleResetSubtitleDelay()
+                    true
+                }
+
+                PlayerEvent.DismissSubtitleError -> {
+                    _uiState.update { it.copy(subtitleError = null) }
                     true
                 }
 
@@ -415,14 +532,25 @@ class PlayerViewModel
             }
         }
 
-        private fun handleOpenPanel() {
-            _uiState.update { it.copy(panelOpen = true, controlsVisible = true) }
-            controlsTimerJob?.cancel()
+        private fun handleOpenDrawer(drawer: PlayerDrawer) {
+            if (_uiState.value.drawer == drawer) {
+                handleCloseDrawer()
+            } else {
+                _uiState.update { it.copy(drawer = drawer, controlsVisible = true) }
+                controlsTimerJob?.cancel()
+                if (drawer == PlayerDrawer.SUBTITLES) {
+                    if (_uiState.value.onlineSubtitles is OnlineSubtitlesState.Idle) {
+                        loadOnlineSubtitles(force = false)
+                    }
+                }
+            }
         }
 
-        private fun handleClosePanel() {
-            _uiState.update { it.copy(panelOpen = false) }
-            handleControlsTimer()
+        private fun handleCloseDrawer() {
+            if (_uiState.value.drawer != null) {
+                _uiState.update { it.copy(drawer = null) }
+                handleControlsTimer()
+            }
         }
 
         private fun handleSelectAudio(id: String) {
@@ -445,6 +573,135 @@ class PlayerViewModel
                     controller?.selectSubtitleTrack(id)
                 }
             }
+            _uiState.update { it.copy(subtitleError = null) }
+        }
+
+        private fun handleSelectOnlineSubtitle(key: String) {
+            val url = onlineSubtitleUrls[key] ?: return
+            _uiState.update { it.copy(applyingSubtitleKey = key, subtitleError = null) }
+            val c = controller
+            c?.addSubtitle(url)
+            c?.setSubtitleDelay(_uiState.value.subtitleDelayMs)
+
+            applyingSubtitleJob?.cancel()
+            applyingSubtitleJob =
+                viewModelScope.launch(mainDispatcher) {
+                    val initialCount =
+                        c
+                            ?.tracks
+                            ?.value
+                            ?.subtitles
+                            ?.size ?: 0
+                    val grew =
+                        withTimeoutOrNull(6_000L) {
+                            c?.tracks?.first { it.subtitles.size > initialCount }
+                        }
+                    if (grew != null) {
+                        _uiState.update { it.copy(applyingSubtitleKey = null) }
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                applyingSubtitleKey = null,
+                                subtitleError = SubtitleError.SUBTITLE_LOAD_FAILED,
+                            )
+                        }
+                    }
+                }
+        }
+
+        private fun handleRefreshOnlineSubtitles() {
+            loadOnlineSubtitles(force = true)
+        }
+
+        private fun loadOnlineSubtitles(force: Boolean) {
+            if (!force && _uiState.value.onlineSubtitles !is OnlineSubtitlesState.Idle) {
+                return
+            }
+            val selection = holder.current.value
+            val type = selection?.type ?: "movie"
+            val videoId = selection?.videoId ?: selection?.metaId.orEmpty()
+            val hints = selection?.subtitleHints
+
+            onlineSubtitlesJob?.cancel()
+            onlineSubtitlesJob =
+                viewModelScope.launch(mainDispatcher) {
+                    _uiState.update { it.copy(onlineSubtitles = OnlineSubtitlesState.Loading) }
+                    try {
+                        val results = loadOnlineSubtitlesUseCase(type, videoId, hints)
+                        if (results.isEmpty()) {
+                            val hasAddons = loadOnlineSubtitlesUseCase.hasMatchingAddons(type, videoId)
+                            _uiState.update {
+                                it.copy(onlineSubtitles = OnlineSubtitlesState.Empty(noAddonInstalled = !hasAddons))
+                            }
+                        } else {
+                            onlineSubtitleUrls.clear()
+                            val groups = groupByLanguage(results)
+                            val uiGroups =
+                                groups.map { group ->
+                                    SubtitleLanguageGroupUi(
+                                        language = group.language,
+                                        items =
+                                            group.items.map { item ->
+                                                val key = "online_sub_${onlineSubtitlesKeyCounter++}"
+                                                onlineSubtitleUrls[key] = item.subtitle.url
+                                                val subLabel =
+                                                    item.subtitle.label?.takeIf { it.isNotBlank() } ?: item.addonName
+                                                OnlineSubtitleItemUi(
+                                                    key = key,
+                                                    label = subLabel,
+                                                    addonName = item.addonName,
+                                                )
+                                            },
+                                    )
+                                }
+                            _uiState.update {
+                                it.copy(onlineSubtitles = OnlineSubtitlesState.Loaded(uiGroups))
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        _uiState.update {
+                            it.copy(onlineSubtitles = OnlineSubtitlesState.Error)
+                        }
+                    }
+                }
+        }
+
+        private fun handleSubtitleFilePicked(uri: String) {
+            _uiState.update { it.copy(subtitleError = null) }
+            viewModelScope.launch(mainDispatcher) {
+                when (val result = subtitleFileImporter.import(uri)) {
+                    is ImportResult.Imported -> {
+                        val c = controller
+                        c?.addSubtitle("file://${result.path}")
+                        c?.setSubtitleDelay(_uiState.value.subtitleDelayMs)
+                    }
+
+                    is ImportResult.BadType -> {
+                        _uiState.update { it.copy(subtitleError = SubtitleError.BAD_TYPE) }
+                    }
+
+                    is ImportResult.TooLarge -> {
+                        _uiState.update { it.copy(subtitleError = SubtitleError.TOO_LARGE) }
+                    }
+
+                    is ImportResult.Failed -> {
+                        _uiState.update { it.copy(subtitleError = SubtitleError.FAILED) }
+                    }
+                }
+            }
+        }
+
+        private fun handleSubtitleDelay(deltaMs: Long) {
+            val clamped = clampSubtitleDelay(_uiState.value.subtitleDelayMs + deltaMs)
+            _uiState.update { it.copy(subtitleDelayMs = clamped) }
+            controller?.setSubtitleDelay(clamped)
+        }
+
+        private fun handleResetSubtitleDelay() {
+            _uiState.update { it.copy(subtitleDelayMs = 0L) }
+            controller?.setSubtitleDelay(0L)
         }
 
         private fun handleSetSpeed(rate: Float) {
@@ -516,6 +773,9 @@ class PlayerViewModel
         }
 
         private fun handleToggleControls() {
+            if (_uiState.value.drawer != null) {
+                return
+            }
             val newVisible = !_uiState.value.controlsVisible
             _uiState.update { it.copy(controlsVisible = newVisible) }
             if (newVisible) {
@@ -855,7 +1115,7 @@ class PlayerViewModel
         private fun handleControlsTimer() {
             controlsTimerJob?.cancel()
             val state = _uiState.value
-            if (state.panelOpen) {
+            if (state.drawer != null) {
                 _uiState.update { it.copy(controlsVisible = true) }
                 return
             }
@@ -874,6 +1134,9 @@ class PlayerViewModel
 
         public override fun onCleared() {
             super.onCleared()
+            subtitleFileImporter.cleanup()
+            onlineSubtitlesJob?.cancel()
+            applyingSubtitleJob?.cancel()
             controlsTimerJob?.cancel()
             scaleChipJob?.cancel()
             torrentJob?.cancel()

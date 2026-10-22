@@ -22,6 +22,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val BUFFERING_COMPLETE_PERCENT = 100f
+private const val MICROS_PER_MILLI = 1000L
+private const val SLAVE_TYPE_SUBTITLE = 0
 
 @Suppress("TooManyFunctions")
 class LibVlcPlayer(
@@ -187,6 +189,14 @@ class LibVlcPlayer(
             }
         }
         refreshTracks()
+    }
+
+    override fun addSubtitle(uri: String) {
+        mediaPlayer.addSlave(SLAVE_TYPE_SUBTITLE, Uri.parse(uri), true)
+    }
+
+    override fun setSubtitleDelay(ms: Long) {
+        mediaPlayer.setSpuDelay(ms * MICROS_PER_MILLI)
     }
 
     override fun setVideoScale(scale: VideoScale) {

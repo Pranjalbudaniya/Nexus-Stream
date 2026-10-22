@@ -5,15 +5,18 @@ import android.view.View
 import androidx.lifecycle.ViewModel
 import com.nexus.stream.data.player.AudioFocusController
 import com.nexus.stream.data.player.AudioFocusEvent
+import com.nexus.stream.data.player.ImportResult
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.data.player.PlayerTrack
 import com.nexus.stream.data.player.PlayerTracks
+import com.nexus.stream.data.player.SubtitleFileImporter
 import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.StreamSort
+import com.nexus.stream.domain.model.Subtitle
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
@@ -23,6 +26,11 @@ import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
+import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.SubtitleHints
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +66,8 @@ class PlayerViewModelTest {
     private val fakeEngine = FakeTorrentEngine()
     private val fakeAudioFocus = FakeAudioFocusController()
     private val fakePrefs = FakePlayerPrefsRepository()
+    private val loadOnlineSubtitlesUseCase = mockk<LoadOnlineSubtitles>(relaxed = true)
+    private val fakeSubtitleImporter = FakeSubtitleFileImporter()
     private val statsHub =
         com.nexus.stream.data.torrent
             .StreamStatsHub()
@@ -72,7 +82,11 @@ class PlayerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(h: PlaybackSessionHolder = holder): PlayerViewModel =
+    private fun createViewModel(
+        h: PlaybackSessionHolder = holder,
+        loader: LoadOnlineSubtitles = loadOnlineSubtitlesUseCase,
+        importer: SubtitleFileImporter = fakeSubtitleImporter,
+    ): PlayerViewModel =
         PlayerViewModel(
             holder = h,
             controllerFactory = fakeFactory,
@@ -81,6 +95,8 @@ class PlayerViewModelTest {
             statsHub = statsHub,
             audioFocusController = fakeAudioFocus,
             playerPrefsRepository = fakePrefs,
+            loadOnlineSubtitlesUseCase = loader,
+            subtitleFileImporter = importer,
             mainDispatcher = testDispatcher,
         )
 
@@ -1409,7 +1425,7 @@ class PlayerViewModelTest {
         }
 
     @Test
-    fun PL49_panel_open_keeps_controls_visible() =
+    fun PL50_drawer_switching_closing_and_controls_visibility() =
         runTest(testDispatcher) {
             val url = "https://example.com/video.mp4"
             holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
@@ -1419,28 +1435,395 @@ class PlayerViewModelTest {
             val ctrl = fakeFactory.createdControllers.single()
             ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isBuffering = false)
             runCurrent()
-
             assertTrue(vm.uiState.value.controlsVisible)
 
-            vm.onEvent(PlayerEvent.OpenPanel)
+            // OpenDrawer(AUDIO) sets drawer
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.AUDIO))
             runCurrent()
-            assertTrue(vm.uiState.value.panelOpen)
+            assertEquals(PlayerDrawer.AUDIO, vm.uiState.value.drawer)
             assertTrue(vm.uiState.value.controlsVisible)
 
-            // Advancing past 3000ms should NOT hide controls because panel is open
+            // Controls do not hide while drawer is open
             advanceTimeBy(3500L)
             runCurrent()
             assertTrue(vm.uiState.value.controlsVisible)
 
-            // Closing panel should resume auto-hide
-            vm.onEvent(PlayerEvent.ClosePanel)
+            // OpenDrawer(SUBTITLES) replaces it
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
             runCurrent()
-            assertFalse(vm.uiState.value.panelOpen)
+            assertEquals(PlayerDrawer.SUBTITLES, vm.uiState.value.drawer)
+
+            // OpenDrawer(SUBTITLES) again closes it
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+            assertNull(vm.uiState.value.drawer)
             assertTrue(vm.uiState.value.controlsVisible)
 
+            // Timer restarts on close: controls hide after hide delay
             advanceTimeBy(3500L)
             runCurrent()
             assertFalse(vm.uiState.value.controlsVisible)
+
+            // Re-open and test CloseDrawer
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SPEED))
+            runCurrent()
+            assertEquals(PlayerDrawer.SPEED, vm.uiState.value.drawer)
+            assertTrue(vm.uiState.value.controlsVisible)
+
+            vm.onEvent(PlayerEvent.CloseDrawer)
+            runCurrent()
+            assertNull(vm.uiState.value.drawer)
+            assertTrue(vm.uiState.value.controlsVisible)
+            advanceTimeBy(3500L)
+            runCurrent()
+            assertFalse(vm.uiState.value.controlsVisible)
+        }
+
+    @Test
+    fun PL51_audio_selection_valid_forwards_unknown_ignored() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "English"), PlayerTrack("2", "Spanish")),
+                )
+            runCurrent()
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.AUDIO))
+            runCurrent()
+
+            vm.onEvent(PlayerEvent.SelectAudio("2"))
+            runCurrent()
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+
+            vm.onEvent(PlayerEvent.SelectAudio("999")) // unknown id
+            runCurrent()
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+        }
+
+    @Test
+    fun PL52_speed_selection_listed_values_only() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SPEED))
+            runCurrent()
+
+            vm.onEvent(PlayerEvent.SetSpeed(1.25f))
+            runCurrent()
+            assertEquals(1.25f, vm.uiState.value.rate)
+            assertEquals(listOf(1.25f), ctrl.rateCalls)
+
+            // Invalid speed not in SPEED_OPTIONS
+            vm.onEvent(PlayerEvent.SetSpeed(3.0f))
+            runCurrent()
+            assertEquals(1.25f, vm.uiState.value.rate)
+            assertEquals(listOf(1.25f), ctrl.rateCalls)
+        }
+
+    @Test
+    fun PL53_subtitles_drawer_loads_once_on_first_open_refresh_reloads() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://sub.org/en.srt", "en", "English"),
+                        "OpenSubtitles",
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(OnlineSubtitlesState.Idle, vm.uiState.value.onlineSubtitles)
+
+            // Open subtitles drawer first time -> loads
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+            assertTrue(vm.uiState.value.onlineSubtitles is OnlineSubtitlesState.Loaded)
+            coVerify(exactly = 1) { loadOnlineSubtitlesUseCase("movie", "v1", null) }
+
+            // Close and reopen -> does NOT reload
+            vm.onEvent(PlayerEvent.CloseDrawer)
+            runCurrent()
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+            coVerify(exactly = 1) { loadOnlineSubtitlesUseCase("movie", "v1", null) }
+
+            // Refresh -> reloads
+            vm.onEvent(PlayerEvent.RefreshOnlineSubtitles)
+            runCurrent()
+            coVerify(exactly = 2) { loadOnlineSubtitlesUseCase("movie", "v1", null) }
+        }
+
+    @Test
+    fun PL54_select_online_subtitle_calls_add_and_clears_on_growth() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://sub.org/test.srt", "en", "English"),
+                        "AddonX",
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.tracksFlow.value = PlayerTracks(subtitles = emptyList())
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+
+            val loadedState = vm.uiState.value.onlineSubtitles as OnlineSubtitlesState.Loaded
+            val itemKey =
+                loadedState.groups
+                    .single()
+                    .items
+                    .single()
+                    .key
+
+            vm.onEvent(PlayerEvent.SelectOnlineSubtitle(itemKey))
+            runCurrent()
+
+            assertEquals(listOf("https://sub.org/test.srt"), ctrl.addedSubtitles)
+            assertEquals(itemKey, vm.uiState.value.applyingSubtitleKey)
+
+            // Simulate controller's subtitle tracks growing by one
+            ctrl.tracksFlow.value = PlayerTracks(subtitles = listOf(PlayerTrack("100", "test.srt")))
+            runCurrent()
+
+            assertNull(vm.uiState.value.applyingSubtitleKey)
+            assertNull(vm.uiState.value.subtitleError)
+        }
+
+    @Test
+    fun PL55_select_online_subtitle_timeout_after_6s_sets_error() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://sub.org/test.srt", "en", "English"),
+                        "AddonX",
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.tracksFlow.value = PlayerTracks(subtitles = emptyList())
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+
+            val loadedState = vm.uiState.value.onlineSubtitles as OnlineSubtitlesState.Loaded
+            val itemKey =
+                loadedState.groups
+                    .single()
+                    .items
+                    .single()
+                    .key
+
+            vm.onEvent(PlayerEvent.SelectOnlineSubtitle(itemKey))
+            runCurrent()
+
+            assertEquals(itemKey, vm.uiState.value.applyingSubtitleKey)
+            assertNull(vm.uiState.value.subtitleError)
+
+            // Advance 6000ms without track growth
+            advanceTimeBy(6001L)
+            runCurrent()
+
+            assertNull(vm.uiState.value.applyingSubtitleKey)
+            assertEquals(SubtitleError.SUBTITLE_LOAD_FAILED, vm.uiState.value.subtitleError)
+        }
+
+    @Test
+    fun PL56_subtitle_file_picked_imported_adds_slave_errors_set_state() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+
+            // 1. Success
+            fakeSubtitleImporter.importResult = ImportResult.Imported("/cache/subtitles/123.srt")
+            vm.onEvent(PlayerEvent.SubtitleFilePicked("content://sub.srt"))
+            runCurrent()
+
+            assertEquals(listOf("file:///cache/subtitles/123.srt"), ctrl.addedSubtitles)
+            assertNull(vm.uiState.value.subtitleError)
+
+            // 2. BadType
+            fakeSubtitleImporter.importResult = ImportResult.BadType
+            vm.onEvent(PlayerEvent.SubtitleFilePicked("content://bad.txt"))
+            runCurrent()
+            assertEquals(1, ctrl.addedSubtitles.size)
+            assertEquals(SubtitleError.BAD_TYPE, vm.uiState.value.subtitleError)
+
+            // 3. TooLarge
+            fakeSubtitleImporter.importResult = ImportResult.TooLarge
+            vm.onEvent(PlayerEvent.SubtitleFilePicked("content://huge.srt"))
+            runCurrent()
+            assertEquals(1, ctrl.addedSubtitles.size)
+            assertEquals(SubtitleError.TOO_LARGE, vm.uiState.value.subtitleError)
+
+            // 4. Failed
+            fakeSubtitleImporter.importResult = ImportResult.Failed
+            vm.onEvent(PlayerEvent.SubtitleFilePicked("content://error.srt"))
+            runCurrent()
+            assertEquals(1, ctrl.addedSubtitles.size)
+            assertEquals(SubtitleError.FAILED, vm.uiState.value.subtitleError)
+        }
+
+    @Test
+    fun PL57_subtitle_delay_clamped_reset_and_reapplied_on_add() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            assertEquals(0L, vm.uiState.value.subtitleDelayMs)
+
+            // +100 ms
+            vm.onEvent(PlayerEvent.SubtitleDelay(100L))
+            runCurrent()
+            assertEquals(100L, vm.uiState.value.subtitleDelayMs)
+            assertEquals(listOf(100L), ctrl.subtitleDelayCalls)
+
+            // Clamp check: jump by +40_000 -> clamps at 30_000
+            vm.onEvent(PlayerEvent.SubtitleDelay(40_000L))
+            runCurrent()
+            assertEquals(30_000L, vm.uiState.value.subtitleDelayMs)
+            assertEquals(30_000L, ctrl.subtitleDelayCalls.last())
+
+            // -40_000 ms -> clamped to -10_000
+            vm.onEvent(PlayerEvent.SubtitleDelay(-40_000L))
+            runCurrent()
+            assertEquals(-10_000L, vm.uiState.value.subtitleDelayMs)
+            assertEquals(-10_000L, ctrl.subtitleDelayCalls.last())
+
+            // Reset
+            vm.onEvent(PlayerEvent.ResetSubtitleDelay)
+            runCurrent()
+            assertEquals(0L, vm.uiState.value.subtitleDelayMs)
+            assertEquals(0L, ctrl.subtitleDelayCalls.last())
+
+            // Set delay to 2500ms
+            vm.onEvent(PlayerEvent.SubtitleDelay(2500L))
+            runCurrent()
+            assertEquals(2500L, vm.uiState.value.subtitleDelayMs)
+
+            // Newly added subtitle re-applies current delay (2500L)
+            fakeSubtitleImporter.importResult = ImportResult.Imported("/cache/subtitles/sub.srt")
+            vm.onEvent(PlayerEvent.SubtitleFilePicked("content://sub.srt"))
+            runCurrent()
+            assertEquals(listOf("file:///cache/subtitles/sub.srt"), ctrl.addedSubtitles)
+            assertEquals(2500L, ctrl.subtitleDelayCalls.last())
+        }
+
+    @Test
+    fun PL58_uiState_toString_contains_no_urls_hashes_or_headers() =
+        runTest(testDispatcher) {
+            val url = "https://sensitive.org/stream?token=secret123"
+            val hints = SubtitleHints("movie.mkv", "secretHash999", 12345L)
+            holder.start(
+                PlaybackSelection(
+                    title = "Movie",
+                    source = PlaybackSource.Direct(url),
+                    type = "movie",
+                    metaId = "m1",
+                    videoId = "v1",
+                    subtitleHints = hints,
+                ),
+            )
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://private-sub.org/secret.srt?auth=abc", "en", "English"),
+                        "SecretAddon",
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+
+            val stateString = vm.uiState.value.toString()
+            assertFalse(stateString.contains("sensitive.org"))
+            assertFalse(stateString.contains("secret123"))
+            assertFalse(stateString.contains("secretHash999"))
+            assertFalse(stateString.contains("private-sub.org"))
+            assertFalse(stateString.contains("auth=abc"))
+        }
+
+    @Test
+    fun PL59_onCleared_calls_importer_cleanup() =
+        runTest(testDispatcher) {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(0, fakeSubtitleImporter.cleanupCallCount)
+            vm.onCleared()
+            assertEquals(1, fakeSubtitleImporter.cleanupCallCount)
+        }
+
+    @Test
+    fun PL60_failing_loader_leaves_error_refresh_can_succeed() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } throws RuntimeException("Network error")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            runCurrent()
+
+            assertEquals(OnlineSubtitlesState.Error, vm.uiState.value.onlineSubtitles)
+
+            // Now configure loader to succeed
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://sub.org/en.srt", "en", "English"),
+                        "Addon",
+                    ),
+                )
+
+            vm.onEvent(PlayerEvent.RefreshOnlineSubtitles)
+            runCurrent()
+
+            assertTrue(vm.uiState.value.onlineSubtitles is OnlineSubtitlesState.Loaded)
         }
 
     private class FakePlayerController : PlayerController {
@@ -1457,6 +1840,8 @@ class PlayerViewModelTest {
         val rateCalls = mutableListOf<Float>()
         val selectedAudioTracks = mutableListOf<String>()
         val selectedSubtitleTracks = mutableListOf<String?>()
+        val addedSubtitles = mutableListOf<String>()
+        val subtitleDelayCalls = mutableListOf<Long>()
         val videoScaleCalls = mutableListOf<VideoScale>()
         var releaseCallCount = 0
 
@@ -1494,12 +1879,35 @@ class PlayerViewModelTest {
             selectedSubtitleTracks.add(id)
         }
 
+        override fun addSubtitle(uri: String) {
+            addedSubtitles.add(uri)
+        }
+
+        override fun setSubtitleDelay(ms: Long) {
+            subtitleDelayCalls.add(ms)
+        }
+
         override fun setVideoScale(scale: VideoScale) {
             videoScaleCalls.add(scale)
         }
 
         override fun release() {
             releaseCallCount++
+        }
+    }
+
+    private class FakeSubtitleFileImporter : SubtitleFileImporter {
+        var importResult: ImportResult = ImportResult.Failed
+        val importedUris = mutableListOf<String>()
+        var cleanupCallCount = 0
+
+        override suspend fun import(uri: String): ImportResult {
+            importedUris.add(uri)
+            return importResult
+        }
+
+        override fun cleanup() {
+            cleanupCallCount++
         }
     }
 

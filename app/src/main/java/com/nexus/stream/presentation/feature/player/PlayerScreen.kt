@@ -4,12 +4,17 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.net.Uri
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -179,11 +184,20 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler(enabled = uiState.panelOpen) {
-        viewModel.onEvent(PlayerEvent.ClosePanel)
+    val subtitleFileLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri: Uri? ->
+            uri?.let {
+                viewModel.onEvent(PlayerEvent.SubtitleFilePicked(it.toString()))
+            }
+        }
+
+    BackHandler(enabled = uiState.drawer != null) {
+        viewModel.onEvent(PlayerEvent.CloseDrawer)
     }
 
-    BackHandler(enabled = !uiState.panelOpen) {
+    BackHandler(enabled = uiState.drawer == null) {
         handleBack()
     }
 
@@ -202,10 +216,15 @@ fun PlayerScreen(
         onToggleNetworkCard = { viewModel.onEvent(PlayerEvent.ToggleNetworkCard) },
         onDismissNetworkCard = { viewModel.onEvent(PlayerEvent.DismissNetworkCard) },
         onHoldSpeed = { viewModel.onEvent(PlayerEvent.HoldSpeed(it)) },
-        onOpenPanel = { viewModel.onEvent(PlayerEvent.OpenPanel) },
-        onClosePanel = { viewModel.onEvent(PlayerEvent.ClosePanel) },
+        onOpenDrawer = { viewModel.onEvent(PlayerEvent.OpenDrawer(it)) },
+        onCloseDrawer = { viewModel.onEvent(PlayerEvent.CloseDrawer) },
         onSelectAudio = { viewModel.onEvent(PlayerEvent.SelectAudio(it)) },
         onSelectSubtitle = { viewModel.onEvent(PlayerEvent.SelectSubtitle(it)) },
+        onSelectOnlineSubtitle = { viewModel.onEvent(PlayerEvent.SelectOnlineSubtitle(it)) },
+        onRefreshOnlineSubtitles = { viewModel.onEvent(PlayerEvent.RefreshOnlineSubtitles) },
+        onAddSubtitleFile = { subtitleFileLauncher.launch(arrayOf("*/*")) },
+        onSubtitleDelay = { viewModel.onEvent(PlayerEvent.SubtitleDelay(it)) },
+        onResetSubtitleDelay = { viewModel.onEvent(PlayerEvent.ResetSubtitleDelay) },
         onSetSpeed = { viewModel.onEvent(PlayerEvent.SetSpeed(it)) },
         onCycleScale = { viewModel.onEvent(PlayerEvent.CycleScale) },
         onOpenExternal = { viewModel.onEvent(PlayerEvent.OpenExternal) },
@@ -230,10 +249,15 @@ internal fun PlayerScreenContent(
     onToggleNetworkCard: () -> Unit,
     onDismissNetworkCard: () -> Unit,
     modifier: Modifier = Modifier,
-    onOpenPanel: () -> Unit = {},
-    onClosePanel: () -> Unit = {},
+    onOpenDrawer: (PlayerDrawer) -> Unit = {},
+    onCloseDrawer: () -> Unit = {},
     onSelectAudio: (String) -> Unit = {},
     onSelectSubtitle: (String?) -> Unit = {},
+    onSelectOnlineSubtitle: (String) -> Unit = {},
+    onRefreshOnlineSubtitles: () -> Unit = {},
+    onAddSubtitleFile: () -> Unit = {},
+    onSubtitleDelay: (Long) -> Unit = {},
+    onResetSubtitleDelay: () -> Unit = {},
     onSetSpeed: (Float) -> Unit = {},
     onCycleScale: () -> Unit = {},
     onOpenExternal: () -> Unit = {},
@@ -261,7 +285,8 @@ internal fun PlayerScreenContent(
 
             PlayerGestureLayer(
                 isActive =
-                    !uiState.panelOpen && (uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended),
+                    uiState.drawer == null &&
+                        (uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended),
                 isSeekable = uiState.isSeekable,
                 seekStepMs = uiState.seekStepMs,
                 holdSpeed = uiState.holdSpeed,
@@ -294,7 +319,7 @@ internal fun PlayerScreenContent(
                     onTogglePlay = onTogglePlay,
                     onSeekTo = onSeekTo,
                     onToggleNetworkCard = onToggleNetworkCard,
-                    onOpenPanel = onOpenPanel,
+                    onOpenDrawer = onOpenDrawer,
                     onCycleScale = onCycleScale,
                     onOpenExternal = onOpenExternal,
                 )
@@ -353,30 +378,42 @@ internal fun PlayerScreenContent(
             )
 
             AnimatedVisibility(
-                visible = uiState.panelOpen,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                visible = uiState.drawer != null,
+                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(PlayerOverlayColors.Scrim.copy(alpha = 0.5f))
-                            .clickable(onClick = onClosePanel),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
+                uiState.drawer?.let { currentDrawer ->
                     Box(
-                        modifier = Modifier.clickable(enabled = false) {},
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .background(PlayerOverlayColors.Scrim.copy(alpha = 0.5f))
+                                .clickable(onClick = onCloseDrawer),
+                        contentAlignment = Alignment.CenterEnd,
                     ) {
-                        PlayerSidePanel(
-                            tracks = uiState.tracks,
-                            currentRate = uiState.rate,
-                            onSetSpeed = onSetSpeed,
-                            onSelectAudio = onSelectAudio,
-                            onSelectSubtitle = onSelectSubtitle,
-                            onClose = onClosePanel,
-                        )
+                        Box(
+                            modifier = Modifier.clickable(enabled = false) {},
+                        ) {
+                            PlayerSidePanel(
+                                drawer = currentDrawer,
+                                tracks = uiState.tracks,
+                                currentRate = uiState.rate,
+                                subtitleDelayMs = uiState.subtitleDelayMs,
+                                onlineSubtitles = uiState.onlineSubtitles,
+                                applyingSubtitleKey = uiState.applyingSubtitleKey,
+                                subtitleError = uiState.subtitleError,
+                                onSetSpeed = onSetSpeed,
+                                onSelectAudio = onSelectAudio,
+                                onSelectSubtitle = onSelectSubtitle,
+                                onSelectOnlineSubtitle = onSelectOnlineSubtitle,
+                                onRefreshOnlineSubtitles = onRefreshOnlineSubtitles,
+                                onAddSubtitleFile = onAddSubtitleFile,
+                                onSubtitleDelay = onSubtitleDelay,
+                                onResetSubtitleDelay = onResetSubtitleDelay,
+                                onClose = onCloseDrawer,
+                            )
+                        }
                     }
                 }
             }
@@ -392,7 +429,7 @@ private fun PlayerControlsOverlay(
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onToggleNetworkCard: () -> Unit,
-    onOpenPanel: () -> Unit,
+    onOpenDrawer: (PlayerDrawer) -> Unit,
     onCycleScale: () -> Unit,
     onOpenExternal: () -> Unit,
     modifier: Modifier = Modifier,
@@ -470,12 +507,47 @@ private fun PlayerControlsOverlay(
             }
             Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
             NexusIconButton(
-                onClick = onOpenPanel,
+                onClick = { onOpenDrawer(PlayerDrawer.AUDIO) },
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_audiotrack),
+                    contentDescription = stringResource(R.string.player_action_audio),
+                    tint =
+                        if (uiState.drawer == PlayerDrawer.AUDIO) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            PlayerOverlayColors.Content
+                        },
+                )
+            }
+            Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+            NexusIconButton(
+                onClick = { onOpenDrawer(PlayerDrawer.SUBTITLES) },
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_subtitles),
-                    contentDescription = stringResource(R.string.player_action_tracks_and_speed),
-                    tint = PlayerOverlayColors.Content,
+                    contentDescription = stringResource(R.string.player_action_subtitles),
+                    tint =
+                        if (uiState.drawer == PlayerDrawer.SUBTITLES) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            PlayerOverlayColors.Content
+                        },
+                )
+            }
+            Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+            NexusIconButton(
+                onClick = { onOpenDrawer(PlayerDrawer.SPEED) },
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_speed),
+                    contentDescription = stringResource(R.string.player_action_speed),
+                    tint =
+                        if (uiState.drawer == PlayerDrawer.SPEED) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            PlayerOverlayColors.Content
+                        },
                 )
             }
         }
@@ -814,7 +886,7 @@ internal fun PlayerPanelOpenDarkPreview() {
                     positionMs = 10_000,
                     durationMs = 180_000,
                     controlsVisible = true,
-                    panelOpen = true,
+                    drawer = PlayerDrawer.SUBTITLES,
                     scaleChipLabel = "Fit",
                 ),
             onNavigateUp = {},

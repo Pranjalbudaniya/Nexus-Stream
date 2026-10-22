@@ -23,6 +23,7 @@ import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.MagnetLink
 import com.nexus.stream.domain.usecase.StreamMatching
 import com.nexus.stream.domain.usecase.StreamOrdering
+import com.nexus.stream.domain.usecase.SubtitleHints
 import com.nexus.stream.domain.usecase.resolvePlaybackSource
 import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.feature.player.PlaybackSelection
@@ -539,16 +540,22 @@ class StreamsViewModel
                 }
             val source = resolvePlaybackSource(stream.stream.source, hint)
             val title = req?.title ?: stream.displayName
+            val hints =
+                SubtitleHints(
+                    filename = stream.stream.filename,
+                    videoHash = stream.stream.videoHash,
+                    videoSize = stream.stream.videoSize,
+                )
             when (source) {
                 is PlaybackSource.Direct,
                 is PlaybackSource.DirectWithHeaders,
                 -> {
-                    startPlayback(title, source, req)
+                    startPlayback(title, source, req, hints)
                 }
 
                 is PlaybackSource.Torrent -> {
                     if (playbackCapabilities.supportsTorrent) {
-                        startPlayback(title, source, req)
+                        startPlayback(title, source, req, hints)
                     } else {
                         _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
                     }
@@ -568,6 +575,7 @@ class StreamsViewModel
             title: String,
             source: PlaybackSource,
             req: PlaybackRequest?,
+            hints: SubtitleHints?,
         ) {
             val selection =
                 PlaybackSelection(
@@ -578,6 +586,7 @@ class StreamsViewModel
                     videoId = req?.videoId.orEmpty(),
                     logoUrl = req?.logoUrl,
                     backgroundUrl = req?.backgroundUrl,
+                    subtitleHints = hints,
                 )
             playbackSessionHolder.start(selection)
             _effects.emit(StreamsEffect.DismissSheet)

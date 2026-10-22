@@ -862,4 +862,31 @@ class StreamsViewModelTest {
             assertFalse(viewModel.uiState.value.isDone)
             assertTrue(viewModel.uiState.value.isLoading)
         }
+
+    @Test
+    fun SV_P8_selectionCarriesSubtitleHintsFromChosenStream() =
+        runTest {
+            val baseStream = createParsedStream("hinted_stream", kind = StreamKind.Direct)
+            val streamWithHints =
+                baseStream.copy(
+                    stream =
+                        baseStream.stream.copy(
+                            filename = "movie.2024.1080p.mkv",
+                            videoHash = "abc123hash",
+                            videoSize = 1048576000L,
+                        ),
+                )
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(streamWithHints))
+            advanceUntilIdle()
+
+            val selection = playbackSessionHolder.current.value
+            assertNotNull(selection)
+            assertNotNull(selection?.subtitleHints)
+            assertEquals("movie.2024.1080p.mkv", selection?.subtitleHints?.filename)
+            assertEquals("abc123hash", selection?.subtitleHints?.videoHash)
+            assertEquals(1048576000L, selection?.subtitleHints?.videoSize)
+        }
 }

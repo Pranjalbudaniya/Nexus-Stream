@@ -15,6 +15,7 @@ data class PlayerSnapshot(
     val rate: Float = 1f,
 )
 
+@Suppress("TooManyFunctions")
 interface PlayerController {
     val snapshot: StateFlow<PlayerSnapshot>
     val tracks: StateFlow<PlayerTracks>
@@ -36,6 +37,10 @@ interface PlayerController {
     fun selectAudioTrack(id: String)
 
     fun selectSubtitleTrack(id: String?)
+
+    fun addSubtitle(uri: String)
+
+    fun setSubtitleDelay(ms: Long)
 
     fun setVideoScale(scale: VideoScale)
 
