@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.domain.model.StreamSort
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -46,6 +47,7 @@ class PlayerPrefsRepositoryImplTest {
             assertNull(repo.preferredQuality.first())
             assertFalse(repo.hideCam.first())
             assertEquals(10, repo.seekStepSeconds.first())
+            assertEquals(VideoScale.FIT, repo.videoScale.first())
         }
 
     @Test
@@ -70,6 +72,24 @@ class PlayerPrefsRepositoryImplTest {
             assertEquals(20, repo.seekStepSeconds.first())
             repo.setSeekStepSeconds(7)
             assertEquals(20, repo.seekStepSeconds.first())
+        }
+
+    @Test
+    fun PP5_PP6_PP7_videoScaleBehavior() =
+        runTest {
+            val (repo, dataStore) = createRepository(this, "video_scale_prefs.preferences_pb")
+            // PP5: default FIT
+            assertEquals(VideoScale.FIT, repo.videoScale.first())
+
+            // PP6: set CROP reads CROP
+            repo.setVideoScale(VideoScale.CROP)
+            assertEquals(VideoScale.CROP, repo.videoScale.first())
+
+            // PP7: unknown stored value reads FIT
+            dataStore.edit { prefs ->
+                prefs[stringPreferencesKey("video_scale")] = "UNKNOWN_SCALE_VALUE"
+            }
+            assertEquals(VideoScale.FIT, repo.videoScale.first())
         }
 
     @Test

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -40,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -69,6 +71,7 @@ import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusIconButton
+import com.nexus.stream.presentation.feature.streams.ExternalActions
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 
@@ -112,6 +115,29 @@ fun PlayerScreen(
             }
         }
 
+    LaunchedEffect(viewModel, context) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is PlayerEffect.OpenExternal -> {
+                    ExternalActions.openVideo(
+                        context = context,
+                        url = effect.url,
+                        title = effect.title,
+                        headers = emptyMap(),
+                        onError = {
+                            Toast
+                                .makeText(
+                                    context,
+                                    context.getString(R.string.player_external_no_app),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     DisposableEffect(context) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (window != null) {
@@ -153,7 +179,11 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler {
+    BackHandler(enabled = uiState.panelOpen) {
+        viewModel.onEvent(PlayerEvent.ClosePanel)
+    }
+
+    BackHandler(enabled = !uiState.panelOpen) {
         handleBack()
     }
 
@@ -172,6 +202,13 @@ fun PlayerScreen(
         onToggleNetworkCard = { viewModel.onEvent(PlayerEvent.ToggleNetworkCard) },
         onDismissNetworkCard = { viewModel.onEvent(PlayerEvent.DismissNetworkCard) },
         onHoldSpeed = { viewModel.onEvent(PlayerEvent.HoldSpeed(it)) },
+        onOpenPanel = { viewModel.onEvent(PlayerEvent.OpenPanel) },
+        onClosePanel = { viewModel.onEvent(PlayerEvent.ClosePanel) },
+        onSelectAudio = { viewModel.onEvent(PlayerEvent.SelectAudio(it)) },
+        onSelectSubtitle = { viewModel.onEvent(PlayerEvent.SelectSubtitle(it)) },
+        onSetSpeed = { viewModel.onEvent(PlayerEvent.SetSpeed(it)) },
+        onCycleScale = { viewModel.onEvent(PlayerEvent.CycleScale) },
+        onOpenExternal = { viewModel.onEvent(PlayerEvent.OpenExternal) },
         surfaceFactory = controller?.let { ctrl -> { ctx -> ctrl.createSurface(ctx) } },
         surfaceRelease = { controller?.detachSurface() },
         modifier = modifier,
@@ -193,6 +230,13 @@ internal fun PlayerScreenContent(
     onToggleNetworkCard: () -> Unit,
     onDismissNetworkCard: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPanel: () -> Unit = {},
+    onClosePanel: () -> Unit = {},
+    onSelectAudio: (String) -> Unit = {},
+    onSelectSubtitle: (String?) -> Unit = {},
+    onSetSpeed: (Float) -> Unit = {},
+    onCycleScale: () -> Unit = {},
+    onOpenExternal: () -> Unit = {},
     surfaceFactory: ((Context) -> android.view.View)? = null,
     surfaceRelease: (() -> Unit)? = null,
 ) {
@@ -216,7 +260,8 @@ internal fun PlayerScreenContent(
             }
 
             PlayerGestureLayer(
-                isActive = uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended,
+                isActive =
+                    !uiState.panelOpen && (uiState.phase is PlayerPhase.Playing || uiState.phase is PlayerPhase.Ended),
                 isSeekable = uiState.isSeekable,
                 seekStepMs = uiState.seekStepMs,
                 holdSpeed = uiState.holdSpeed,
@@ -249,7 +294,38 @@ internal fun PlayerScreenContent(
                     onTogglePlay = onTogglePlay,
                     onSeekTo = onSeekTo,
                     onToggleNetworkCard = onToggleNetworkCard,
+                    onOpenPanel = onOpenPanel,
+                    onCycleScale = onCycleScale,
+                    onOpenExternal = onOpenExternal,
                 )
+            }
+
+            AnimatedVisibility(
+                visible = uiState.scaleChipLabel != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                uiState.scaleChipLabel?.let { label ->
+                    Card(
+                        shape = NexusTheme.shapes.chip,
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = PlayerOverlayColors.Card,
+                            ),
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = PlayerOverlayColors.Content,
+                            modifier =
+                                Modifier.padding(
+                                    horizontal = NexusTheme.spacing.lg,
+                                    vertical = NexusTheme.spacing.sm,
+                                ),
+                        )
+                    }
+                }
             }
 
             if (uiState.showNetworkCard && uiState.isTorrentSource) {
@@ -275,6 +351,35 @@ internal fun PlayerScreenContent(
                 onRetry = onRetry,
                 modifier = Modifier.align(Alignment.Center),
             )
+
+            AnimatedVisibility(
+                visible = uiState.panelOpen,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(PlayerOverlayColors.Scrim.copy(alpha = 0.5f))
+                            .clickable(onClick = onClosePanel),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Box(
+                        modifier = Modifier.clickable(enabled = false) {},
+                    ) {
+                        PlayerSidePanel(
+                            tracks = uiState.tracks,
+                            currentRate = uiState.rate,
+                            onSetSpeed = onSetSpeed,
+                            onSelectAudio = onSelectAudio,
+                            onSelectSubtitle = onSelectSubtitle,
+                            onClose = onClosePanel,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -287,6 +392,9 @@ private fun PlayerControlsOverlay(
     onTogglePlay: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onToggleNetworkCard: () -> Unit,
+    onOpenPanel: () -> Unit,
+    onCycleScale: () -> Unit,
+    onOpenExternal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -337,6 +445,38 @@ private fun PlayerControlsOverlay(
                         tint = PlayerOverlayColors.Content,
                     )
                 }
+            }
+            if (uiState.canOpenExternal) {
+                Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+                NexusIconButton(
+                    onClick = onOpenExternal,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_open_external),
+                        contentDescription = stringResource(R.string.player_action_open_external),
+                        tint = PlayerOverlayColors.Content,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+            NexusIconButton(
+                onClick = onCycleScale,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_aspect_ratio),
+                    contentDescription = stringResource(R.string.player_action_video_scale),
+                    tint = PlayerOverlayColors.Content,
+                )
+            }
+            Spacer(modifier = Modifier.width(NexusTheme.spacing.sm))
+            NexusIconButton(
+                onClick = onOpenPanel,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_subtitles),
+                    contentDescription = stringResource(R.string.player_action_tracks_and_speed),
+                    tint = PlayerOverlayColors.Content,
+                )
             }
         }
 
@@ -646,6 +786,36 @@ internal fun PlayerControlsDarkPreview() {
                     durationMs = 180_000,
                     controlsVisible = true,
                     isTorrentSource = false,
+                ),
+            onNavigateUp = {},
+            onTogglePlay = {},
+            onSeekTo = {},
+            onToggleControls = {},
+            onPickFile = {},
+            onAllowMeteredOnce = {},
+            onRetry = {},
+            onToggleNetworkCard = {},
+            onDismissNetworkCard = {},
+        )
+    }
+}
+
+@Preview(name = "Player Panel Open Dark", showBackground = true)
+@Composable
+internal fun PlayerPanelOpenDarkPreview() {
+    NexusTheme(settings = ThemeSettings(mode = ThemeMode.DARK)) {
+        PlayerScreenContent(
+            uiState =
+                PlayerUiState(
+                    title = "Sample Video Title",
+                    phase = PlayerPhase.Playing,
+                    isPlaying = true,
+                    isSeekable = true,
+                    positionMs = 10_000,
+                    durationMs = 180_000,
+                    controlsVisible = true,
+                    panelOpen = true,
+                    scaleChipLabel = "Fit",
                 ),
             onNavigateUp = {},
             onTogglePlay = {},

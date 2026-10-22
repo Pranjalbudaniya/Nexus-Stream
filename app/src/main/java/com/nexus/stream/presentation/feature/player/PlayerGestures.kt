@@ -10,7 +10,7 @@ private const val TOP_DEADZONE_RATIO = 0.12f
 private const val BOTTOM_DEADZONE_RATIO = 0.18f
 private const val PERCENT_SCALE = 100f
 private const val DEFAULT_SEEK_STEP_MS = 10_000L
-private const val DEFAULT_SEEK_WINDOW_MS = 800L
+const val SEEK_ACCUMULATE_WINDOW_MS = 1200L
 private const val MS_PER_SEC = 1000L
 
 fun zoneOf(
@@ -49,7 +49,7 @@ fun accumulatedSeek(
     nowMs: Long,
     direction: Int,
     stepMs: Long = DEFAULT_SEEK_STEP_MS,
-    windowMs: Long = DEFAULT_SEEK_WINDOW_MS,
+    windowMs: Long = SEEK_ACCUMULATE_WINDOW_MS,
 ): Long {
     val sameDirection = (prevDeltaMs > 0L && direction > 0) || (prevDeltaMs < 0L && direction < 0)
     val withinWindow = (nowMs - prevTapMs) in 0..windowMs

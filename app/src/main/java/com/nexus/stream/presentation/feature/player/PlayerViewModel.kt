@@ -7,6 +7,10 @@ import com.nexus.stream.data.player.AudioFocusEvent
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
+import com.nexus.stream.data.player.PlayerTracks
+import com.nexus.stream.data.player.SPEED_OPTIONS
+import com.nexus.stream.data.player.VideoScale
+import com.nexus.stream.data.player.next
 import com.nexus.stream.data.torrent.StreamStatsHub
 import com.nexus.stream.di.MainDispatcher
 import com.nexus.stream.domain.model.AppError
@@ -22,15 +26,19 @@ import com.nexus.stream.domain.repository.TorrentEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
+private const val SCALE_CHIP_HIDE_DELAY_MS = 1200L
 private const val RECOVERY_WINDOW_MS = 60_000L
 private const val HOLD_SPEED = 2.0f
 private const val NORMAL_SPEED = 1.0f
@@ -108,12 +116,19 @@ data class PlayerUiState(
     val isTorrentSource: Boolean = false,
     val seekStepMs: Long = 10_000L,
     val holdSpeed: Boolean = false,
+    val tracks: PlayerTracks = PlayerTracks(),
+    val rate: Float = 1.0f,
+    val scale: VideoScale = VideoScale.FIT,
+    val panelOpen: Boolean = false,
+    val canOpenExternal: Boolean = false,
+    val scaleChipLabel: String? = null,
 ) {
     override fun toString(): String =
         "PlayerUiState(title=$title, phase=$phase, pos=$positionMs, dur=$durationMs, " +
             "playing=$isPlaying, buffering=$isBuffering, seekable=$isSeekable, controls=$controlsVisible, " +
             "showNetworkCard=$showNetworkCard, hasStats=${stats != null}, " +
-            "seekStepMs=$seekStepMs, holdSpeed=$holdSpeed)"
+            "seekStepMs=$seekStepMs, holdSpeed=$holdSpeed, " +
+            "rate=$rate, scale=$scale, panelOpen=$panelOpen, canOpenExternal=$canOpenExternal)"
 }
 
 sealed interface PlayerEvent {
@@ -146,10 +161,37 @@ sealed interface PlayerEvent {
     data object ToggleNetworkCard : PlayerEvent
 
     data object DismissNetworkCard : PlayerEvent
+
+    data object OpenPanel : PlayerEvent
+
+    data object ClosePanel : PlayerEvent
+
+    data class SelectAudio(
+        val id: String,
+    ) : PlayerEvent
+
+    data class SelectSubtitle(
+        val id: String?,
+    ) : PlayerEvent
+
+    data class SetSpeed(
+        val rate: Float,
+    ) : PlayerEvent
+
+    data object CycleScale : PlayerEvent
+
+    data object OpenExternal : PlayerEvent
+}
+
+sealed interface PlayerEffect {
+    data class OpenExternal(
+        val url: String,
+        val title: String,
+    ) : PlayerEffect
 }
 
 @HiltViewModel
-@Suppress("TooManyFunctions", "LongParameterList")
+@Suppress("TooManyFunctions", "LongParameterList", "LargeClass")
 class PlayerViewModel
     @Inject
     constructor(
@@ -165,12 +207,16 @@ class PlayerViewModel
         private val _uiState = MutableStateFlow(PlayerUiState())
         val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
+        private val _effects = Channel<PlayerEffect>(Channel.BUFFERED)
+        val effects: Flow<PlayerEffect> = _effects.receiveAsFlow()
+
         internal var nowMs: () -> Long = System::currentTimeMillis
 
         private var controller: PlayerController? = null
         private var proxySession: ProxySession? = null
         private var torrentJob: Job? = null
         private var controlsTimerJob: Job? = null
+        private var scaleChipJob: Job? = null
         private var activeTorrentRequest: TorrentRequest? = null
         private var playedOnce = false
 
@@ -179,6 +225,10 @@ class PlayerViewModel
         private var currentStreamUrl: String? = null
         private var focusRequestedForCurrentPlayback = false
         private var resumeOnGain = false
+
+        private var baseRate = NORMAL_SPEED
+        private var storedVideoScale = VideoScale.FIT
+        private var initialScaleApplied = false
 
         init {
             val selection = holder.current.value
@@ -254,11 +304,68 @@ class PlayerViewModel
                     _uiState.update { it.copy(seekStepMs = seconds * 1000L) }
                 }
             }
+
+            viewModelScope.launch(mainDispatcher) {
+                playerPrefsRepository.videoScale.collect { scale ->
+                    storedVideoScale = scale
+                    if (!initialScaleApplied) {
+                        _uiState.update { it.copy(scale = scale) }
+                    }
+                }
+            }
         }
 
         fun getController(): PlayerController? = controller
 
         fun onEvent(event: PlayerEvent) {
+            if (!handlePanelAndTrackEvent(event)) {
+                handlePlaybackEvent(event)
+            }
+        }
+
+        private fun handlePanelAndTrackEvent(event: PlayerEvent): Boolean =
+            when (event) {
+                PlayerEvent.OpenPanel -> {
+                    handleOpenPanel()
+                    true
+                }
+
+                PlayerEvent.ClosePanel -> {
+                    handleClosePanel()
+                    true
+                }
+
+                is PlayerEvent.SelectAudio -> {
+                    handleSelectAudio(event.id)
+                    true
+                }
+
+                is PlayerEvent.SelectSubtitle -> {
+                    handleSelectSubtitle(event.id)
+                    true
+                }
+
+                is PlayerEvent.SetSpeed -> {
+                    handleSetSpeed(event.rate)
+                    true
+                }
+
+                PlayerEvent.CycleScale -> {
+                    handleCycleScale()
+                    true
+                }
+
+                PlayerEvent.OpenExternal -> {
+                    handleOpenExternal()
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
+
+        private fun handlePlaybackEvent(event: PlayerEvent) {
             when (event) {
                 PlayerEvent.TogglePlay -> handleTogglePlay()
                 is PlayerEvent.SeekTo -> handleSeekTo(event.ms)
@@ -271,6 +378,7 @@ class PlayerViewModel
                 PlayerEvent.Retry -> handleRetry()
                 PlayerEvent.ToggleNetworkCard -> handleToggleNetworkCard()
                 PlayerEvent.DismissNetworkCard -> handleDismissNetworkCard()
+                else -> Unit
             }
         }
 
@@ -291,7 +399,7 @@ class PlayerViewModel
         private fun handleHoldSpeed(active: Boolean) {
             if (active) {
                 val state = _uiState.value
-                if (state.phase is PlayerPhase.Playing && state.isPlaying) {
+                if (state.phase is PlayerPhase.Playing && state.isPlaying && baseRate < HOLD_SPEED) {
                     controller?.setRate(HOLD_SPEED)
                     _uiState.update { it.copy(holdSpeed = true) }
                 }
@@ -302,8 +410,89 @@ class PlayerViewModel
 
         private fun cancelHoldSpeed() {
             if (_uiState.value.holdSpeed) {
-                controller?.setRate(NORMAL_SPEED)
+                controller?.setRate(baseRate)
                 _uiState.update { it.copy(holdSpeed = false) }
+            }
+        }
+
+        private fun handleOpenPanel() {
+            _uiState.update { it.copy(panelOpen = true, controlsVisible = true) }
+            controlsTimerJob?.cancel()
+        }
+
+        private fun handleClosePanel() {
+            _uiState.update { it.copy(panelOpen = false) }
+            handleControlsTimer()
+        }
+
+        private fun handleSelectAudio(id: String) {
+            val listedIds =
+                _uiState.value.tracks.audio
+                    .map { it.id }
+            if (id in listedIds) {
+                controller?.selectAudioTrack(id)
+            }
+        }
+
+        private fun handleSelectSubtitle(id: String?) {
+            if (id == null) {
+                controller?.selectSubtitleTrack(null)
+            } else {
+                val listedIds =
+                    _uiState.value.tracks.subtitles
+                        .map { it.id }
+                if (id in listedIds) {
+                    controller?.selectSubtitleTrack(id)
+                }
+            }
+        }
+
+        private fun handleSetSpeed(rate: Float) {
+            if (rate in SPEED_OPTIONS) {
+                baseRate = rate
+                controller?.setRate(rate)
+                _uiState.update { it.copy(rate = rate) }
+            }
+        }
+
+        private fun handleCycleScale() {
+            initialScaleApplied = true
+            val nextScale = _uiState.value.scale.next()
+            controller?.setVideoScale(nextScale)
+            viewModelScope.launch(mainDispatcher) {
+                playerPrefsRepository.setVideoScale(nextScale)
+            }
+            _uiState.update { it.copy(scale = nextScale, scaleChipLabel = scaleLabel(nextScale)) }
+            scaleChipJob?.cancel()
+            scaleChipJob =
+                viewModelScope.launch(mainDispatcher) {
+                    delay(SCALE_CHIP_HIDE_DELAY_MS)
+                    _uiState.update { it.copy(scaleChipLabel = null) }
+                }
+        }
+
+        private fun scaleLabel(scale: VideoScale): String =
+            when (scale) {
+                VideoScale.FIT -> "Fit"
+                VideoScale.CROP -> "Crop"
+                VideoScale.STRETCH -> "Stretch"
+                VideoScale.RATIO_16_9 -> "16:9"
+                VideoScale.RATIO_4_3 -> "4:3"
+                VideoScale.ORIGINAL -> "Original"
+            }
+
+        private fun handleOpenExternal() {
+            val url = currentStreamUrl
+            if (_uiState.value.canOpenExternal && url != null) {
+                cancelHoldSpeed()
+                controller?.let { ctrl ->
+                    if (ctrl.snapshot.value.isPlaying) {
+                        ctrl.pause()
+                    }
+                }
+                viewModelScope.launch(mainDispatcher) {
+                    _effects.send(PlayerEffect.OpenExternal(url = url, title = _uiState.value.title))
+                }
             }
         }
 
@@ -521,10 +710,17 @@ class PlayerViewModel
             url: String,
         ) {
             focusRequestedForCurrentPlayback = false
+            currentStreamUrl = url
+            _uiState.update { it.copy(canOpenExternal = true) }
             ctrl.play(url)
         }
 
         private fun observeSnapshot(ctrl: PlayerController) {
+            viewModelScope.launch(mainDispatcher) {
+                ctrl.tracks.collect { tracks ->
+                    _uiState.update { it.copy(tracks = tracks) }
+                }
+            }
             viewModelScope.launch(mainDispatcher) {
                 ctrl.snapshot.collect { snap ->
                     if (snap.failed) {
@@ -538,6 +734,11 @@ class PlayerViewModel
                     }
 
                     if (snap.isPlaying) {
+                        if (!initialScaleApplied) {
+                            initialScaleApplied = true
+                            ctrl.setVideoScale(storedVideoScale)
+                            _uiState.update { it.copy(scale = storedVideoScale) }
+                        }
                         if (!focusRequestedForCurrentPlayback) {
                             focusRequestedForCurrentPlayback = true
                             val granted = audioFocusController.request()
@@ -560,6 +761,7 @@ class PlayerViewModel
                             isPlaying = snap.isPlaying,
                             isBuffering = snap.isBuffering,
                             isSeekable = snap.isSeekable,
+                            rate = if (current.holdSpeed) snap.rate else baseRate,
                             phase = resolvePlaybackPhase(current.phase, snap),
                         )
                     }
@@ -653,6 +855,10 @@ class PlayerViewModel
         private fun handleControlsTimer() {
             controlsTimerJob?.cancel()
             val state = _uiState.value
+            if (state.panelOpen) {
+                _uiState.update { it.copy(controlsVisible = true) }
+                return
+            }
             val shouldAutoFade = state.phase is PlayerPhase.Playing && state.isPlaying && !state.isBuffering
 
             if (!shouldAutoFade) {
@@ -669,6 +875,7 @@ class PlayerViewModel
         public override fun onCleared() {
             super.onCleared()
             controlsTimerJob?.cancel()
+            scaleChipJob?.cancel()
             torrentJob?.cancel()
             proxySession?.close()
             proxySession = null

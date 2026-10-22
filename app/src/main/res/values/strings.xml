@@ -465,5 +465,24 @@
     <string name="error_source_server_error">The source answered %1$d (server error).</string>
     <string name="error_source_unreachable">The source could not be reached (%1$d).</string>
     <string name="error_source_unsupported_path">Unsupported stream path requested. Segmented streams such as HLS are not supported with headers yet.</string>
+
+    <!-- Player tracks, speed, scale, and external player strings -->
+    <string name="player_action_open_external">Play in external app</string>
+    <string name="player_action_video_scale">Video scale</string>
+    <string name="player_action_tracks_and_speed">Audio, subtitles, and speed</string>
+    <string name="player_panel_close">Close panel</string>
+    <string name="player_scale_fit">Fit</string>
+    <string name="player_scale_crop">Crop</string>
+    <string name="player_scale_stretch">Stretch</string>
+    <string name="player_scale_16_9">16:9</string>
+    <string name="player_scale_4_3">4:3</string>
+    <string name="player_scale_original">Original</string>
+    <string name="player_panel_section_speed">Speed</string>
+    <string name="player_panel_section_audio">Audio</string>
+    <string name="player_panel_section_subtitles">Subtitles</string>
+    <string name="player_track_off">Off</string>
+    <string name="player_tracks_empty_audio">No alternate audio tracks</string>
+    <string name="player_tracks_empty_subtitles">No subtitles</string>
+    <string name="player_external_no_app">No app found to open this stream</string>
 </resources>
 

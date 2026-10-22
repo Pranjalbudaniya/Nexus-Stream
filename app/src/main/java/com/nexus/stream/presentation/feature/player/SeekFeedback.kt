@@ -38,11 +38,14 @@ import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 import kotlinx.coroutines.launch
 
-private const val RIPPLE_DURATION_MS = 450
-private const val CHEVRON_DURATION_MS = 600f
-private const val CHEVRON_STAGGER_MS = 120f
-private const val TOTAL_CHEVRON_ANIM_MS = 840
-private const val RIPPLE_MAX_ALPHA = 0.30f
+private const val RIPPLE_DURATION_MS = 900
+private const val CHEVRON_CYCLE_MS = 1000f
+private const val CHEVRON_STAGGER_MS = 200f
+private const val CHEVRON_FADE_IN_MS = 250f
+private const val CHEVRON_FADE_OUT_MS = 350f
+private const val CHEVRON_HOLD_END_MS = CHEVRON_CYCLE_MS - CHEVRON_FADE_OUT_MS
+private const val TOTAL_CHEVRON_ANIM_MS = 1400
+private const val RIPPLE_MAX_ALPHA = 0.35f
 private const val HALF_PROGRESS = 0.5f
 
 @Composable
@@ -173,11 +176,10 @@ private fun chevronAlpha(
 ): Float {
     val startMs = index * CHEVRON_STAGGER_MS
     val elapsed = totalElapsedMs - startMs
-    if (elapsed !in 0f..CHEVRON_DURATION_MS) return 0f
-    val progress = elapsed / CHEVRON_DURATION_MS
-    return if (progress <= HALF_PROGRESS) {
-        progress * 2f
-    } else {
-        (1f - progress) * 2f
+    if (elapsed !in 0f..CHEVRON_CYCLE_MS) return 0f
+    return when {
+        elapsed < CHEVRON_FADE_IN_MS -> elapsed / CHEVRON_FADE_IN_MS
+        elapsed <= CHEVRON_HOLD_END_MS -> 1f
+        else -> ((CHEVRON_CYCLE_MS - elapsed) / CHEVRON_FADE_OUT_MS).coerceIn(0f, 1f)
     }
 }

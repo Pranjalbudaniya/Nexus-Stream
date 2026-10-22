@@ -55,7 +55,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val DISMISS_DELAY_MS = 800L
+private const val PILL_DISMISS_DELAY_MS = 800L
+private const val CHIP_DISMISS_DELAY_MS = 1200L
 private const val DEFAULT_BRIGHTNESS_FALLBACK = 0.5f
 private const val BRIGHTNESS_SCALE = 255f
 private const val MIN_BRIGHTNESS = 0.02f
@@ -253,7 +254,7 @@ private class PlayerGestureState(
             pillDismissJob?.cancel()
             pillDismissJob =
                 coroutineScope.launch {
-                    delay(DISMISS_DELAY_MS)
+                    delay(PILL_DISMISS_DELAY_MS)
                     isPillVisible = false
                 }
         }
@@ -278,7 +279,7 @@ private class PlayerGestureState(
                 stepMs = stepMs,
             )
         val isRestarted =
-            (now - lastTapMs > DISMISS_DELAY_MS) ||
+            (now - lastTapMs > CHIP_DISMISS_DELAY_MS) ||
                 (seekChipState.deltaMs != 0L && (seekChipState.deltaMs > 0 != direction > 0))
         if (isRestarted) {
             alreadyAppliedDelta = 0L
@@ -297,7 +298,7 @@ private class PlayerGestureState(
         chipDismissJob?.cancel()
         chipDismissJob =
             coroutineScope.launch {
-                delay(DISMISS_DELAY_MS)
+                delay(CHIP_DISMISS_DELAY_MS)
                 seekChipState = seekChipState.onTimeout()
                 alreadyAppliedDelta = 0L
             }

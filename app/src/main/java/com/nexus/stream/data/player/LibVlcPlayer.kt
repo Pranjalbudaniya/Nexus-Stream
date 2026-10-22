@@ -23,6 +23,7 @@ import javax.inject.Singleton
 
 private const val BUFFERING_COMPLETE_PERCENT = 100f
 
+@Suppress("TooManyFunctions")
 class LibVlcPlayer(
     context: Context,
     io: CoroutineDispatcher,
@@ -34,6 +35,9 @@ class LibVlcPlayer(
     private val _snapshot = MutableStateFlow(PlayerSnapshot())
     override val snapshot: StateFlow<PlayerSnapshot> = _snapshot.asStateFlow()
 
+    private val _tracks = MutableStateFlow(PlayerTracks())
+    override val tracks: StateFlow<PlayerTracks> = _tracks.asStateFlow()
+
     private var currentMedia: Media? = null
     private val released = AtomicBoolean(false)
 
@@ -41,55 +45,91 @@ class LibVlcPlayer(
         mediaPlayer.setEventListener { event ->
             when (event.type) {
                 MediaPlayer.Event.Playing -> {
+                    refreshTracks()
                     _snapshot.update {
-                        it.copy(isPlaying = true, isBuffering = false)
+                        it.copy(isPlaying = true, isBuffering = false, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.Paused -> {
                     _snapshot.update {
-                        it.copy(isPlaying = false)
+                        it.copy(isPlaying = false, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.Buffering -> {
                     val isBuffering = event.buffering < BUFFERING_COMPLETE_PERCENT
                     _snapshot.update {
-                        it.copy(isBuffering = isBuffering)
+                        it.copy(isBuffering = isBuffering, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.EncounteredError -> {
                     _snapshot.update {
-                        it.copy(failed = true, isPlaying = false, isBuffering = false)
+                        it.copy(failed = true, isPlaying = false, isBuffering = false, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.EndReached -> {
                     _snapshot.update {
-                        it.copy(ended = true, isPlaying = false, isBuffering = false)
+                        it.copy(ended = true, isPlaying = false, isBuffering = false, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.LengthChanged -> {
                     _snapshot.update {
-                        it.copy(durationMs = event.lengthChanged)
+                        it.copy(durationMs = event.lengthChanged, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.TimeChanged -> {
                     _snapshot.update {
-                        it.copy(positionMs = event.timeChanged)
+                        it.copy(positionMs = event.timeChanged, rate = mediaPlayer.rate)
                     }
                 }
 
                 MediaPlayer.Event.SeekableChanged -> {
                     _snapshot.update {
-                        it.copy(isSeekable = event.seekable)
+                        it.copy(isSeekable = event.seekable, rate = mediaPlayer.rate)
                     }
+                }
+
+                MediaPlayer.Event.ESAdded,
+                MediaPlayer.Event.ESDeleted,
+                MediaPlayer.Event.ESSelected,
+                -> {
+                    refreshTracks()
                 }
             }
         }
+    }
+
+    private fun refreshTracks() {
+        val rawAudio = mediaPlayer.audioTracks ?: emptyArray()
+        val audioList =
+            rawAudio
+                .filter { it.id != -1 }
+                .map { PlayerTrack(id = it.id.toString(), name = it.name.orEmpty()) }
+
+        val rawSpu = mediaPlayer.spuTracks ?: emptyArray()
+        val spuList =
+            rawSpu
+                .filter { it.id != -1 }
+                .map { PlayerTrack(id = it.id.toString(), name = it.name.orEmpty()) }
+
+        val currentAudioId = mediaPlayer.audioTrack
+        val selectedAudio = if (currentAudioId == -1) null else currentAudioId.toString()
+
+        val currentSpuId = mediaPlayer.spuTrack
+        val selectedSpu = if (currentSpuId == -1) null else currentSpuId.toString()
+
+        _tracks.value =
+            PlayerTracks(
+                audio = audioList,
+                subtitles = spuList,
+                selectedAudioId = selectedAudio,
+                selectedSubtitleId = selectedSpu,
+            )
     }
 
     override fun createSurface(context: Context): View {
@@ -128,6 +168,38 @@ class LibVlcPlayer(
 
     override fun setRate(rate: Float) {
         mediaPlayer.rate = rate
+        _snapshot.update { it.copy(rate = mediaPlayer.rate) }
+    }
+
+    override fun selectAudioTrack(id: String) {
+        id.toIntOrNull()?.let { intId ->
+            mediaPlayer.setAudioTrack(intId)
+            refreshTracks()
+        }
+    }
+
+    override fun selectSubtitleTrack(id: String?) {
+        if (id == null) {
+            mediaPlayer.setSpuTrack(-1)
+        } else {
+            id.toIntOrNull()?.let { intId ->
+                mediaPlayer.setSpuTrack(intId)
+            }
+        }
+        refreshTracks()
+    }
+
+    override fun setVideoScale(scale: VideoScale) {
+        val scaleType =
+            when (scale) {
+                VideoScale.FIT -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
+                VideoScale.CROP -> MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
+                VideoScale.STRETCH -> MediaPlayer.ScaleType.SURFACE_FILL
+                VideoScale.RATIO_16_9 -> MediaPlayer.ScaleType.SURFACE_16_9
+                VideoScale.RATIO_4_3 -> MediaPlayer.ScaleType.SURFACE_4_3
+                VideoScale.ORIGINAL -> MediaPlayer.ScaleType.SURFACE_ORIGINAL
+            }
+        mediaPlayer.videoScale = scaleType
     }
 
     override fun release() {

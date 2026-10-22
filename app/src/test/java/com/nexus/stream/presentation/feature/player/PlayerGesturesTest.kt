@@ -23,7 +23,6 @@ class PlayerGesturesTest {
     @Test
     fun PG2_accumulatedSeek_sameDirectionWithinWindow_addsStep() {
         val step = 10_000L
-        val window = 800L
 
         // First tap right (direction = +1)
         val s1 =
@@ -33,45 +32,30 @@ class PlayerGesturesTest {
                 nowMs = 1000L,
                 direction = 1,
                 stepMs = step,
-                windowMs = window,
             )
         assertEquals(10_000L, s1)
 
-        // Second tap right at +300 ms
+        // Second tap right at 1.1 s later (1100 ms <= 1200 ms window) -> accumulates
         val s2 =
             accumulatedSeek(
                 prevDeltaMs = s1,
                 prevTapMs = 1000L,
-                nowMs = 1300L,
+                nowMs = 2100L,
                 direction = 1,
                 stepMs = step,
-                windowMs = window,
             )
         assertEquals(20_000L, s2)
 
-        // Third tap right at +600 ms from previous
+        // Third tap right at 1.3 s later (1300 ms > 1200 ms window) -> restarts at +10 s
         val s3 =
             accumulatedSeek(
                 prevDeltaMs = s2,
-                prevTapMs = 1300L,
-                nowMs = 1900L,
+                prevTapMs = 2100L,
+                nowMs = 3400L,
                 direction = 1,
                 stepMs = step,
-                windowMs = window,
             )
-        assertEquals(30_000L, s3)
-
-        // Tap 1 s later (1000 ms > 800 ms window) -> starts at +10 s again
-        val s4 =
-            accumulatedSeek(
-                prevDeltaMs = s3,
-                prevTapMs = 1900L,
-                nowMs = 2900L,
-                direction = 1,
-                stepMs = step,
-                windowMs = window,
-            )
-        assertEquals(10_000L, s4)
+        assertEquals(10_000L, s3)
     }
 
     @Test

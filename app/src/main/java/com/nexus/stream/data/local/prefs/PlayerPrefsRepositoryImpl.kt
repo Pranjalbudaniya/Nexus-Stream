@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.nexus.stream.data.player.VideoScale
+import com.nexus.stream.data.player.parseVideoScale
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.presentation.feature.player.ALLOWED_SEEK_STEPS
@@ -76,6 +78,12 @@ class PlayerPrefsRepositoryImpl
                     normalizeSeekStep(prefs[KEY_SEEK_STEP_SECONDS])
                 }.distinctUntilChanged()
 
+        override val videoScale: Flow<VideoScale> =
+            safeData
+                .map { prefs ->
+                    parseVideoScale(prefs[KEY_VIDEO_SCALE])
+                }.distinctUntilChanged()
+
         override suspend fun setQuickPlay(enabled: Boolean) {
             dataStore.edit { prefs ->
                 prefs[KEY_QUICK_PLAY] = enabled
@@ -122,6 +130,12 @@ class PlayerPrefsRepositoryImpl
             }
         }
 
+        override suspend fun setVideoScale(scale: VideoScale) {
+            dataStore.edit { prefs ->
+                prefs[KEY_VIDEO_SCALE] = scale.name
+            }
+        }
+
         companion object {
             val KEY_QUICK_PLAY = booleanPreferencesKey("quick_play")
             val KEY_STREAM_SORT = stringPreferencesKey("stream_sort")
@@ -129,5 +143,6 @@ class PlayerPrefsRepositoryImpl
             val KEY_PREFERRED_QUALITY = intPreferencesKey("preferred_quality")
             val KEY_HIDE_CAM = booleanPreferencesKey("hide_cam")
             val KEY_SEEK_STEP_SECONDS = intPreferencesKey("seek_step_seconds")
+            val KEY_VIDEO_SCALE = stringPreferencesKey("video_scale")
         }
     }

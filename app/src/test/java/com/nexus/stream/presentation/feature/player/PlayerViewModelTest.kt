@@ -8,6 +8,9 @@ import com.nexus.stream.data.player.AudioFocusEvent
 import com.nexus.stream.data.player.PlayerController
 import com.nexus.stream.data.player.PlayerControllerFactory
 import com.nexus.stream.data.player.PlayerSnapshot
+import com.nexus.stream.data.player.PlayerTrack
+import com.nexus.stream.data.player.PlayerTracks
+import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.StreamSort
@@ -29,6 +32,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -1179,15 +1183,281 @@ class PlayerViewModelTest {
             assertFalse(str.contains(secretHash))
         }
 
+    @Test
+    fun PL40_select_audio_valid_forwards_to_controller() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio =
+                        listOf(
+                            PlayerTrack("1", "English"),
+                            PlayerTrack("2", "French"),
+                        ),
+                )
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.SelectAudio("2"))
+            advanceUntilIdle()
+
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+
+            vm.onEvent(PlayerEvent.SelectAudio("99"))
+            advanceUntilIdle()
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+        }
+
+    @Test
+    fun PL41_select_subtitle_off_calls_null() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    subtitles =
+                        listOf(
+                            PlayerTrack("1", "English"),
+                            PlayerTrack("3", "Spanish"),
+                        ),
+                )
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.SelectSubtitle(null))
+            advanceUntilIdle()
+            assertEquals(listOf<String?>(null), ctrl.selectedSubtitleTracks)
+
+            vm.onEvent(PlayerEvent.SelectSubtitle("3"))
+            advanceUntilIdle()
+            assertEquals(listOf<String?>(null, "3"), ctrl.selectedSubtitleTracks)
+
+            vm.onEvent(PlayerEvent.SelectSubtitle("99"))
+            advanceUntilIdle()
+            assertEquals(listOf<String?>(null, "3"), ctrl.selectedSubtitleTracks)
+        }
+
+    @Test
+    fun PL42_set_speed_valid_updates_controller_and_state() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            vm.onEvent(PlayerEvent.SetSpeed(1.5f))
+            advanceUntilIdle()
+
+            assertEquals(listOf(1.5f), ctrl.rateCalls)
+            assertEquals(1.5f, vm.uiState.value.rate)
+        }
+
+    @Test
+    fun PL43_set_speed_invalid_ignored() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            vm.onEvent(PlayerEvent.SetSpeed(3.0f))
+            advanceUntilIdle()
+
+            assertTrue(ctrl.rateCalls.isEmpty())
+            assertEquals(1.0f, vm.uiState.value.rate)
+        }
+
+    @Test
+    fun PL44_hold_speed_restores_to_base_rate() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.SetSpeed(1.25f))
+            advanceUntilIdle()
+            assertEquals(listOf(1.25f), ctrl.rateCalls)
+
+            vm.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.holdSpeed)
+            assertEquals(listOf(1.25f, 2.0f), ctrl.rateCalls)
+
+            vm.onEvent(PlayerEvent.HoldSpeed(false))
+            advanceUntilIdle()
+            assertFalse(vm.uiState.value.holdSpeed)
+            assertEquals(listOf(1.25f, 2.0f, 1.25f), ctrl.rateCalls)
+        }
+
+    @Test
+    fun PL45_hold_speed_noop_if_base_rate_ge_2() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.SetSpeed(2.0f))
+            advanceUntilIdle()
+            assertEquals(listOf(2.0f), ctrl.rateCalls)
+
+            vm.onEvent(PlayerEvent.HoldSpeed(true))
+            advanceUntilIdle()
+            assertFalse(vm.uiState.value.holdSpeed)
+            assertEquals(listOf(2.0f), ctrl.rateCalls)
+            assertEquals(2.0f, vm.uiState.value.rate)
+        }
+
+    @Test
+    fun PL46_cycle_scale_cycles_and_persists() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            assertEquals(VideoScale.FIT, vm.uiState.value.scale)
+
+            val expectedSequence =
+                listOf(
+                    VideoScale.CROP,
+                    VideoScale.STRETCH,
+                    VideoScale.RATIO_16_9,
+                    VideoScale.RATIO_4_3,
+                    VideoScale.ORIGINAL,
+                    VideoScale.FIT,
+                )
+
+            for (expected in expectedSequence) {
+                vm.onEvent(PlayerEvent.CycleScale)
+                runCurrent()
+                assertEquals(expected, vm.uiState.value.scale)
+                assertEquals(expected, fakePrefs.videoScaleFlow.value)
+                assertTrue(vm.uiState.value.scaleChipLabel != null)
+            }
+
+            assertEquals(expectedSequence, ctrl.videoScaleCalls)
+
+            advanceTimeBy(1300L)
+            runCurrent()
+            assertNull(vm.uiState.value.scaleChipLabel)
+        }
+
+    @Test
+    fun PL47_open_external_emits_effect_and_pauses() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            val effects = mutableListOf<PlayerEffect>()
+            val job = launch { vm.effects.collect { effects.add(it) } }
+
+            vm.onEvent(PlayerEvent.OpenExternal)
+            advanceUntilIdle()
+
+            assertEquals(1, ctrl.pauseCallCount)
+            assertEquals(1, effects.size)
+            val effect = effects.single() as PlayerEffect.OpenExternal
+            assertEquals(url, effect.url)
+            assertEquals("Movie", effect.title)
+
+            job.cancel()
+        }
+
+    @Test
+    fun PL48_initial_video_scale_applied_on_start() =
+        runTest(testDispatcher) {
+            fakePrefs.videoScaleFlow.value = VideoScale.CROP
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            assertTrue(ctrl.videoScaleCalls.isEmpty())
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            advanceUntilIdle()
+
+            assertEquals(listOf(VideoScale.CROP), ctrl.videoScaleCalls)
+            assertEquals(VideoScale.CROP, vm.uiState.value.scale)
+        }
+
+    @Test
+    fun PL49_panel_open_keeps_controls_visible() =
+        runTest(testDispatcher) {
+            val url = "https://example.com/video.mp4"
+            holder.start(PlaybackSelection("Movie", PlaybackSource.Direct(url), "movie", "m1", "v1"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isBuffering = false)
+            runCurrent()
+
+            assertTrue(vm.uiState.value.controlsVisible)
+
+            vm.onEvent(PlayerEvent.OpenPanel)
+            runCurrent()
+            assertTrue(vm.uiState.value.panelOpen)
+            assertTrue(vm.uiState.value.controlsVisible)
+
+            // Advancing past 3000ms should NOT hide controls because panel is open
+            advanceTimeBy(3500L)
+            runCurrent()
+            assertTrue(vm.uiState.value.controlsVisible)
+
+            // Closing panel should resume auto-hide
+            vm.onEvent(PlayerEvent.ClosePanel)
+            runCurrent()
+            assertFalse(vm.uiState.value.panelOpen)
+            assertTrue(vm.uiState.value.controlsVisible)
+
+            advanceTimeBy(3500L)
+            runCurrent()
+            assertFalse(vm.uiState.value.controlsVisible)
+        }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
+
+        val tracksFlow = MutableStateFlow(PlayerTracks())
+        override val tracks: StateFlow<PlayerTracks> = tracksFlow.asStateFlow()
 
         val playedUrls = mutableListOf<String>()
         var pauseCallCount = 0
         var resumeCallCount = 0
         val seekPositions = mutableListOf<Long>()
         val rateCalls = mutableListOf<Float>()
+        val selectedAudioTracks = mutableListOf<String>()
+        val selectedSubtitleTracks = mutableListOf<String?>()
+        val videoScaleCalls = mutableListOf<VideoScale>()
         var releaseCallCount = 0
 
         override fun createSurface(context: Context): View = View(context)
@@ -1216,6 +1486,18 @@ class PlayerViewModelTest {
             rateCalls.add(rate)
         }
 
+        override fun selectAudioTrack(id: String) {
+            selectedAudioTracks.add(id)
+        }
+
+        override fun selectSubtitleTrack(id: String?) {
+            selectedSubtitleTracks.add(id)
+        }
+
+        override fun setVideoScale(scale: VideoScale) {
+            videoScaleCalls.add(scale)
+        }
+
         override fun release() {
             releaseCallCount++
         }
@@ -1239,6 +1521,8 @@ class PlayerViewModelTest {
         override val preferredLanguage: Flow<String?> = MutableStateFlow(null)
         override val preferredQuality: Flow<Int?> = MutableStateFlow(null)
         override val hideCam: Flow<Boolean> = MutableStateFlow(false)
+        val videoScaleFlow = MutableStateFlow(VideoScale.FIT)
+        override val videoScale: Flow<VideoScale> = videoScaleFlow
 
         override suspend fun setQuickPlay(enabled: Boolean) {
             // No-op for tests
@@ -1262,6 +1546,10 @@ class PlayerViewModelTest {
 
         override suspend fun setSeekStepSeconds(seconds: Int) {
             seekStepSecondsFlow.value = seconds
+        }
+
+        override suspend fun setVideoScale(scale: VideoScale) {
+            videoScaleFlow.value = scale
         }
     }
 

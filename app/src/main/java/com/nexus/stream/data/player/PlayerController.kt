@@ -12,10 +12,12 @@ data class PlayerSnapshot(
     val isSeekable: Boolean = false,
     val ended: Boolean = false,
     val failed: Boolean = false,
+    val rate: Float = 1f,
 )
 
 interface PlayerController {
     val snapshot: StateFlow<PlayerSnapshot>
+    val tracks: StateFlow<PlayerTracks>
 
     fun createSurface(context: Context): View // returns the video view and attaches it
 
@@ -30,6 +32,12 @@ interface PlayerController {
     fun seekTo(positionMs: Long)
 
     fun setRate(rate: Float)
+
+    fun selectAudioTrack(id: String)
+
+    fun selectSubtitleTrack(id: String?)
+
+    fun setVideoScale(scale: VideoScale)
 
     fun release() // idempotent; never blocks the main thread
 }
