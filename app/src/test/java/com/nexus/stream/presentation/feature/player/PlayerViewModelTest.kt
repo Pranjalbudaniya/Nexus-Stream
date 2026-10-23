@@ -27,18 +27,25 @@ import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
+import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.PlaybackProgressTracker
 import com.nexus.stream.domain.usecase.SUBTITLES_OFF
+import com.nexus.stream.domain.usecase.SaveOutcome
+import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.SubtitleHints
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.verifyOrder
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -76,17 +83,27 @@ class PlayerViewModelTest {
     private val fakePrefs = FakePlayerPrefsRepository()
     private val loadOnlineSubtitlesUseCase = mockk<LoadOnlineSubtitles>(relaxed = true)
     private val fakeSubtitleImporter = FakeSubtitleFileImporter()
+    private var fakeSaveProgress = mockk<SaveProgress>(relaxed = true)
+    private var fakeProgressRepository = mockk<ProgressRepository>(relaxed = true)
     private val statsHub =
         com.nexus.stream.data.torrent
             .StreamStatsHub()
 
+    private val createdViewModels = mutableListOf<PlayerViewModel>()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        fakeSaveProgress = mockk(relaxed = true)
+        fakeProgressRepository = mockk(relaxed = true)
+        coEvery { fakeProgressRepository.get(any()) } returns null
+        coEvery { fakeSaveProgress(any(), any(), any(), any()) } returns SaveOutcome.Skipped
     }
 
     @After
     fun tearDown() {
+        createdViewModels.forEach { it.onCleared() }
+        createdViewModels.clear()
         Dispatchers.resetMain()
     }
 
@@ -94,19 +111,26 @@ class PlayerViewModelTest {
         h: PlaybackSessionHolder = holder,
         loader: LoadOnlineSubtitles = loadOnlineSubtitlesUseCase,
         importer: SubtitleFileImporter = fakeSubtitleImporter,
-    ): PlayerViewModel =
-        PlayerViewModel(
-            holder = h,
-            controllerFactory = fakeFactory,
-            streamProxy = fakeProxy,
-            torrentEngine = fakeEngine,
-            statsHub = statsHub,
-            audioFocusController = fakeAudioFocus,
-            playerPrefsRepository = fakePrefs,
-            loadOnlineSubtitlesUseCase = loader,
-            subtitleFileImporter = importer,
-            mainDispatcher = testDispatcher,
-        )
+    ): PlayerViewModel {
+        val vm =
+            PlayerViewModel(
+                holder = h,
+                controllerFactory = fakeFactory,
+                streamProxy = fakeProxy,
+                torrentEngine = fakeEngine,
+                statsHub = statsHub,
+                audioFocusController = fakeAudioFocus,
+                playerPrefsRepository = fakePrefs,
+                loadOnlineSubtitlesUseCase = loader,
+                subtitleFileImporter = importer,
+                saveProgress = fakeSaveProgress,
+                progressRepository = fakeProgressRepository,
+                ioDispatcher = Dispatchers.Unconfined,
+                mainDispatcher = testDispatcher,
+            )
+        createdViewModels.add(vm)
+        return vm
+    }
 
     @Test
     fun PL1_directUrl_callsPlayOnce_snapshotPlayingSetsPhasePlaying() =
@@ -2146,6 +2170,391 @@ class PlayerViewModelTest {
             assertFalse(str.contains("secret"))
         }
 
+    @Test
+    fun PL69_selectionWithMetaIdAndVideoId_playingSnapshots_saveProgressIsCalled() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 100_000L, positionMs = 10_000L)
+            advanceUntilIdle()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = false, isSeekable = true, durationMs = 100_000L, positionMs = 10_000L)
+            advanceUntilIdle()
+
+            coVerify(atLeast = 1) {
+                fakeSaveProgress.invoke(match { it.metaId == "m1" && it.videoId == "v1" }, any(), any(), any())
+            }
+            vm.onCleared()
+        }
+
+    @Test
+    fun PL70_selectionWithoutMetaIdOrVideoId_noProgressRead_noWrite() =
+        runTest(testDispatcher) {
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "", ""),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 100_000L, positionMs = 10_000L)
+            advanceTimeBy(15_000L)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { fakeProgressRepository.get(any()) }
+            coVerify(exactly = 0) { fakeSaveProgress.invoke(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun PL71_savedRowUnwatched_firstSnapshotPlayingSeekable_controllerSeekToPositionOnce() =
+        runTest(testDispatcher) {
+            val savedRow =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 720_000L,
+                    durationMs = 7_200_000L,
+                    watched = false,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 1_000L)
+            advanceUntilIdle()
+
+            assertEquals(listOf(720_000L), ctrl.seekPositions)
+        }
+
+    @Test
+    fun PL72_noSavedRow_noSeek() =
+        runTest(testDispatcher) {
+            coEvery { fakeProgressRepository.get(any()) } returns null
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 1_000L)
+            advanceUntilIdle()
+
+            assertTrue(ctrl.seekPositions.isEmpty())
+        }
+
+    @Test
+    fun PL73_watchedRow_noSeek() =
+        runTest(testDispatcher) {
+            val watchedRow =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 720_000L,
+                    durationMs = 7_200_000L,
+                    watched = true,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns watchedRow
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 1_000L)
+            advanceUntilIdle()
+
+            assertTrue(ctrl.seekPositions.isEmpty())
+        }
+
+    @Test
+    fun PL74_savedPosition5s_noSeek() =
+        runTest(testDispatcher) {
+            val row5s =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 5_000L,
+                    durationMs = 7_200_000L,
+                    watched = false,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns row5s
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 1_000L)
+            advanceUntilIdle()
+
+            assertTrue(ctrl.seekPositions.isEmpty())
+        }
+
+    @Test
+    fun PL75_savedPositionWithin10sOfDuration_noSeek() =
+        runTest(testDispatcher) {
+            val rowNearEnd =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 7_195_000L,
+                    durationMs = 7_200_000L,
+                    watched = false,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns rowNearEnd
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 1_000L)
+            advanceUntilIdle()
+
+            assertTrue(ctrl.seekPositions.isEmpty())
+        }
+
+    @Test
+    fun PL76_snapshotsBeforeSeekable_thenSeekable_thenMore_exactlyOneSeek() =
+        runTest(testDispatcher) {
+            val savedRow =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 720_000L,
+                    durationMs = 7_200_000L,
+                    watched = false,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = false, durationMs = 7_200_000L)
+            advanceUntilIdle()
+            assertTrue(ctrl.seekPositions.isEmpty())
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L)
+            advanceUntilIdle()
+            assertEquals(listOf(720_000L), ctrl.seekPositions)
+
+            ctrl.snapshotFlow.value =
+                PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L, positionMs = 725_000L)
+            advanceUntilIdle()
+            assertEquals(listOf(720_000L), ctrl.seekPositions)
+        }
+
+    @Test
+    fun PL77_controllerFailsBeforePlaying_reopenResumesOnce_afterResumeReopenDoesNotResumeAgain() =
+        runTest(testDispatcher) {
+            val savedRow =
+                WatchProgress(
+                    key = "m1|v1",
+                    metaId = "m1",
+                    videoId = "v1",
+                    type = "movie",
+                    season = null,
+                    episode = null,
+                    positionMs = 720_000L,
+                    durationMs = 7_200_000L,
+                    watched = false,
+                    updatedAt = 1_000L,
+                )
+            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            assertEquals(0, ctrl.seekPositions.size)
+
+            vm.onEvent(PlayerEvent.Retry)
+            advanceUntilIdle()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L)
+            advanceUntilIdle()
+            assertEquals(listOf(720_000L), ctrl.seekPositions)
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(failed = true)
+            advanceUntilIdle()
+            vm.onEvent(PlayerEvent.Retry)
+            advanceUntilIdle()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L)
+            advanceUntilIdle()
+            assertEquals(listOf(720_000L), ctrl.seekPositions)
+        }
+
+    @Test
+    fun PL78_onCleared_flushCalledBeforeControllerReleased() =
+        runTest(testDispatcher) {
+            val mockTracker = mockk<PlaybackProgressTracker>(relaxed = true)
+            val mockController = mockk<PlayerController>(relaxed = true)
+            coEvery { mockController.snapshot } returns MutableStateFlow(PlayerSnapshot())
+            coEvery { mockController.tracks } returns MutableStateFlow(PlayerTracks())
+            fakeFactory.nextController = mockController
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.progressTracker = mockTracker
+
+            vm.onCleared()
+            verifyOrder {
+                mockTracker.flush()
+                mockController.release()
+            }
+        }
+
+    @Test
+    fun PL79_savedRowReadThrows_noSeek_noErrorState_playbackContinues() =
+        runTest(testDispatcher) {
+            coEvery { fakeProgressRepository.get(any()) } throws RuntimeException("Storage failure")
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val ctrl = fakeFactory.createdControllers.single()
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, isSeekable = true, durationMs = 7_200_000L)
+            advanceUntilIdle()
+
+            assertTrue(ctrl.seekPositions.isEmpty())
+            assertEquals(PlayerPhase.Playing, vm.uiState.value.phase)
+        }
+
+    @Test
+    fun PL80_snapshotToTrackerInput_playingPausedEndedFailed() {
+        val snapPlaying =
+            PlayerSnapshot(positionMs = 10, durationMs = 100, isPlaying = true, ended = false, failed = false)
+        assertEquals(
+            PlaybackProgressTracker.Input(10, 100, playing = true, ended = false, failed = false),
+            snapPlaying.toTrackerInput(),
+        )
+
+        val snapPaused =
+            PlayerSnapshot(positionMs = 10, durationMs = 100, isPlaying = false, ended = false, failed = false)
+        assertEquals(
+            PlaybackProgressTracker.Input(10, 100, playing = false, ended = false, failed = false),
+            snapPaused.toTrackerInput(),
+        )
+
+        val snapEnded =
+            PlayerSnapshot(positionMs = 100, durationMs = 100, isPlaying = false, ended = true, failed = false)
+        assertEquals(
+            PlaybackProgressTracker.Input(100, 100, playing = false, ended = true, failed = false),
+            snapEnded.toTrackerInput(),
+        )
+
+        val snapFailed =
+            PlayerSnapshot(positionMs = 10, durationMs = 100, isPlaying = false, ended = false, failed = true)
+        assertEquals(
+            PlaybackProgressTracker.Input(10, 100, playing = false, ended = false, failed = true),
+            snapFailed.toTrackerInput(),
+        )
+    }
+
+    @Test
+    fun PL81_toProgressTarget_movieEpisodeMissingIds() {
+        val movieSel =
+            PlaybackSelection(
+                title = "Movie",
+                source = PlaybackSource.Direct(""),
+                type = "movie",
+                metaId = "m1",
+                videoId = "v1",
+                logoUrl = "logo",
+                backgroundUrl = "bg",
+            )
+        val movieTarget = movieSel.toProgressTarget()
+        assertTrue(
+            movieTarget != null && movieTarget.isMovie && movieTarget.season == null && movieTarget.episode == null,
+        )
+        assertEquals("m1", movieTarget?.metaId)
+        assertEquals("v1", movieTarget?.videoId)
+
+        val epSel =
+            PlaybackSelection(
+                title = "Series",
+                source = PlaybackSource.Direct(""),
+                type = "series",
+                metaId = "s1",
+                videoId = "e1",
+                season = 1,
+                episode = 2,
+            )
+        val epTarget = epSel.toProgressTarget()
+        assertTrue(epTarget != null && !epTarget.isMovie && epTarget.season == 1 && epTarget.episode == 2)
+
+        val missingMeta = PlaybackSelection("Ep", PlaybackSource.Direct(""), "movie", "", "v1")
+        assertNull(missingMeta.toProgressTarget())
+
+        val missingVideo = PlaybackSelection("Ep", PlaybackSource.Direct(""), "movie", "m1", "")
+        assertNull(missingVideo.toProgressTarget())
+    }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
@@ -2233,10 +2642,16 @@ class PlayerViewModelTest {
 
     private class FakePlayerControllerFactory : PlayerControllerFactory {
         val createdControllers = mutableListOf<FakePlayerController>()
+        var nextController: PlayerController? = null
         var lastRenderStyle: SubtitleRenderStyle? = null
 
         override fun create(style: SubtitleRenderStyle): PlayerController {
             lastRenderStyle = style
+            val custom = nextController
+            if (custom != null) {
+                nextController = null
+                return custom
+            }
             val ctrl = FakePlayerController()
             createdControllers.add(ctrl)
             return ctrl

@@ -4,9 +4,14 @@ import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.WatchProgress
 import kotlinx.coroutines.flow.Flow
 
 interface ProgressRepository {
+    suspend fun get(key: String): WatchProgress?
+
+    suspend fun upsert(progress: WatchProgress)
+
     fun observeContinueWatching(): Flow<List<ContinueWatchingItem>>
 
     suspend fun removeFromContinueWatching(metaId: String)

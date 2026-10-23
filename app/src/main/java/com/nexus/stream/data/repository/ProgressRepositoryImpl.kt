@@ -10,8 +10,10 @@ import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.ContinueWatchingRules
+import com.nexus.stream.domain.usecase.ProgressRules
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -120,7 +122,7 @@ class ProgressRepositoryImpl(
                     val entities =
                         episodes.map { ep ->
                             WatchProgressEntity(
-                                key = "${meta.id}|${ep.videoId}",
+                                key = ProgressRules.progressKey(meta.id, ep.videoId),
                                 metaId = meta.id,
                                 videoId = ep.videoId,
                                 type = ep.type,
@@ -140,4 +142,43 @@ class ProgressRepositoryImpl(
             }
         }
     }
+
+    override suspend fun get(key: String): WatchProgress? =
+        withContext(dispatcher) {
+            progressDao.get(key)?.toDomain()
+        }
+
+    override suspend fun upsert(progress: WatchProgress) {
+        withContext(dispatcher) {
+            progressDao.upsert(progress.toEntity())
+        }
+    }
 }
+
+private fun WatchProgressEntity.toDomain(): WatchProgress =
+    WatchProgress(
+        key = key,
+        metaId = metaId,
+        videoId = videoId,
+        type = type,
+        season = season,
+        episode = episode,
+        positionMs = positionMs,
+        durationMs = durationMs,
+        watched = watched,
+        updatedAt = updatedAt,
+    )
+
+private fun WatchProgress.toEntity(): WatchProgressEntity =
+    WatchProgressEntity(
+        key = key,
+        metaId = metaId,
+        videoId = videoId,
+        type = type,
+        season = season,
+        episode = episode,
+        positionMs = positionMs,
+        durationMs = durationMs,
+        watched = watched,
+        updatedAt = updatedAt,
+    )

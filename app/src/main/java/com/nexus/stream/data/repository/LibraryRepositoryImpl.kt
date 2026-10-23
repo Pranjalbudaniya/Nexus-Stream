@@ -6,6 +6,8 @@ import com.nexus.stream.data.local.db.entity.LibraryItemEntity
 import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.ProgressTarget
+import com.nexus.stream.domain.repository.LibraryItem
 import com.nexus.stream.domain.repository.LibraryRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -97,6 +99,58 @@ class LibraryRepositoryImpl(
                         }
                     libraryDao.upsert(entity)
                 }
+            }
+        }
+    }
+
+    override suspend fun ensureSnapshot(target: ProgressTarget) {
+        withContext(dispatcher) {
+            transactionRunner.run {
+                val existing = libraryDao.get(target.metaId)
+                if (existing == null) {
+                    libraryDao.upsert(
+                        LibraryItemEntity(
+                            metaId = target.metaId,
+                            type = target.type,
+                            name = target.name,
+                            poster = target.poster,
+                            background = target.background,
+                            inWatchlist = false,
+                            addedAt = clock(),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    override suspend fun getItem(metaId: String): LibraryItem? =
+        withContext(dispatcher) {
+            val entity = libraryDao.get(metaId) ?: return@withContext null
+            val status =
+                runCatching {
+                    ListStatus.valueOf(entity.listStatus)
+                }.getOrDefault(ListStatus.PLAN_TO_WATCH)
+            LibraryItem(
+                metaId = entity.metaId,
+                inWatchlist = entity.inWatchlist,
+                status = status,
+            )
+        }
+
+    override suspend fun setStatusById(
+        metaId: String,
+        status: ListStatus,
+    ) {
+        withContext(dispatcher) {
+            transactionRunner.run {
+                val existing = libraryDao.get(metaId) ?: return@run
+                libraryDao.upsert(
+                    existing.copy(
+                        inWatchlist = true,
+                        listStatus = status.name,
+                    ),
+                )
             }
         }
     }

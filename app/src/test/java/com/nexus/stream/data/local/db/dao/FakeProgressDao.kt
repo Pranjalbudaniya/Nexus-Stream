@@ -14,6 +14,8 @@ class FakeProgressDao : ProgressDao {
 
     override fun observeContinueRows(): Flow<List<ContinueRow>> = continueRows
 
+    override suspend fun get(key: String): WatchProgressEntity? = progressEntities.value[key]
+
     override suspend fun upsert(entity: WatchProgressEntity) {
         val current = progressEntities.value.toMutableMap()
         current[entity.key] = entity

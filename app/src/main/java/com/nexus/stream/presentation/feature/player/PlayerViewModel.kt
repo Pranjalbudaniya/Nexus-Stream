@@ -16,20 +16,27 @@ import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.data.player.next
 import com.nexus.stream.data.player.toRenderStyle
 import com.nexus.stream.data.torrent.StreamStatsHub
+import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.di.MainDispatcher
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
+import com.nexus.stream.domain.model.ProgressTarget
 import com.nexus.stream.domain.model.StreamStats
 import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
+import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.PlaybackProgressTracker
+import com.nexus.stream.domain.usecase.ProgressRules
 import com.nexus.stream.domain.usecase.SUBTITLES_OFF
+import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.clampSubtitleDelay
 import com.nexus.stream.domain.usecase.groupByLanguage
 import com.nexus.stream.domain.usecase.matchTrackByLanguage
@@ -37,7 +44,11 @@ import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +56,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -285,6 +297,9 @@ class PlayerViewModel
         private val playerPrefsRepository: PlayerPrefsRepository,
         private val loadOnlineSubtitlesUseCase: LoadOnlineSubtitles,
         private val subtitleFileImporter: SubtitleFileImporter,
+        private val saveProgress: SaveProgress,
+        private val progressRepository: ProgressRepository,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PlayerUiState())
@@ -294,6 +309,11 @@ class PlayerViewModel
         val effects: Flow<PlayerEffect> = _effects.receiveAsFlow()
 
         internal var nowMs: () -> Long = System::currentTimeMillis
+
+        private var progressTarget: ProgressTarget? = null
+        internal var progressTracker: PlaybackProgressTracker? = null
+        private var resumeDeferred: Deferred<WatchProgress?>? = null
+        private var resumeHandled = false
 
         private var controller: PlayerController? = null
         private var proxySession: ProxySession? = null
@@ -341,6 +361,21 @@ class PlayerViewModel
 
             val selection = holder.current.value
             val isTorrent = selection?.source is PlaybackSource.Torrent
+            val target = selection?.toProgressTarget().also { progressTarget = it }
+            if (target != null) {
+                progressTracker =
+                    PlaybackProgressTracker(target, saveProgress, CoroutineScope(SupervisorJob() + ioDispatcher), nowMs)
+                resumeDeferred =
+                    viewModelScope.async(ioDispatcher) {
+                        try {
+                            progressRepository.get(ProgressRules.progressKey(target.metaId, target.videoId))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+            }
             if (selection == null) {
                 _uiState.update { it.copy(phase = PlayerPhase.Empty) }
             } else {
@@ -1077,6 +1112,7 @@ class PlayerViewModel
         }
 
         private fun observeSnapshot(ctrl: PlayerController) {
+            progressTracker?.attach(ctrl.snapshot.map { it.toTrackerInput() })
             viewModelScope.launch(mainDispatcher) {
                 ctrl.tracks.collect { tracks ->
                     _uiState.update { it.copy(tracks = tracks) }
@@ -1128,6 +1164,21 @@ class PlayerViewModel
             ctrl: PlayerController,
             snap: PlayerSnapshot,
         ) {
+            if (!resumeHandled && snap.isSeekable && snap.durationMs > 0) {
+                resumeHandled = true
+                viewModelScope.launch(mainDispatcher) {
+                    val saved =
+                        try {
+                            resumeDeferred?.await()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                    val resumeMs = ProgressRules.resumePositionMs(saved, snap.durationMs)
+                    if (resumeMs != null) ctrl.seekTo(resumeMs)
+                }
+            }
             if (!firstPlayingSnapshotSeen) {
                 firstPlayingSnapshotSeen = true
                 autoSelectTimeoutJob?.cancel()
@@ -1153,7 +1204,7 @@ class PlayerViewModel
             pendingResumePositionMs?.let { target ->
                 if (snap.isSeekable) {
                     pendingResumePositionMs = null
-                    ctrl.seekTo(target)
+                    if (target > 0) ctrl.seekTo(target)
                 }
             }
         }
@@ -1262,6 +1313,7 @@ class PlayerViewModel
 
         public override fun onCleared() {
             super.onCleared()
+            progressTracker?.flush()
             autoSelectTimeoutJob?.cancel()
             subtitleFileImporter.cleanup()
             onlineSubtitlesJob?.cancel()
@@ -1277,3 +1329,23 @@ class PlayerViewModel
             holder.clear()
         }
     }
+
+internal fun PlaybackSelection.toProgressTarget(): ProgressTarget? =
+    if (metaId.isBlank() || videoId.isBlank()) {
+        null
+    } else {
+        ProgressTarget(
+            metaId = metaId,
+            videoId = videoId,
+            type = type,
+            isMovie = type.equals("movie", ignoreCase = true),
+            season = season,
+            episode = episode,
+            name = title,
+            poster = posterUrl ?: logoUrl,
+            background = backgroundUrl,
+        )
+    }
+
+internal fun PlayerSnapshot.toTrackerInput(): PlaybackProgressTracker.Input =
+    PlaybackProgressTracker.Input(positionMs, durationMs, isPlaying, ended, failed)

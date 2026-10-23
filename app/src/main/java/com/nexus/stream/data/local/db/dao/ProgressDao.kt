@@ -38,6 +38,9 @@ interface ProgressDao {
     )
     fun observeContinueRows(): Flow<List<ContinueRow>>
 
+    @Query("SELECT * FROM watch_progress WHERE `key` = :key LIMIT 1")
+    suspend fun get(key: String): WatchProgressEntity?
+
     @Upsert
     suspend fun upsert(entity: WatchProgressEntity)
 
