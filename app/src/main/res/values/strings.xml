@@ -509,5 +509,37 @@
     <string name="player_subtitles_error_bad_type">This file type is not supported</string>
     <string name="player_subtitles_error_too_large">This file is too large (5 MB max)</string>
     <string name="player_subtitles_error_failed">Couldn\'t open this file</string>
+
+    <!-- Subtitle style and preferred languages (P09b.3) -->
+    <string name="settings_audio_language_title">Audio language</string>
+    <string name="settings_subtitle_language_title">Subtitle language</string>
+    <string name="settings_language_dont_change">Don\'t change</string>
+    <string name="settings_subtitle_language_off">Off</string>
+    <string name="settings_subtitles_group_title">Subtitles</string>
+    <string name="settings_subtitle_size_title">Size</string>
+    <string name="settings_subtitle_color_title">Text color</string>
+    <string name="settings_subtitle_background_title">Background</string>
+    <string name="settings_subtitle_edge_title">Edge</string>
+    <string name="settings_subtitle_bold_title">Bold text</string>
+    <string name="settings_subtitle_preview_sample">The quick brown fox</string>
+    <string name="settings_subtitle_preview_caption">Applies the next time you open a video.</string>
+    <string name="settings_subtitle_size_nano">Nano</string>
+    <string name="settings_subtitle_size_micro">Micro</string>
+    <string name="settings_subtitle_size_smallest">Smallest</string>
+    <string name="settings_subtitle_size_small">Small</string>
+    <string name="settings_subtitle_size_normal">Normal</string>
+    <string name="settings_subtitle_size_big">Big</string>
+    <string name="settings_subtitle_size_huge">Huge</string>
+    <string name="settings_subtitle_bg_none">None</string>
+    <string name="settings_subtitle_bg_dim">Dim</string>
+    <string name="settings_subtitle_bg_solid">Solid</string>
+    <string name="settings_subtitle_edge_none">None</string>
+    <string name="settings_subtitle_edge_outline">Outline</string>
+    <string name="settings_subtitle_edge_shadow">Shadow</string>
+    <string name="settings_subtitle_color_white">White</string>
+    <string name="settings_subtitle_color_yellow">Yellow</string>
+    <string name="settings_subtitle_color_cyan">Cyan</string>
+    <string name="settings_subtitle_color_green">Green</string>
+    <string name="settings_subtitle_color_orange">Orange</string>
 </resources>
 

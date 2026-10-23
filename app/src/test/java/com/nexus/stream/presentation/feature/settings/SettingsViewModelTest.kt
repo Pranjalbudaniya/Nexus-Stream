@@ -4,6 +4,10 @@ import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.ManifestHints
+import com.nexus.stream.domain.model.SubtitleBackground
+import com.nexus.stream.domain.model.SubtitleEdge
+import com.nexus.stream.domain.model.SubtitleSize
+import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
@@ -38,6 +42,13 @@ class SettingsViewModelTest {
     private val preferredQualityFlow = MutableStateFlow<Int?>(null)
     private val hideCamFlow = MutableStateFlow(false)
     private val seekStepSecondsFlow = MutableStateFlow(10)
+    private val preferredAudioLanguageFlow = MutableStateFlow<String?>(null)
+    private val preferredSubtitleLanguageFlow = MutableStateFlow<String?>(null)
+    private val subtitleStyleFlow =
+        MutableStateFlow(
+            com.nexus.stream.domain.model
+                .SubtitleStyle(),
+        )
     private val addonsFlow = MutableStateFlow<List<Addon>>(emptyList())
 
     private val adultAddon =
@@ -107,6 +118,9 @@ class SettingsViewModelTest {
         every { playerPrefsRepository.preferredQuality } returns preferredQualityFlow
         every { playerPrefsRepository.hideCam } returns hideCamFlow
         every { playerPrefsRepository.seekStepSeconds } returns seekStepSecondsFlow
+        every { playerPrefsRepository.preferredAudioLanguage } returns preferredAudioLanguageFlow
+        every { playerPrefsRepository.preferredSubtitleLanguage } returns preferredSubtitleLanguageFlow
+        every { playerPrefsRepository.subtitleStyle } returns subtitleStyleFlow
         every { addonRepository.observeAll() } returns addonsFlow
     }
 
@@ -238,5 +252,79 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             coVerify { playerPrefsRepository.setSeekStepSeconds(20) }
+        }
+
+    @Test
+    fun `SS3 state mirrors stored languages and style`() =
+        runTest {
+            preferredAudioLanguageFlow.value = "es"
+            preferredSubtitleLanguageFlow.value = "fr"
+            val customStyle =
+                SubtitleStyle(
+                    size = SubtitleSize.HUGE,
+                    colorId = "yellow",
+                    background = SubtitleBackground.SOLID,
+                    edge = SubtitleEdge.SHADOW,
+                    bold = true,
+                )
+            subtitleStyleFlow.value = customStyle
+
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertEquals("es", viewModel.uiState.value.preferredAudioLanguage)
+            assertEquals("fr", viewModel.uiState.value.preferredSubtitleLanguage)
+            assertEquals(customStyle, viewModel.uiState.value.subtitleStyle)
+        }
+
+    @Test
+    fun `SS4 each new event writes through to repository`() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            viewModel.onEvent(SettingsEvent.SetPreferredSubtitleLanguage("off"))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setPreferredSubtitleLanguage("off") }
+
+            viewModel.onEvent(SettingsEvent.SetPreferredAudioLanguage(null))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setPreferredAudioLanguage(null) }
+
+            viewModel.onEvent(SettingsEvent.SetSubtitleSize(SubtitleSize.BIG))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setSubtitleSize(SubtitleSize.BIG) }
+
+            viewModel.onEvent(SettingsEvent.SetSubtitleColor("cyan"))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setSubtitleColor("cyan") }
+
+            viewModel.onEvent(SettingsEvent.SetSubtitleBackground(SubtitleBackground.DIM))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setSubtitleBackground(SubtitleBackground.DIM) }
+
+            viewModel.onEvent(SettingsEvent.SetSubtitleEdge(SubtitleEdge.NONE))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setSubtitleEdge(SubtitleEdge.NONE) }
+
+            viewModel.onEvent(SettingsEvent.SetSubtitleBold(true))
+            advanceUntilIdle()
+            coVerify { playerPrefsRepository.setSubtitleBold(true) }
+        }
+
+    @Test
+    fun `SS5 defaults when nothing is stored`() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.preferredAudioLanguage)
+            assertEquals(null, viewModel.uiState.value.preferredSubtitleLanguage)
+            assertEquals(SubtitleStyle(), viewModel.uiState.value.subtitleStyle)
+            assertEquals(SubtitleSize.NORMAL, viewModel.uiState.value.subtitleStyle.size)
+            assertEquals("white", viewModel.uiState.value.subtitleStyle.colorId)
+            assertEquals(SubtitleBackground.NONE, viewModel.uiState.value.subtitleStyle.background)
+            assertEquals(SubtitleEdge.OUTLINE, viewModel.uiState.value.subtitleStyle.edge)
+            assertEquals(false, viewModel.uiState.value.subtitleStyle.bold)
         }
 }

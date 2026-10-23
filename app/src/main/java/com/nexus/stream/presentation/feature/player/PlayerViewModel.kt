@@ -11,13 +11,16 @@ import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.data.player.PlayerTracks
 import com.nexus.stream.data.player.SPEED_OPTIONS
 import com.nexus.stream.data.player.SubtitleFileImporter
+import com.nexus.stream.data.player.SubtitleRenderStyle
 import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.data.player.next
+import com.nexus.stream.data.player.toRenderStyle
 import com.nexus.stream.data.torrent.StreamStatsHub
 import com.nexus.stream.di.MainDispatcher
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.StreamStats
+import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
@@ -26,8 +29,11 @@ import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.SUBTITLES_OFF
 import com.nexus.stream.domain.usecase.clampSubtitleDelay
 import com.nexus.stream.domain.usecase.groupByLanguage
+import com.nexus.stream.domain.usecase.matchTrackByLanguage
+import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -47,6 +53,7 @@ import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
 private const val SCALE_CHIP_HIDE_DELAY_MS = 1200L
+private const val AUTO_SELECT_WINDOW_MS = 15_000L
 private const val RECOVERY_WINDOW_MS = 60_000L
 private const val HOLD_SPEED = 2.0f
 private const val NORMAL_SPEED = 1.0f
@@ -310,7 +317,28 @@ class PlayerViewModel
         private var storedVideoScale = VideoScale.FIT
         private var initialScaleApplied = false
 
+        private var userChangedAudio = false
+        private var userChangedSubtitles = false
+        private var audioAutoDone = false
+        private var subtitleAutoDone = false
+        private var autoSelectWindowExpired = false
+        private var firstPlayingSnapshotSeen = false
+        private var autoSelectTimeoutJob: Job? = null
+        private var preferredAudioLang: String? = null
+        private var preferredSubtitleLang: String? = null
+
         init {
+            viewModelScope.launch(mainDispatcher) {
+                preferredAudioLang =
+                    runCatching {
+                        playerPrefsRepository.preferredAudioLanguage.first()?.takeIf { it.isNotBlank() }
+                    }.getOrNull()
+                preferredSubtitleLang =
+                    runCatching {
+                        playerPrefsRepository.preferredSubtitleLanguage.first()?.takeIf { it.isNotBlank() }
+                    }.getOrNull()
+            }
+
             val selection = holder.current.value
             val isTorrent = selection?.source is PlaybackSource.Torrent
             if (selection == null) {
@@ -554,6 +582,8 @@ class PlayerViewModel
         }
 
         private fun handleSelectAudio(id: String) {
+            userChangedAudio = true
+            audioAutoDone = true
             val listedIds =
                 _uiState.value.tracks.audio
                     .map { it.id }
@@ -563,6 +593,8 @@ class PlayerViewModel
         }
 
         private fun handleSelectSubtitle(id: String?) {
+            userChangedSubtitles = true
+            subtitleAutoDone = true
             if (id == null) {
                 controller?.selectSubtitleTrack(null)
             } else {
@@ -577,6 +609,8 @@ class PlayerViewModel
         }
 
         private fun handleSelectOnlineSubtitle(key: String) {
+            userChangedSubtitles = true
+            subtitleAutoDone = true
             val url = onlineSubtitleUrls[key] ?: return
             _uiState.update { it.copy(applyingSubtitleKey = key, subtitleError = null) }
             val c = controller
@@ -635,7 +669,12 @@ class PlayerViewModel
                             }
                         } else {
                             onlineSubtitleUrls.clear()
-                            val groups = groupByLanguage(results)
+                            val prefSub =
+                                preferredSubtitleLang ?: runCatching {
+                                    playerPrefsRepository.preferredSubtitleLanguage.first()
+                                }.getOrNull()?.also { preferredSubtitleLang = it }
+                            val preferredCode = prefSub?.takeIf { it != SUBTITLES_OFF && it.isNotBlank() }
+                            val groups = groupByLanguage(results, preferredCode = preferredCode)
                             val uiGroups =
                                 groups.map { group ->
                                     SubtitleLanguageGroupUi(
@@ -669,6 +708,8 @@ class PlayerViewModel
         }
 
         private fun handleSubtitleFilePicked(uri: String) {
+            userChangedSubtitles = true
+            subtitleAutoDone = true
             _uiState.update { it.copy(subtitleError = null) }
             viewModelScope.launch(mainDispatcher) {
                 when (val result = subtitleFileImporter.import(uri)) {
@@ -817,12 +858,10 @@ class PlayerViewModel
                 lastRecoveryMs = nowMs()
                 pendingResumePositionMs = _uiState.value.positionMs
                 _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
-                val ctrl =
-                    controller ?: controllerFactory.create().also {
-                        controller = it
-                        observeSnapshot(it)
-                    }
-                playUrl(ctrl, url)
+                viewModelScope.launch(mainDispatcher) {
+                    val ctrl = obtainController()
+                    playUrl(ctrl, url)
+                }
             } else {
                 holder.current.value?.let { selection ->
                     playedOnce = false
@@ -842,26 +881,24 @@ class PlayerViewModel
         private fun startPlayback(selection: PlaybackSelection) {
             when (val source = selection.source) {
                 is PlaybackSource.Direct -> {
-                    val ctrl = controllerFactory.create()
-                    controller = ctrl
-                    observeSnapshot(ctrl)
                     _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
-                    currentStreamUrl = source.url
-                    playUrl(ctrl, source.url)
+                    viewModelScope.launch(mainDispatcher) {
+                        val ctrl = obtainController()
+                        playUrl(ctrl, source.url)
+                    }
                 }
 
                 is PlaybackSource.DirectWithHeaders -> {
-                    try {
-                        val session = streamProxy.open(source.url, source.headers)
-                        proxySession = session
-                        val ctrl = controllerFactory.create()
-                        controller = ctrl
-                        observeSnapshot(ctrl)
-                        _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
-                        currentStreamUrl = session.url
-                        playUrl(ctrl, session.url)
-                    } catch (_: IllegalArgumentException) {
-                        _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.UNPLAYABLE)) }
+                    _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                    viewModelScope.launch(mainDispatcher) {
+                        try {
+                            val session = streamProxy.open(source.url, source.headers)
+                            proxySession = session
+                            val ctrl = obtainController()
+                            playUrl(ctrl, session.url)
+                        } catch (_: IllegalArgumentException) {
+                            _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.UNPLAYABLE)) }
+                        }
                     }
                 }
 
@@ -927,12 +964,10 @@ class PlayerViewModel
                 currentStreamUrl = localUrl
                 if (!playedOnce) {
                     playedOnce = true
-                    val ctrl =
-                        controller ?: controllerFactory.create().also {
-                            controller = it
-                            observeSnapshot(it)
-                        }
-                    playUrl(ctrl, localUrl)
+                    viewModelScope.launch(mainDispatcher) {
+                        val ctrl = obtainController()
+                        playUrl(ctrl, localUrl)
+                    }
                 }
             } else {
                 _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.OTHER)) }
@@ -975,57 +1010,150 @@ class PlayerViewModel
             ctrl.play(url)
         }
 
+        private suspend fun obtainController(): PlayerController {
+            val existing = controller
+            if (existing != null) return existing
+            val style =
+                try {
+                    playerPrefsRepository.subtitleStyle.first()
+                } catch (_: Exception) {
+                    SubtitleStyle()
+                }
+            val renderStyle = style.toRenderStyle(SubtitlePalette.rgbFor(style.colorId))
+            val newController = controllerFactory.create(renderStyle)
+            controller = newController
+            observeSnapshot(newController)
+            return newController
+        }
+
+        private fun evaluateAutoTrackSelection(
+            ctrl: PlayerController,
+            tracks: PlayerTracks,
+        ) {
+            if (!firstPlayingSnapshotSeen || autoSelectWindowExpired) return
+            evaluateAudioAutoSelection(ctrl, tracks)
+            evaluateSubtitleAutoSelection(ctrl, tracks)
+        }
+
+        private fun evaluateAudioAutoSelection(
+            ctrl: PlayerController,
+            tracks: PlayerTracks,
+        ) {
+            if (!audioAutoDone) {
+                val audioPref = preferredAudioLang
+                if (userChangedAudio || audioPref.isNullOrBlank()) {
+                    audioAutoDone = true
+                } else if (tracks.audio.isNotEmpty()) {
+                    val matched = matchTrackByLanguage(tracks.audio, audioPref)
+                    if (matched != null && matched.id != tracks.selectedAudioId) {
+                        ctrl.selectAudioTrack(matched.id)
+                    }
+                    audioAutoDone = true
+                }
+            }
+        }
+
+        private fun evaluateSubtitleAutoSelection(
+            ctrl: PlayerController,
+            tracks: PlayerTracks,
+        ) {
+            if (!subtitleAutoDone) {
+                val subPref = preferredSubtitleLang
+                if (userChangedSubtitles || subPref.isNullOrBlank()) {
+                    subtitleAutoDone = true
+                } else if (subPref == SUBTITLES_OFF) {
+                    if (tracks.selectedSubtitleId != null) {
+                        ctrl.selectSubtitleTrack(null)
+                        subtitleAutoDone = true
+                    }
+                } else if (tracks.subtitles.isNotEmpty()) {
+                    val matched = matchTrackByLanguage(tracks.subtitles, subPref)
+                    if (matched != null && matched.id != tracks.selectedSubtitleId) {
+                        ctrl.selectSubtitleTrack(matched.id)
+                    }
+                    subtitleAutoDone = true
+                }
+            }
+        }
+
         private fun observeSnapshot(ctrl: PlayerController) {
             viewModelScope.launch(mainDispatcher) {
                 ctrl.tracks.collect { tracks ->
                     _uiState.update { it.copy(tracks = tracks) }
+                    if (firstPlayingSnapshotSeen && !autoSelectWindowExpired) {
+                        evaluateAutoTrackSelection(ctrl, tracks)
+                    }
                 }
             }
             viewModelScope.launch(mainDispatcher) {
                 ctrl.snapshot.collect { snap ->
-                    if (snap.failed) {
-                        cancelHoldSpeed()
-                        handlePlaybackFailed(ctrl)
-                        return@collect
-                    }
+                    handleSnapshotUpdate(ctrl, snap)
+                }
+            }
+        }
 
-                    if (snap.ended || !snap.isPlaying) {
-                        cancelHoldSpeed()
-                    }
+        private fun handleSnapshotUpdate(
+            ctrl: PlayerController,
+            snap: PlayerSnapshot,
+        ) {
+            if (snap.failed) {
+                cancelHoldSpeed()
+                handlePlaybackFailed(ctrl)
+                return
+            }
 
-                    if (snap.isPlaying) {
-                        if (!initialScaleApplied) {
-                            initialScaleApplied = true
-                            ctrl.setVideoScale(storedVideoScale)
-                            _uiState.update { it.copy(scale = storedVideoScale) }
-                        }
-                        if (!focusRequestedForCurrentPlayback) {
-                            focusRequestedForCurrentPlayback = true
-                            val granted = audioFocusController.request()
-                            if (!granted) {
-                                ctrl.pause()
-                            }
-                        }
-                        pendingResumePositionMs?.let { target ->
-                            if (snap.isSeekable) {
-                                pendingResumePositionMs = null
-                                ctrl.seekTo(target)
-                            }
-                        }
-                    }
+            if (snap.ended || !snap.isPlaying) {
+                cancelHoldSpeed()
+            }
 
-                    _uiState.update { current ->
-                        current.copy(
-                            positionMs = snap.positionMs,
-                            durationMs = snap.durationMs,
-                            isPlaying = snap.isPlaying,
-                            isBuffering = snap.isBuffering,
-                            isSeekable = snap.isSeekable,
-                            rate = if (current.holdSpeed) snap.rate else baseRate,
-                            phase = resolvePlaybackPhase(current.phase, snap),
-                        )
+            if (snap.isPlaying) {
+                handlePlayingSnapshot(ctrl, snap)
+            }
+
+            _uiState.update { current ->
+                current.copy(
+                    positionMs = snap.positionMs,
+                    durationMs = snap.durationMs,
+                    isPlaying = snap.isPlaying,
+                    isBuffering = snap.isBuffering,
+                    isSeekable = snap.isSeekable,
+                    rate = if (current.holdSpeed) snap.rate else baseRate,
+                    phase = resolvePlaybackPhase(current.phase, snap),
+                )
+            }
+            handleControlsTimer()
+        }
+
+        private fun handlePlayingSnapshot(
+            ctrl: PlayerController,
+            snap: PlayerSnapshot,
+        ) {
+            if (!firstPlayingSnapshotSeen) {
+                firstPlayingSnapshotSeen = true
+                autoSelectTimeoutJob?.cancel()
+                autoSelectTimeoutJob =
+                    viewModelScope.launch(mainDispatcher) {
+                        delay(AUTO_SELECT_WINDOW_MS)
+                        autoSelectWindowExpired = true
                     }
-                    handleControlsTimer()
+                evaluateAutoTrackSelection(ctrl, ctrl.tracks.value)
+            }
+            if (!initialScaleApplied) {
+                initialScaleApplied = true
+                ctrl.setVideoScale(storedVideoScale)
+                _uiState.update { it.copy(scale = storedVideoScale) }
+            }
+            if (!focusRequestedForCurrentPlayback) {
+                focusRequestedForCurrentPlayback = true
+                val granted = audioFocusController.request()
+                if (!granted) {
+                    ctrl.pause()
+                }
+            }
+            pendingResumePositionMs?.let { target ->
+                if (snap.isSeekable) {
+                    pendingResumePositionMs = null
+                    ctrl.seekTo(target)
                 }
             }
         }
@@ -1134,6 +1262,7 @@ class PlayerViewModel
 
         public override fun onCleared() {
             super.onCleared()
+            autoSelectTimeoutJob?.cancel()
             subtitleFileImporter.cleanup()
             onlineSubtitlesJob?.cancel()
             applyingSubtitleJob?.cancel()

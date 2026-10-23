@@ -29,9 +29,10 @@ private const val SLAVE_TYPE_SUBTITLE = 0
 class LibVlcPlayer(
     context: Context,
     io: CoroutineDispatcher,
+    options: List<String> = emptyList(),
 ) : PlayerController {
     private val scope = CoroutineScope(SupervisorJob() + io)
-    private val libVlc = LibVLC(context, ArrayList<String>())
+    private val libVlc = LibVLC(context, ArrayList(options))
     private val mediaPlayer = MediaPlayer(libVlc)
 
     private val _snapshot = MutableStateFlow(PlayerSnapshot())
@@ -233,5 +234,6 @@ class LibVlcPlayerFactory
         @ApplicationContext private val context: Context,
         @IoDispatcher private val io: CoroutineDispatcher,
     ) : PlayerControllerFactory {
-        override fun create(): PlayerController = LibVlcPlayer(context, io)
+        override fun create(style: SubtitleRenderStyle): PlayerController =
+            LibVlcPlayer(context, io, buildSubtitleOptions(style))
     }

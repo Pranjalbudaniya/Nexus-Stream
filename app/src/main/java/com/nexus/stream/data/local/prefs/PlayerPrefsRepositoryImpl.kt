@@ -11,9 +11,14 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nexus.stream.data.player.VideoScale
 import com.nexus.stream.data.player.parseVideoScale
 import com.nexus.stream.domain.model.StreamSort
+import com.nexus.stream.domain.model.SubtitleBackground
+import com.nexus.stream.domain.model.SubtitleEdge
+import com.nexus.stream.domain.model.SubtitleSize
+import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.presentation.feature.player.ALLOWED_SEEK_STEPS
 import com.nexus.stream.presentation.feature.player.normalizeSeekStep
+import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -23,6 +28,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+// Implementation of PlayerPrefsRepository exposing 16 flows and setters for player and subtitle preferences.
+@Suppress("TooManyFunctions")
 class PlayerPrefsRepositoryImpl
     @Inject
     constructor(
@@ -84,6 +91,52 @@ class PlayerPrefsRepositoryImpl
                     parseVideoScale(prefs[KEY_VIDEO_SCALE])
                 }.distinctUntilChanged()
 
+        override val preferredAudioLanguage: Flow<String?> =
+            safeData
+                .map { prefs ->
+                    prefs[KEY_PREFERRED_AUDIO_LANGUAGE]?.ifBlank { null }
+                }.distinctUntilChanged()
+
+        override val preferredSubtitleLanguage: Flow<String?> =
+            safeData
+                .map { prefs ->
+                    prefs[KEY_PREFERRED_SUBTITLE_LANGUAGE]?.ifBlank { null }
+                }.distinctUntilChanged()
+
+        override val subtitleStyle: Flow<SubtitleStyle> =
+            safeData
+                .map { prefs ->
+                    val size =
+                        prefs[KEY_SUBTITLE_SIZE]?.let { raw ->
+                            runCatching { SubtitleSize.valueOf(raw) }.getOrNull()
+                        } ?: SubtitleSize.NORMAL
+
+                    val colorId =
+                        prefs[KEY_SUBTITLE_COLOR]?.takeIf { raw ->
+                            SubtitlePalette.colors.any { it.id.equals(raw, ignoreCase = true) }
+                        } ?: "white"
+
+                    val bg =
+                        prefs[KEY_SUBTITLE_BACKGROUND]?.let { raw ->
+                            runCatching { SubtitleBackground.valueOf(raw) }.getOrNull()
+                        } ?: SubtitleBackground.NONE
+
+                    val edge =
+                        prefs[KEY_SUBTITLE_EDGE]?.let { raw ->
+                            runCatching { SubtitleEdge.valueOf(raw) }.getOrNull()
+                        } ?: SubtitleEdge.OUTLINE
+
+                    val bold = prefs[KEY_SUBTITLE_BOLD] ?: false
+
+                    SubtitleStyle(
+                        size = size,
+                        colorId = colorId,
+                        background = bg,
+                        edge = edge,
+                        bold = bold,
+                    )
+                }.distinctUntilChanged()
+
         override suspend fun setQuickPlay(enabled: Boolean) {
             dataStore.edit { prefs ->
                 prefs[KEY_QUICK_PLAY] = enabled
@@ -136,6 +189,58 @@ class PlayerPrefsRepositoryImpl
             }
         }
 
+        override suspend fun setPreferredAudioLanguage(code: String?) {
+            dataStore.edit { prefs ->
+                if (code.isNullOrBlank()) {
+                    prefs.remove(KEY_PREFERRED_AUDIO_LANGUAGE)
+                } else {
+                    prefs[KEY_PREFERRED_AUDIO_LANGUAGE] = code
+                }
+            }
+        }
+
+        override suspend fun setPreferredSubtitleLanguage(code: String?) {
+            dataStore.edit { prefs ->
+                if (code == null) {
+                    prefs.remove(KEY_PREFERRED_SUBTITLE_LANGUAGE)
+                } else {
+                    prefs[KEY_PREFERRED_SUBTITLE_LANGUAGE] = code
+                }
+            }
+        }
+
+        override suspend fun setSubtitleSize(size: SubtitleSize) {
+            dataStore.edit { prefs ->
+                prefs[KEY_SUBTITLE_SIZE] = size.name
+            }
+        }
+
+        override suspend fun setSubtitleColor(id: String) {
+            if (SubtitlePalette.colors.any { it.id.equals(id, ignoreCase = true) }) {
+                dataStore.edit { prefs ->
+                    prefs[KEY_SUBTITLE_COLOR] = id
+                }
+            }
+        }
+
+        override suspend fun setSubtitleBackground(background: SubtitleBackground) {
+            dataStore.edit { prefs ->
+                prefs[KEY_SUBTITLE_BACKGROUND] = background.name
+            }
+        }
+
+        override suspend fun setSubtitleEdge(edge: SubtitleEdge) {
+            dataStore.edit { prefs ->
+                prefs[KEY_SUBTITLE_EDGE] = edge.name
+            }
+        }
+
+        override suspend fun setSubtitleBold(bold: Boolean) {
+            dataStore.edit { prefs ->
+                prefs[KEY_SUBTITLE_BOLD] = bold
+            }
+        }
+
         companion object {
             val KEY_QUICK_PLAY = booleanPreferencesKey("quick_play")
             val KEY_STREAM_SORT = stringPreferencesKey("stream_sort")
@@ -144,5 +249,12 @@ class PlayerPrefsRepositoryImpl
             val KEY_HIDE_CAM = booleanPreferencesKey("hide_cam")
             val KEY_SEEK_STEP_SECONDS = intPreferencesKey("seek_step_seconds")
             val KEY_VIDEO_SCALE = stringPreferencesKey("video_scale")
+            val KEY_PREFERRED_AUDIO_LANGUAGE = stringPreferencesKey("preferred_audio_language")
+            val KEY_PREFERRED_SUBTITLE_LANGUAGE = stringPreferencesKey("preferred_subtitle_language")
+            val KEY_SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
+            val KEY_SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
+            val KEY_SUBTITLE_BACKGROUND = stringPreferencesKey("subtitle_background")
+            val KEY_SUBTITLE_EDGE = stringPreferencesKey("subtitle_edge")
+            val KEY_SUBTITLE_BOLD = booleanPreferencesKey("subtitle_bold")
         }
     }

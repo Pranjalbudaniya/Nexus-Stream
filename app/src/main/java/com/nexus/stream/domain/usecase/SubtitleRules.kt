@@ -10,7 +10,7 @@ private const val MILLIS_PER_SECOND = 1000.0
 
 private val ALLOWED_EXTENSIONS = setOf("srt", "ass", "ssa", "vtt", "sub", "smi")
 
-private val BIBLIOGRAPHIC_MAP: Map<String, String> =
+internal val BIBLIOGRAPHIC_MAP: Map<String, String> =
     mapOf(
         "fre" to "fr",
         "ger" to "de",
@@ -78,13 +78,23 @@ data class LanguageGroup(
 fun groupByLanguage(
     items: List<OnlineSubtitle>,
     limit: Int = 60,
+    preferredCode: String? = null,
 ): List<LanguageGroup> {
     val distinct = items.distinctBy { it.subtitle.url }
     val grouped = distinct.groupBy { languageDisplayName(it.subtitle.lang) }
     var remaining = limit
     val result = mutableListOf<LanguageGroup>()
 
-    for ((lang, groupItems) in grouped.entries.sortedBy { it.key }) {
+    val preferredName = preferredCode?.takeIf { it.isNotBlank() }?.let { languageDisplayName(it) }
+
+    val sortedEntries =
+        grouped.entries.sortedWith(
+            compareByDescending<Map.Entry<String, List<OnlineSubtitle>>> {
+                preferredName != null && it.key.equals(preferredName, ignoreCase = true)
+            }.thenBy { it.key },
+        )
+
+    for ((lang, groupItems) in sortedEntries) {
         if (remaining <= 0) break
         val sortedItems =
             groupItems.sortedWith(

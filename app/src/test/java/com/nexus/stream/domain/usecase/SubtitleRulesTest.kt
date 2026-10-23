@@ -97,4 +97,26 @@ class SubtitleRulesTest {
         assertEquals(-30_000L, clampSubtitleDelay(-40_000L))
         assertEquals(500L, clampSubtitleDelay(500L))
     }
+
+    @Test
+    fun SR6_groupByLanguage_preferredCodePutsLanguageFirst() {
+        val items =
+            listOf(
+                OnlineSubtitle(Subtitle("1", "http://sub.com/1", "en", "English 1"), "Addon1"),
+                OnlineSubtitle(Subtitle("2", "http://sub.com/2", "es", "Spanish 1"), "Addon1"),
+                OnlineSubtitle(Subtitle("3", "http://sub.com/3", "fr", "French 1"), "Addon1"),
+            )
+
+        val groupsPreferred = groupByLanguage(items, preferredCode = "es")
+        assertEquals(3, groupsPreferred.size)
+        assertEquals("Spanish", groupsPreferred[0].language)
+        assertEquals("English", groupsPreferred[1].language)
+        assertEquals("French", groupsPreferred[2].language)
+
+        val groupsDefault = groupByLanguage(items)
+        assertEquals(3, groupsDefault.size)
+        assertEquals("English", groupsDefault[0].language)
+        assertEquals("French", groupsDefault[1].language)
+        assertEquals("Spanish", groupsDefault[2].language)
+    }
 }

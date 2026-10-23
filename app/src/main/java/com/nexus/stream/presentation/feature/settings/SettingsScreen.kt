@@ -143,6 +143,10 @@ internal fun SettingsContent(
                 seekStepSeconds = uiState.seekStepSeconds,
                 onClick = { showSkipLengthDialog = true },
             )
+            SubtitleSettingsSection(
+                uiState = uiState,
+                onEvent = onEvent,
+            )
             NexusCard(
                 modifier =
                     Modifier

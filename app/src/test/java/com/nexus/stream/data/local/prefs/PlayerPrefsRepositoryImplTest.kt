@@ -48,6 +48,13 @@ class PlayerPrefsRepositoryImplTest {
             assertFalse(repo.hideCam.first())
             assertEquals(10, repo.seekStepSeconds.first())
             assertEquals(VideoScale.FIT, repo.videoScale.first())
+            assertNull(repo.preferredAudioLanguage.first())
+            assertNull(repo.preferredSubtitleLanguage.first())
+            assertEquals(
+                com.nexus.stream.domain.model
+                    .SubtitleStyle(),
+                repo.subtitleStyle.first(),
+            )
         }
 
     @Test
@@ -196,5 +203,114 @@ class PlayerPrefsRepositoryImplTest {
             assertNull(repo.preferredLanguage.first())
             assertNull(repo.preferredQuality.first())
             assertFalse(repo.hideCam.first())
+        }
+
+    @Test
+    fun PP8_preferredAudioLanguage_crud() =
+        runTest {
+            val (repo, _) = createRepository(this, "audio_lang_prefs.preferences_pb")
+            assertNull(repo.preferredAudioLanguage.first())
+
+            repo.setPreferredAudioLanguage("es")
+            assertEquals("es", repo.preferredAudioLanguage.first())
+
+            repo.setPreferredAudioLanguage(null)
+            assertNull(repo.preferredAudioLanguage.first())
+
+            repo.setPreferredAudioLanguage("fr")
+            assertEquals("fr", repo.preferredAudioLanguage.first())
+
+            repo.setPreferredAudioLanguage("")
+            assertNull(repo.preferredAudioLanguage.first())
+
+            repo.setPreferredAudioLanguage("   ")
+            assertNull(repo.preferredAudioLanguage.first())
+        }
+
+    @Test
+    fun PP9_preferredSubtitleLanguage_crudAndOffRoundTrips() =
+        runTest {
+            val (repo, _) = createRepository(this, "sub_lang_prefs.preferences_pb")
+            assertNull(repo.preferredSubtitleLanguage.first())
+
+            repo.setPreferredSubtitleLanguage("es")
+            assertEquals("es", repo.preferredSubtitleLanguage.first())
+
+            repo.setPreferredSubtitleLanguage("off")
+            assertEquals("off", repo.preferredSubtitleLanguage.first())
+
+            repo.setPreferredSubtitleLanguage(null)
+            assertNull(repo.preferredSubtitleLanguage.first())
+
+            repo.setPreferredSubtitleLanguage("fr")
+            assertEquals("fr", repo.preferredSubtitleLanguage.first())
+
+            repo.setPreferredSubtitleLanguage("")
+            assertNull(repo.preferredSubtitleLanguage.first())
+        }
+
+    @Test
+    fun PP10_subtitleStyle_defaultEqualsDefaultInstance() =
+        runTest {
+            val (repo, _) = createRepository(this, "sub_style_default.preferences_pb")
+            assertEquals(
+                com.nexus.stream.domain.model
+                    .SubtitleStyle(),
+                repo.subtitleStyle.first(),
+            )
+        }
+
+    @Test
+    fun PP11_subtitleStyle_fiveSettersPersist_unknownValuesFallBack() =
+        runTest {
+            val (repo, dataStore) = createRepository(this, "sub_style_crud.preferences_pb")
+
+            // Size
+            repo.setSubtitleSize(com.nexus.stream.domain.model.SubtitleSize.HUGE)
+            assertEquals(com.nexus.stream.domain.model.SubtitleSize.HUGE, repo.subtitleStyle.first().size)
+
+            // Color
+            repo.setSubtitleColor("yellow")
+            assertEquals("yellow", repo.subtitleStyle.first().colorId)
+
+            // Background
+            repo.setSubtitleBackground(com.nexus.stream.domain.model.SubtitleBackground.SOLID)
+            assertEquals(com.nexus.stream.domain.model.SubtitleBackground.SOLID, repo.subtitleStyle.first().background)
+
+            // Edge
+            repo.setSubtitleEdge(com.nexus.stream.domain.model.SubtitleEdge.SHADOW)
+            assertEquals(com.nexus.stream.domain.model.SubtitleEdge.SHADOW, repo.subtitleStyle.first().edge)
+
+            // Bold
+            repo.setSubtitleBold(true)
+            assertTrue(repo.subtitleStyle.first().bold)
+
+            // Unknown values fall back to defaults
+            dataStore.edit { prefs ->
+                prefs[stringPreferencesKey("subtitle_size")] = "INVALID_SIZE"
+                prefs[stringPreferencesKey("subtitle_color")] = "INVALID_COLOR"
+                prefs[stringPreferencesKey("subtitle_background")] = "INVALID_BG"
+                prefs[stringPreferencesKey("subtitle_edge")] = "INVALID_EDGE"
+            }
+
+            val style = repo.subtitleStyle.first()
+            assertEquals(com.nexus.stream.domain.model.SubtitleSize.NORMAL, style.size)
+            assertEquals("white", style.colorId)
+            assertEquals(com.nexus.stream.domain.model.SubtitleBackground.NONE, style.background)
+            assertEquals(com.nexus.stream.domain.model.SubtitleEdge.OUTLINE, style.edge)
+            assertTrue(style.bold)
+        }
+
+    @Test
+    fun PP12_subtitleColor_outsidePaletteIsIgnored() =
+        runTest {
+            val (repo, _) = createRepository(this, "sub_color_palette.preferences_pb")
+            assertEquals("white", repo.subtitleStyle.first().colorId)
+
+            repo.setSubtitleColor("cyan")
+            assertEquals("cyan", repo.subtitleStyle.first().colorId)
+
+            repo.setSubtitleColor("neon_pink_not_in_palette")
+            assertEquals("cyan", repo.subtitleStyle.first().colorId)
         }
 }

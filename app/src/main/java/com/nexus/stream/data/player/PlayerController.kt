@@ -48,5 +48,5 @@ interface PlayerController {
 }
 
 fun interface PlayerControllerFactory {
-    fun create(): PlayerController
+    fun create(style: SubtitleRenderStyle): PlayerController
 }

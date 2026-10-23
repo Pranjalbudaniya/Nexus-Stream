@@ -12,11 +12,17 @@ import com.nexus.stream.data.player.PlayerSnapshot
 import com.nexus.stream.data.player.PlayerTrack
 import com.nexus.stream.data.player.PlayerTracks
 import com.nexus.stream.data.player.SubtitleFileImporter
+import com.nexus.stream.data.player.SubtitleRenderStyle
 import com.nexus.stream.data.player.VideoScale
+import com.nexus.stream.data.player.toRenderStyle
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.Subtitle
+import com.nexus.stream.domain.model.SubtitleBackground
+import com.nexus.stream.domain.model.SubtitleEdge
+import com.nexus.stream.domain.model.SubtitleSize
+import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
@@ -27,7 +33,9 @@ import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.SUBTITLES_OFF
 import com.nexus.stream.domain.usecase.SubtitleHints
+import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -1047,6 +1055,7 @@ class PlayerViewModelTest {
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
             )
             val viewModel = createViewModel()
+            advanceUntilIdle()
             val ctrl = fakeFactory.createdControllers.first()
             ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
             advanceUntilIdle()
@@ -1069,6 +1078,7 @@ class PlayerViewModelTest {
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
             )
             val viewModel = createViewModel()
+            advanceUntilIdle()
             val ctrl = fakeFactory.createdControllers.first()
 
             // 1. Preparing
@@ -1111,6 +1121,7 @@ class PlayerViewModelTest {
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
             )
             val viewModel = createViewModel()
+            advanceUntilIdle()
             val ctrl = fakeFactory.createdControllers.first()
             ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
             advanceUntilIdle()
@@ -1148,6 +1159,7 @@ class PlayerViewModelTest {
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
             )
             val viewModel = createViewModel()
+            advanceUntilIdle()
             val ctrl = fakeFactory.createdControllers.first()
             ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
             advanceUntilIdle()
@@ -1826,6 +1838,314 @@ class PlayerViewModelTest {
             assertTrue(vm.uiState.value.onlineSubtitles is OnlineSubtitlesState.Loaded)
         }
 
+    @Test
+    fun PL61_factoryReceivesRenderStyleResolvedFromStoredStyle() =
+        runTest(testDispatcher) {
+            val customStyle =
+                SubtitleStyle(
+                    size = SubtitleSize.BIG,
+                    colorId = "yellow",
+                    background = SubtitleBackground.DIM,
+                    edge = SubtitleEdge.SHADOW,
+                    bold = true,
+                )
+            fakePrefs.subtitleStyleFlow.value = customStyle
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+
+            val expected = customStyle.toRenderStyle(SubtitlePalette.rgbFor("yellow"))
+            assertEquals(expected, fakeFactory.lastRenderStyle)
+            assertEquals(13, fakeFactory.lastRenderStyle?.relFontSize)
+            assertEquals(0xFFFF00, fakeFactory.lastRenderStyle?.rgb)
+            assertEquals(true, fakeFactory.lastRenderStyle?.bold)
+            assertEquals(128, fakeFactory.lastRenderStyle?.backgroundOpacity)
+            assertEquals(0, fakeFactory.lastRenderStyle?.outlineOpacity)
+            assertEquals(128, fakeFactory.lastRenderStyle?.shadowOpacity)
+        }
+
+    @Test
+    fun PL62_preferredAudioMatchesTrack_selectsOnce_andAlreadySelectedNoCall() =
+        runTest(testDispatcher) {
+            fakePrefs.preferredAudioLanguageFlow.value = "es"
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl = fakeFactory.createdControllers.single()
+
+            // 1. Snapshot playing arrived
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+
+            // 2. Tracks arrive with English selected
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "1",
+                )
+            runCurrent()
+
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+
+            // 3. Subsequent emission does not select again
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "2",
+                )
+            runCurrent()
+            assertEquals(listOf("2"), ctrl.selectedAudioTracks)
+
+            // 4. Test already selected: fresh start where Spanish is already selected
+            fakePrefs.preferredAudioLanguageFlow.value = "es"
+            fakeFactory.createdControllers.clear()
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl2 = fakeFactory.createdControllers.single()
+            ctrl2.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+            ctrl2.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "2",
+                )
+            runCurrent()
+            assertTrue(ctrl2.selectedAudioTracks.isEmpty())
+        }
+
+    @Test
+    fun PL63_noPreferredAudio_noAutomaticCall() =
+        runTest(testDispatcher) {
+            fakePrefs.preferredAudioLanguageFlow.value = null
+
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl = fakeFactory.createdControllers.single()
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "1",
+                )
+            runCurrent()
+
+            assertTrue(ctrl.selectedAudioTracks.isEmpty())
+        }
+
+    @Test
+    fun PL64_subtitlePreferenceOffOrCode_selectsExpectedTrack() =
+        runTest(testDispatcher) {
+            // Case A: preference "off" with a selected subtitle -> selects null
+            fakePrefs.preferredSubtitleLanguageFlow.value = SUBTITLES_OFF
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl1 = fakeFactory.createdControllers.single()
+            ctrl1.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+            ctrl1.tracksFlow.value =
+                PlayerTracks(
+                    subtitles = listOf(PlayerTrack("s1", "English")),
+                    selectedSubtitleId = "s1",
+                )
+            runCurrent()
+            assertEquals(listOf<String?>(null), ctrl1.selectedSubtitleTracks)
+
+            // Case B: "fr" with a French track -> selected
+            fakePrefs.preferredSubtitleLanguageFlow.value = "fr"
+            fakeFactory.createdControllers.clear()
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl2 = fakeFactory.createdControllers.single()
+            ctrl2.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+            ctrl2.tracksFlow.value =
+                PlayerTracks(
+                    subtitles = listOf(PlayerTrack("s1", "English"), PlayerTrack("s2", "French")),
+                    selectedSubtitleId = "s1",
+                )
+            runCurrent()
+            assertEquals(listOf("s2"), ctrl2.selectedSubtitleTracks)
+
+            // Case C: "fr" without French track -> no call
+            fakePrefs.preferredSubtitleLanguageFlow.value = "fr"
+            fakeFactory.createdControllers.clear()
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl3 = fakeFactory.createdControllers.single()
+            ctrl3.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+            ctrl3.tracksFlow.value =
+                PlayerTracks(
+                    subtitles = listOf(PlayerTrack("s1", "English"), PlayerTrack("s2", "German")),
+                    selectedSubtitleId = "s1",
+                )
+            runCurrent()
+            assertTrue(ctrl3.selectedSubtitleTracks.isEmpty())
+        }
+
+    @Test
+    fun PL65_userSelectsAudioFirst_orAfterAuto_noFurtherSelection() =
+        runTest(testDispatcher) {
+            // User selects audio first
+            fakePrefs.preferredAudioLanguageFlow.value = "es"
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+            val ctrl = fakeFactory.createdControllers.single()
+
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "1",
+                )
+            runCurrent()
+
+            // User manually chooses track 1
+            vm.onEvent(PlayerEvent.SelectAudio("1"))
+            runCurrent()
+            assertEquals(listOf("1"), ctrl.selectedAudioTracks)
+
+            // First playing snapshot arrives
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+
+            // Another track emission arrives -> no automatic selection override
+            ctrl.tracksFlow.value =
+                PlayerTracks(
+                    audio = listOf(PlayerTrack("1", "Track 1 - [English]"), PlayerTrack("2", "Track 2 - [Spanish]")),
+                    selectedAudioId = "1",
+                )
+            runCurrent()
+            assertEquals(listOf("1"), ctrl.selectedAudioTracks)
+        }
+
+    @Test
+    fun PL66_subtitleTracksArrivalTiming_matchesAt10s_notAt16s() =
+        runTest(testDispatcher) {
+            fakePrefs.preferredSubtitleLanguageFlow.value = "fr"
+
+            // Subtitle tracks arriving at 10s: matched
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl1 = fakeFactory.createdControllers.single()
+            ctrl1.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+
+            advanceTimeBy(10_000L)
+            ctrl1.tracksFlow.value =
+                PlayerTracks(
+                    subtitles = listOf(PlayerTrack("s1", "English"), PlayerTrack("s2", "French")),
+                    selectedSubtitleId = "s1",
+                )
+            runCurrent()
+            assertEquals(listOf("s2"), ctrl1.selectedSubtitleTracks)
+
+            // Subtitle tracks arriving at 16s: NOT matched
+            fakeFactory.createdControllers.clear()
+            createViewModel()
+            advanceUntilIdle()
+            val ctrl2 = fakeFactory.createdControllers.single()
+            ctrl2.snapshotFlow.value = PlayerSnapshot(isPlaying = true)
+            runCurrent()
+
+            advanceTimeBy(16_000L)
+            runCurrent()
+            ctrl2.tracksFlow.value =
+                PlayerTracks(
+                    subtitles = listOf(PlayerTrack("s1", "English"), PlayerTrack("s2", "French")),
+                    selectedSubtitleId = "s1",
+                )
+            runCurrent()
+            assertTrue(ctrl2.selectedSubtitleTracks.isEmpty())
+        }
+
+    @Test
+    fun PL67_onlineSubtitlesGroupedWithPreferredLanguageFirst() =
+        runTest(testDispatcher) {
+            fakePrefs.preferredSubtitleLanguageFlow.value = "es"
+            holder.start(
+                PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
+            )
+
+            coEvery { loadOnlineSubtitlesUseCase(any(), any(), any()) } returns
+                listOf(
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s1", "https://sub.org/en.srt", "en", "English"),
+                        "Addon",
+                    ),
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s2", "https://sub.org/es.srt", "es", "Spanish"),
+                        "Addon",
+                    ),
+                    com.nexus.stream.domain.model.OnlineSubtitle(
+                        Subtitle("s3", "https://sub.org/fr.srt", "fr", "French"),
+                        "Addon",
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onEvent(PlayerEvent.OpenDrawer(PlayerDrawer.SUBTITLES))
+            advanceUntilIdle()
+
+            val state = vm.uiState.value.onlineSubtitles
+            assertTrue(state is OnlineSubtitlesState.Loaded)
+            val groups = (state as OnlineSubtitlesState.Loaded).groups
+            assertEquals(3, groups.size)
+            // Preferred language "es" (Spanish) is sorted first
+            assertEquals("Spanish", groups.first().language)
+        }
+
+    @Test
+    fun PL68_uiStateToString_containsNoUrlHashOrHeader() =
+        runTest(testDispatcher) {
+            val secretUrl = "https://private.stream.com/secret/path/video.m3u8?token=12345"
+            val secretHeaderVal = "Bearer super_secret_jwt_token_value"
+            val secretHash = "40charinfohash0123456789abcdef012345678"
+
+            holder.start(
+                PlaybackSelection(
+                    title = "Secret Movie",
+                    source = PlaybackSource.DirectWithHeaders(secretUrl, mapOf("Authorization" to secretHeaderVal)),
+                    type = "movie",
+                    metaId = "tt123",
+                    videoId = "tt123",
+                ),
+            )
+            fakePrefs.preferredAudioLanguageFlow.value = "en"
+            fakePrefs.preferredSubtitleLanguageFlow.value = "es"
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val str = vm.uiState.value.toString()
+            assertFalse(str.contains(secretUrl))
+            assertFalse(str.contains(secretHeaderVal))
+            assertFalse(str.contains(secretHash))
+            assertFalse(str.contains("secret"))
+        }
+
     private class FakePlayerController : PlayerController {
         val snapshotFlow = MutableStateFlow(PlayerSnapshot())
         override val snapshot: StateFlow<PlayerSnapshot> = snapshotFlow.asStateFlow()
@@ -1913,8 +2233,10 @@ class PlayerViewModelTest {
 
     private class FakePlayerControllerFactory : PlayerControllerFactory {
         val createdControllers = mutableListOf<FakePlayerController>()
+        var lastRenderStyle: SubtitleRenderStyle? = null
 
-        override fun create(): PlayerController {
+        override fun create(style: SubtitleRenderStyle): PlayerController {
+            lastRenderStyle = style
             val ctrl = FakePlayerController()
             createdControllers.add(ctrl)
             return ctrl
@@ -1931,6 +2253,16 @@ class PlayerViewModelTest {
         override val hideCam: Flow<Boolean> = MutableStateFlow(false)
         val videoScaleFlow = MutableStateFlow(VideoScale.FIT)
         override val videoScale: Flow<VideoScale> = videoScaleFlow
+        val preferredAudioLanguageFlow = MutableStateFlow<String?>(null)
+        override val preferredAudioLanguage: Flow<String?> = preferredAudioLanguageFlow
+        val preferredSubtitleLanguageFlow = MutableStateFlow<String?>(null)
+        override val preferredSubtitleLanguage: Flow<String?> = preferredSubtitleLanguageFlow
+        val subtitleStyleFlow =
+            MutableStateFlow(
+                com.nexus.stream.domain.model
+                    .SubtitleStyle(),
+            )
+        override val subtitleStyle: Flow<com.nexus.stream.domain.model.SubtitleStyle> = subtitleStyleFlow
 
         override suspend fun setQuickPlay(enabled: Boolean) {
             // No-op for tests
@@ -1958,6 +2290,34 @@ class PlayerViewModelTest {
 
         override suspend fun setVideoScale(scale: VideoScale) {
             videoScaleFlow.value = scale
+        }
+
+        override suspend fun setPreferredAudioLanguage(code: String?) {
+            preferredAudioLanguageFlow.value = code
+        }
+
+        override suspend fun setPreferredSubtitleLanguage(code: String?) {
+            preferredSubtitleLanguageFlow.value = code
+        }
+
+        override suspend fun setSubtitleSize(size: com.nexus.stream.domain.model.SubtitleSize) {
+            subtitleStyleFlow.value = subtitleStyleFlow.value.copy(size = size)
+        }
+
+        override suspend fun setSubtitleColor(id: String) {
+            subtitleStyleFlow.value = subtitleStyleFlow.value.copy(colorId = id)
+        }
+
+        override suspend fun setSubtitleBackground(background: com.nexus.stream.domain.model.SubtitleBackground) {
+            subtitleStyleFlow.value = subtitleStyleFlow.value.copy(background = background)
+        }
+
+        override suspend fun setSubtitleEdge(edge: com.nexus.stream.domain.model.SubtitleEdge) {
+            subtitleStyleFlow.value = subtitleStyleFlow.value.copy(edge = edge)
+        }
+
+        override suspend fun setSubtitleBold(bold: Boolean) {
+            subtitleStyleFlow.value = subtitleStyleFlow.value.copy(bold = bold)
         }
     }
 
