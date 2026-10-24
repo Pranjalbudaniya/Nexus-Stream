@@ -17,6 +17,7 @@ import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.presentation.common.buildPlaybackRequest
 import com.nexus.stream.presentation.feature.player.PlaybackSelection
 import com.nexus.stream.presentation.feature.player.toProgressTarget
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -63,6 +64,7 @@ class ProgressPlaybackContractTest {
         SaveProgress(
             progress = progressRepo,
             library = libraryRepo,
+            sourceMemory = mockk(relaxed = true),
         )
 
     @Before

@@ -1,6 +1,7 @@
 package com.nexus.stream.presentation.feature.player
 
 import com.nexus.stream.domain.model.PlaybackSource
+import com.nexus.stream.domain.model.SourceFingerprint
 import com.nexus.stream.domain.usecase.SubtitleHints
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ data class PlaybackSelection(
     val episode: Int? = null,
     val posterUrl: String? = null,
     val metaName: String? = null,
+    val sourceFingerprint: SourceFingerprint? = null,
 ) {
     override fun toString(): String = "PlaybackSelection(title=$title, type=$type, metaId=$metaId)"
 }

@@ -4,10 +4,12 @@ import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.ProgressSample
 import com.nexus.stream.domain.model.ProgressTarget
+import com.nexus.stream.domain.model.SourceFingerprint
 import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.LibraryItem
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.repository.SourceMemoryRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -24,6 +26,7 @@ import java.io.IOException
 class SaveProgressTest {
     private val progress: ProgressRepository = mockk(relaxed = true)
     private val library: LibraryRepository = mockk(relaxed = true)
+    private val sourceMemory: SourceMemoryRepository = mockk(relaxed = true)
     private lateinit var saveProgress: SaveProgress
 
     private val episodeTarget =
@@ -54,7 +57,7 @@ class SaveProgressTest {
 
     @Before
     fun setUp() {
-        saveProgress = SaveProgress(progress, library)
+        saveProgress = SaveProgress(progress, library, sourceMemory)
     }
 
     @Test
@@ -514,5 +517,109 @@ class SaveProgressTest {
             saveProgress(movieTarget, sample, firstOfSession = false, nowMs = 1000L)
 
             coVerify(exactly = 1) { library.setStatusById(movieTarget.metaId, ListStatus.COMPLETED) }
+        }
+
+    private val testFp =
+        SourceFingerprint(
+            addonKeyHashes = listOf("hash1"),
+            kind = "Torrent",
+            bingeGroup = "group1",
+            infoHash = "abc123def",
+            resolution = 1080,
+            codec = "HEVC",
+            hdr = listOf("HDR"),
+            sizeBytes = 2_000_000_000L,
+        )
+
+    @Test
+    fun SP1_firstWrite_withSource_remembersItOnce() =
+        runTest {
+            val target = episodeTarget.copy(source = testFp)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+            saveProgress(target, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 1) { sourceMemory.remember("tt123|tt123:1:2", testFp) }
+        }
+
+    @Test
+    fun SP2_laterTicks_doNotRemember() =
+        runTest {
+            val target = episodeTarget.copy(source = testFp)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+            saveProgress(target, sample, firstOfSession = false, nowMs = 1000L)
+
+            coVerify(exactly = 0) { sourceMemory.remember(any(), any()) }
+        }
+
+    @Test
+    fun SP3_noSource_noRememberCall() =
+        runTest {
+            val target = episodeTarget.copy(source = null)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+            saveProgress(target, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 0) { sourceMemory.remember(any(), any()) }
+        }
+
+    @Test
+    fun SP4_replayOfWatchedRow_noRememberCall() =
+        runTest {
+            coEvery { progress.get("tt123|tt123:1:2") } returns
+                WatchProgress(
+                    key = "tt123|tt123:1:2",
+                    metaId = "tt123",
+                    videoId = "tt123:1:2",
+                    type = "series",
+                    positionMs = 120_000L,
+                    durationMs = 120_000L,
+                    watched = true,
+                    updatedAt = 500L,
+                )
+            val target = episodeTarget.copy(source = testFp)
+            val sample = ProgressSample(positionMs = 10_000L, durationMs = 120_000L, ended = false)
+            val outcome = saveProgress(target, sample, firstOfSession = true, nowMs = 1000L)
+
+            assertEquals(SaveOutcome.Skipped, outcome)
+            coVerify(exactly = 0) { sourceMemory.remember(any(), any()) }
+        }
+
+    @Test
+    fun SP5_rememberThrowsIOException_progressStillSaved() =
+        runTest {
+            io.mockk.coEvery { sourceMemory.remember(any(), any()) } throws IOException("disk error")
+            val target = episodeTarget.copy(source = testFp)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+            val outcome = saveProgress(target, sample, firstOfSession = true, nowMs = 1000L)
+
+            assertEquals(SaveOutcome.Saved(watched = false), outcome)
+            coVerify(exactly = 1) { progress.upsert(any()) }
+        }
+
+    @Test
+    fun SP6_rememberThrowsCancellation_propagates() =
+        runTest {
+            io.mockk.coEvery { sourceMemory.remember(any(), any()) } throws CancellationException("cancelled")
+            val target = episodeTarget.copy(source = testFp)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+
+            var caught = false
+            try {
+                saveProgress(target, sample, firstOfSession = true, nowMs = 1000L)
+            } catch (_: CancellationException) {
+                caught = true
+            }
+            assertTrue(caught)
+        }
+
+    @Test
+    fun SP7_keyIsTheProgressKey() =
+        runTest {
+            val epTarget = episodeTarget.copy(source = testFp)
+            saveProgress(epTarget, ProgressSample(60_000L, 120_000L, false), firstOfSession = true, nowMs = 1000L)
+            coVerify(exactly = 1) { sourceMemory.remember("tt123|tt123:1:2", testFp) }
+
+            val movTarget = movieTarget.copy(source = testFp)
+            saveProgress(movTarget, ProgressSample(60_000L, 120_000L, false), firstOfSession = true, nowMs = 1000L)
+            coVerify(exactly = 1) { sourceMemory.remember("tt456|tt456", testFp) }
         }
 }

@@ -2866,4 +2866,34 @@ class PlayerViewModelTest {
         assertEquals("tt9999999:1:4", seriesTarget?.videoId)
         assertFalse(seriesTarget!!.isMovie)
     }
+
+    @Test
+    fun PL83_toProgressTarget_carriesTheSourceFingerprint() {
+        val mockSource = mockk<PlaybackSource>(relaxed = true)
+        val fp =
+            com.nexus.stream.domain.model.SourceFingerprint(
+                addonKeyHashes = listOf("hash1"),
+                kind = "Torrent",
+            )
+        val withFp =
+            PlaybackSelection(
+                title = "Movie",
+                source = mockSource,
+                type = "movie",
+                metaId = "tt1",
+                videoId = "tt1",
+                sourceFingerprint = fp,
+            )
+        assertEquals(fp, withFp.toProgressTarget()?.source)
+
+        val withoutFp =
+            PlaybackSelection(
+                title = "Movie",
+                source = mockSource,
+                type = "movie",
+                metaId = "tt1",
+                videoId = "tt1",
+            )
+        assertNull(withoutFp.toProgressTarget()?.source)
+    }
 }

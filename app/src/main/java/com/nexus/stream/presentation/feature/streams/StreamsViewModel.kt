@@ -14,6 +14,7 @@ import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.model.TypeFilter
+import com.nexus.stream.domain.model.fingerprintOf
 import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
@@ -550,12 +551,12 @@ class StreamsViewModel
                 is PlaybackSource.Direct,
                 is PlaybackSource.DirectWithHeaders,
                 -> {
-                    startPlayback(title, source, req, hints)
+                    startPlayback(stream, title, source, req, hints)
                 }
 
                 is PlaybackSource.Torrent -> {
                     if (playbackCapabilities.supportsTorrent) {
-                        startPlayback(title, source, req, hints)
+                        startPlayback(stream, title, source, req, hints)
                     } else {
                         _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
                     }
@@ -572,6 +573,7 @@ class StreamsViewModel
         }
 
         private suspend fun startPlayback(
+            stream: ParsedStream,
             title: String,
             source: PlaybackSource,
             req: PlaybackRequest?,
@@ -591,6 +593,7 @@ class StreamsViewModel
                     episode = req?.episode,
                     posterUrl = req?.posterUrl ?: req?.logoUrl,
                     metaName = req?.metaName,
+                    sourceFingerprint = fingerprintOf(stream),
                 )
             playbackSessionHolder.start(selection)
             _effects.emit(StreamsEffect.DismissSheet)

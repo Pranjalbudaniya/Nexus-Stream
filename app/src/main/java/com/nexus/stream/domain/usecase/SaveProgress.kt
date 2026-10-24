@@ -9,6 +9,7 @@ import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.LibraryItem
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.repository.SourceMemoryRepository
 import javax.inject.Inject
 
 sealed interface SaveOutcome {
@@ -24,6 +25,7 @@ class SaveProgress
     constructor(
         private val progress: ProgressRepository,
         private val library: LibraryRepository,
+        private val sourceMemory: SourceMemoryRepository,
     ) {
         suspend operator fun invoke(
             target: ProgressTarget,
@@ -67,6 +69,15 @@ class SaveProgress
 
             if (firstOfSession) {
                 library.ensureSnapshot(target)
+                if (target.source != null) {
+                    try {
+                        sourceMemory.remember(key, target.source)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // ignore non-cancellation failures
+                    }
+                }
             }
 
             updateLibraryStatusIfNeeded(

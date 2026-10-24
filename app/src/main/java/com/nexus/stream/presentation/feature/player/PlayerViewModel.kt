@@ -1345,6 +1345,7 @@ internal fun PlaybackSelection.toProgressTarget(): ProgressTarget? =
             name = metaName ?: title,
             poster = posterUrl ?: logoUrl,
             background = backgroundUrl,
+            source = sourceFingerprint,
         )
     }
 

@@ -35,6 +35,7 @@ data class WatchProgressDebugRow(
     val watched: Boolean,
     val updatedAt: Long,
     val libraryStatus: String? = null,
+    val sourceText: String = "src=none",
 )
 
 data class MetaCacheDebugRow(
@@ -69,6 +70,7 @@ class DatabaseDevViewModel
     @Inject
     constructor(
         private val database: NexusDatabase,
+        private val sourceMemory: com.nexus.stream.domain.repository.SourceMemoryRepository,
         @IoDispatcher private val dispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _state = MutableStateFlow(DatabaseDebugState())
@@ -86,7 +88,7 @@ class DatabaseDevViewModel
             }
         }
 
-        private fun queryDatabase(): DatabaseDebugState {
+        private suspend fun queryDatabase(): DatabaseDebugState {
             val db = database.openHelper.readableDatabase
             val version = db.version
 
@@ -109,7 +111,22 @@ class DatabaseDevViewModel
                 }
 
             val libraryItems = readLibraryItems(db)
-            val watchProgress = readWatchProgress(db)
+            val watchProgress =
+                readWatchProgress(db).map { row ->
+                    val key =
+                        com.nexus.stream.domain.usecase.ProgressRules
+                            .progressKey(row.metaId, row.videoId)
+                    val fp = sourceMemory.get(key)
+                    val src =
+                        if (fp !=
+                            null
+                        ) {
+                            "src=${fp.kind}${fp.resolution?.let { " ${it}p" }.orEmpty()}"
+                        } else {
+                            "src=none"
+                        }
+                    row.copy(sourceText = src)
+                }
             val metaCache = readMetaCache(db)
             val addons = readAddons(db)
 

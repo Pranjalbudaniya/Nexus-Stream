@@ -10,6 +10,7 @@ data class ProgressTarget(
     val name: String,
     val poster: String?,
     val background: String?,
+    val source: SourceFingerprint? = null,
 )
 
 data class ProgressSample(

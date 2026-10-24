@@ -889,4 +889,46 @@ class StreamsViewModelTest {
             assertEquals("abc123hash", selection?.subtitleHints?.videoHash)
             assertEquals(1048576000L, selection?.subtitleHints?.videoSize)
         }
+
+    @Test
+    fun SX1_choosingAStream_putsItsFingerprintIntoTheSelection() =
+        runTest {
+            val stream =
+                createParsedStream(
+                    key = "t1",
+                    kind = StreamKind.Torrent,
+                    addonKeys = listOf("https://addon1.com/manifest.json"),
+                )
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            advanceUntilIdle()
+
+            val selection = playbackSessionHolder.current.value
+            assertNotNull(selection)
+            assertEquals(
+                com.nexus.stream.domain.model
+                    .fingerprintOf(stream),
+                selection?.sourceFingerprint,
+            )
+        }
+
+    @Test
+    fun SX2_choosingAStreamWithoutAddonKeys_givesNullFingerprint() =
+        runTest {
+            val stream =
+                createParsedStream(
+                    key = "t2",
+                    kind = StreamKind.Torrent,
+                    addonKeys = emptyList(),
+                )
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            viewModel.onEvent(StreamsEvent.SetRequest(sampleRequest))
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            advanceUntilIdle()
+
+            val selection = playbackSessionHolder.current.value
+            assertNotNull(selection)
+            assertNull(selection?.sourceFingerprint)
+        }
 }

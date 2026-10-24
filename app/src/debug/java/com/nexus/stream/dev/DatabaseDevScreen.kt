@@ -119,7 +119,7 @@ fun DatabaseDevScreen(
                             val pos = formatMmSs(item.positionMs)
                             val dur = formatMmSs(item.durationMs)
                             val status = item.libraryStatus ?: "N/A"
-                            val sub = "$pos / $dur | watched=${item.watched} | status=$status"
+                            val sub = "$pos / $dur | watched=${item.watched} | status=$status | ${item.sourceText}"
                             DebugItemCard(
                                 title = key,
                                 subtitle = sub,
