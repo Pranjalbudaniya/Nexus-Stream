@@ -119,6 +119,23 @@ class LibraryRepositoryImpl(
                             addedAt = clock(),
                         ),
                     )
+                } else {
+                    val updatedName = if (target.name.isNotBlank()) target.name else existing.name
+                    val updatedPoster = if (!target.poster.isNullOrBlank()) target.poster else existing.poster
+                    val updatedBackground =
+                        if (!target.background.isNullOrBlank()) target.background else existing.background
+                    if (updatedName != existing.name ||
+                        updatedPoster != existing.poster ||
+                        updatedBackground != existing.background
+                    ) {
+                        libraryDao.upsert(
+                            existing.copy(
+                                name = updatedName,
+                                poster = updatedPoster,
+                                background = updatedBackground,
+                            ),
+                        )
+                    }
                 }
             }
         }

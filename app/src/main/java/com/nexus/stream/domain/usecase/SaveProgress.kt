@@ -1,9 +1,12 @@
 package com.nexus.stream.domain.usecase
 
 import com.nexus.stream.domain.model.ListStatus
+import com.nexus.stream.domain.model.MetaPreview
+import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.model.ProgressSample
 import com.nexus.stream.domain.model.ProgressTarget
 import com.nexus.stream.domain.model.WatchProgress
+import com.nexus.stream.domain.repository.LibraryItem
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import javax.inject.Inject
@@ -57,39 +60,64 @@ class SaveProgress
                 library.ensureSnapshot(target)
             }
 
-            updateLibraryStatusIfNeeded(target, watchedBefore, watchedNow, firstOfSession)
+            updateLibraryStatusIfNeeded(
+                target = target,
+                positionMs = p,
+                watchedBefore = watchedBefore,
+                watchedNow = watchedNow,
+            )
 
             return SaveOutcome.Saved(watchedNow)
         }
 
         private suspend fun updateLibraryStatusIfNeeded(
             target: ProgressTarget,
+            positionMs: Long,
             watchedBefore: Boolean,
             watchedNow: Boolean,
-            firstOfSession: Boolean,
         ) {
             if (watchedBefore) return
+            val qualifying = positionMs >= ProgressRules.STATUS_MIN_POSITION_MS || watchedNow
+            if (!qualifying) return
+
             val item = library.getItem(target.metaId)
-            if (item != null && item.inWatchlist) {
-                val nextStatus =
-                    when {
-                        target.isMovie && watchedNow && item.status != ListStatus.COMPLETED -> {
-                            ListStatus.COMPLETED
-                        }
-
-                        firstOfSession && item.status in ACTIVE_OR_ON_HOLD_STATUSES -> {
-                            ListStatus.WATCHING
-                        }
-
-                        else -> {
-                            null
-                        }
-                    }
-                if (nextStatus != null) {
+            if (item == null || !item.inWatchlist) {
+                val status = if (target.isMovie && watchedNow) ListStatus.COMPLETED else ListStatus.WATCHING
+                library.setStatus(target.toMetaPreview(), status)
+            } else {
+                val nextStatus = computeNextStatus(item, target.isMovie, watchedNow)
+                if (nextStatus != null && nextStatus != item.status) {
                     library.setStatusById(target.metaId, nextStatus)
                 }
             }
         }
+
+        private fun computeNextStatus(
+            item: LibraryItem,
+            isMovie: Boolean,
+            watchedNow: Boolean,
+        ): ListStatus? =
+            when {
+                isMovie && watchedNow && item.status != ListStatus.COMPLETED -> ListStatus.COMPLETED
+                !isMovie && item.status == ListStatus.COMPLETED -> ListStatus.WATCHING
+                item.status in ACTIVE_OR_ON_HOLD_STATUSES -> ListStatus.WATCHING
+                else -> null
+            }
+
+        private fun ProgressTarget.toMetaPreview(): MetaPreview =
+            MetaPreview(
+                id = metaId,
+                type = type,
+                name = name,
+                poster = poster,
+                posterShape = PosterShape.POSTER,
+                background = background,
+                logo = null,
+                description = null,
+                releaseInfo = null,
+                imdbRating = null,
+                genres = emptyList(),
+            )
 
         private companion object {
             private val ACTIVE_OR_ON_HOLD_STATUSES =

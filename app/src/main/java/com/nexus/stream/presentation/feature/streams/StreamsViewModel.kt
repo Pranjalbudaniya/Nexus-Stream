@@ -589,7 +589,8 @@ class StreamsViewModel
                     subtitleHints = hints,
                     season = req?.season,
                     episode = req?.episode,
-                    posterUrl = req?.logoUrl,
+                    posterUrl = req?.posterUrl ?: req?.logoUrl,
+                    metaName = req?.metaName,
                 )
             playbackSessionHolder.start(selection)
             _effects.emit(StreamsEffect.DismissSheet)

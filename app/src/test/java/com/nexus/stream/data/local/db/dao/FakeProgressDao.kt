@@ -4,15 +4,45 @@ import com.nexus.stream.data.local.db.entity.WatchProgressEntity
 import com.nexus.stream.domain.model.ContinueRow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
-class FakeProgressDao : ProgressDao {
+class FakeProgressDao(
+    private val libraryDao: FakeLibraryDao? = null,
+) : ProgressDao {
     val progressEntities = MutableStateFlow<Map<String, WatchProgressEntity>>(emptyMap())
     val continueRows = MutableStateFlow<List<ContinueRow>>(emptyList())
     val deletedMetaIds = mutableListOf<String>()
     val deletedKeys = mutableListOf<String>()
 
-    override fun observeContinueRows(): Flow<List<ContinueRow>> = continueRows
+    override fun observeContinueRows(): Flow<List<ContinueRow>> {
+        val libDao = libraryDao
+        if (libDao != null) {
+            return combine(progressEntities, libDao.items) { progressMap, libraryMap ->
+                val byMeta = progressMap.values.groupBy { it.metaId }
+                byMeta.values
+                    .mapNotNull { rows ->
+                        val newest = rows.maxByOrNull { it.updatedAt } ?: return@mapNotNull null
+                        val libraryItem = libraryMap[newest.metaId]
+                        ContinueRow(
+                            metaId = newest.metaId,
+                            type = newest.type,
+                            name = libraryItem?.name.orEmpty(),
+                            poster = libraryItem?.poster,
+                            videoId = newest.videoId,
+                            season = newest.season,
+                            episode = newest.episode,
+                            positionMs = newest.positionMs,
+                            durationMs = newest.durationMs,
+                            watched = newest.watched,
+                            updatedAt = newest.updatedAt,
+                        )
+                    }.sortedByDescending { it.updatedAt }
+                    .take(40)
+            }
+        }
+        return continueRows
+    }
 
     override suspend fun get(key: String): WatchProgressEntity? = progressEntities.value[key]
 

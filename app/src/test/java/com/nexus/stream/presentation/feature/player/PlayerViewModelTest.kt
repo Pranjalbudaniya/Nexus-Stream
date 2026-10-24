@@ -2553,6 +2553,21 @@ class PlayerViewModelTest {
 
         val missingVideo = PlaybackSelection("Ep", PlaybackSource.Direct(""), "movie", "m1", "")
         assertNull(missingVideo.toProgressTarget())
+
+        val withMetaAndPoster =
+            PlaybackSelection(
+                title = "Breaking Bad - S01E01 Pilot",
+                source = PlaybackSource.Direct(""),
+                type = "series",
+                metaId = "bb",
+                videoId = "bb:1:1",
+                posterUrl = "https://poster.jpg",
+                logoUrl = "https://logo.png",
+                metaName = "Breaking Bad",
+            )
+        val targetWithMeta = withMetaAndPoster.toProgressTarget()
+        assertEquals("Breaking Bad", targetWithMeta?.name)
+        assertEquals("https://poster.jpg", targetWithMeta?.poster)
     }
 
     private class FakePlayerController : PlayerController {

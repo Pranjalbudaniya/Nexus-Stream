@@ -19,6 +19,8 @@ data class PlaybackRequest(
     val year: Int? = null,
     val logoUrl: String? = null,
     val backgroundUrl: String? = null,
+    val posterUrl: String? = null,
+    val metaName: String? = null,
 )
 
 fun buildPlaybackRequest(
@@ -44,6 +46,8 @@ fun buildPlaybackRequest(
         year = year,
         logoUrl = meta.logo,
         backgroundUrl = meta.background,
+        posterUrl = meta.poster,
+        metaName = meta.name,
     )
 }
 

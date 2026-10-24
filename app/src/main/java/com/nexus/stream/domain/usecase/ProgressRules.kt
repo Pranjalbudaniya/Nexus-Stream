@@ -9,6 +9,7 @@ object ProgressRules {
     const val WATCHED_PERCENT = 90
     const val MIN_RESUME_MS = 10_000L
     const val RESUME_END_GUARD_MS = 10_000L
+    const val STATUS_MIN_POSITION_MS = 60_000L
     private const val PERCENT_SCALE = 100L
 
     fun progressKey(

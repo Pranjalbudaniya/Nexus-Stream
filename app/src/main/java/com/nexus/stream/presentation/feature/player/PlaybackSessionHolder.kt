@@ -23,6 +23,7 @@ data class PlaybackSelection(
     val season: Int? = null,
     val episode: Int? = null,
     val posterUrl: String? = null,
+    val metaName: String? = null,
 ) {
     override fun toString(): String = "PlaybackSelection(title=$title, type=$type, metaId=$metaId)"
 }

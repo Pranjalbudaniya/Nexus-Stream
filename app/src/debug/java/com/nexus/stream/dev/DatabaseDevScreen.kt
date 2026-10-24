@@ -115,9 +115,13 @@ fun DatabaseDevScreen(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs)) {
                         state.watchProgress.forEach { item ->
-                            val sub = "watched=${item.watched} | pos=${item.positionMs} / dur=${item.durationMs}"
+                            val key = "${item.metaId} | ${item.videoId}"
+                            val pos = formatMmSs(item.positionMs)
+                            val dur = formatMmSs(item.durationMs)
+                            val status = item.libraryStatus ?: "N/A"
+                            val sub = "$pos / $dur | watched=${item.watched} | status=$status"
                             DebugItemCard(
-                                title = "${item.metaId} / ${item.videoId}",
+                                title = key,
                                 subtitle = sub,
                             )
                         }
@@ -230,6 +234,16 @@ private fun DebugItemCard(
             )
         }
     }
+}
+
+private const val SECONDS_PER_MINUTE = 60
+private const val MS_PER_SECOND = 1000L
+
+private fun formatMmSs(ms: Long): String {
+    val totalSeconds = (ms / MS_PER_SECOND).coerceAtLeast(0)
+    val minutes = totalSeconds / SECONDS_PER_MINUTE
+    val seconds = totalSeconds % SECONDS_PER_MINUTE
+    return String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
 }
 
 private const val PREVIEW_VERSION = 1

@@ -1341,7 +1341,7 @@ internal fun PlaybackSelection.toProgressTarget(): ProgressTarget? =
             isMovie = type.equals("movie", ignoreCase = true),
             season = season,
             episode = episode,
-            name = title,
+            name = metaName ?: title,
             poster = posterUrl ?: logoUrl,
             background = backgroundUrl,
         )

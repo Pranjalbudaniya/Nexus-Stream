@@ -34,6 +34,7 @@ data class WatchProgressDebugRow(
     val durationMs: Long,
     val watched: Boolean,
     val updatedAt: Long,
+    val libraryStatus: String? = null,
 )
 
 data class MetaCacheDebugRow(
@@ -156,29 +157,42 @@ class DatabaseDevViewModel
         private fun readWatchProgress(db: SupportSQLiteDatabase): List<WatchProgressDebugRow> {
             val rows = mutableListOf<WatchProgressDebugRow>()
             runCatching {
-                db
-                    .query(SimpleSQLiteQuery("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT $ROW_LIMIT"))
-                    .use { cursor ->
-                        val metaIdx = cursor.getColumnIndex("metaId")
-                        val videoIdx = cursor.getColumnIndex("videoId")
-                        val posIdx = cursor.getColumnIndex("positionMs")
-                        val durIdx = cursor.getColumnIndex("durationMs")
-                        val watchedIdx = cursor.getColumnIndex("watched")
-                        val updatedIdx = cursor.getColumnIndex("updatedAt")
+                val sql =
+                    """
+                    SELECT p.metaId, p.videoId, p.positionMs, p.durationMs, p.watched, p.updatedAt, l.listStatus
+                    FROM watch_progress p
+                    LEFT JOIN library_items l ON p.metaId = l.metaId
+                    ORDER BY p.updatedAt DESC
+                    LIMIT $ROW_LIMIT
+                    """.trimIndent()
+                db.query(SimpleSQLiteQuery(sql)).use { cursor ->
+                    val metaIdx = cursor.getColumnIndex("metaId")
+                    val videoIdx = cursor.getColumnIndex("videoId")
+                    val posIdx = cursor.getColumnIndex("positionMs")
+                    val durIdx = cursor.getColumnIndex("durationMs")
+                    val watchedIdx = cursor.getColumnIndex("watched")
+                    val updatedIdx = cursor.getColumnIndex("updatedAt")
+                    val statusIdx = cursor.getColumnIndex("listStatus")
 
-                        while (cursor.moveToNext()) {
-                            rows.add(
-                                WatchProgressDebugRow(
-                                    metaId = cursor.getStringOrEmpty(metaIdx),
-                                    videoId = cursor.getStringOrEmpty(videoIdx),
-                                    positionMs = cursor.getLongOrDefault(posIdx, 0L),
-                                    durationMs = cursor.getLongOrDefault(durIdx, 0L),
-                                    watched = cursor.getIntOrDefault(watchedIdx, 0) == 1,
-                                    updatedAt = cursor.getLongOrDefault(updatedIdx, 0L),
-                                ),
-                            )
-                        }
+                    while (cursor.moveToNext()) {
+                        rows.add(
+                            WatchProgressDebugRow(
+                                metaId = cursor.getStringOrEmpty(metaIdx),
+                                videoId = cursor.getStringOrEmpty(videoIdx),
+                                positionMs = cursor.getLongOrDefault(posIdx, 0L),
+                                durationMs = cursor.getLongOrDefault(durIdx, 0L),
+                                watched = cursor.getIntOrDefault(watchedIdx, 0) == 1,
+                                updatedAt = cursor.getLongOrDefault(updatedIdx, 0L),
+                                libraryStatus =
+                                    if (statusIdx >= 0 && !cursor.isNull(statusIdx)) {
+                                        cursor.getString(statusIdx)
+                                    } else {
+                                        null
+                                    },
+                            ),
+                        )
                     }
+                }
             }
             return rows
         }

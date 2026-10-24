@@ -1,6 +1,7 @@
 package com.nexus.stream.domain.usecase
 
 import com.nexus.stream.domain.model.ListStatus
+import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.ProgressSample
 import com.nexus.stream.domain.model.ProgressTarget
 import com.nexus.stream.domain.model.WatchProgress
@@ -214,7 +215,7 @@ class SaveProgressTest {
         runTest {
             coEvery { library.getItem("tt456") } returns
                 LibraryItem(metaId = "tt456", inWatchlist = true, status = ListStatus.PLAN_TO_WATCH)
-            val sample = ProgressSample(positionMs = 10_000L, durationMs = 100_000L, ended = false)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 100_000L, ended = false)
 
             saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
 
@@ -226,7 +227,7 @@ class SaveProgressTest {
         runTest {
             coEvery { library.getItem("tt456") } returns
                 LibraryItem(metaId = "tt456", inWatchlist = true, status = ListStatus.ON_HOLD)
-            val sample = ProgressSample(positionMs = 10_000L, durationMs = 100_000L, ended = false)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 100_000L, ended = false)
 
             saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
             coVerify(exactly = 1) { library.setStatusById("tt456", ListStatus.WATCHING) }
@@ -242,7 +243,7 @@ class SaveProgressTest {
         runTest {
             coEvery { library.getItem("tt456") } returns
                 LibraryItem(metaId = "tt456", inWatchlist = true, status = ListStatus.WATCHING)
-            val sample = ProgressSample(positionMs = 10_000L, durationMs = 100_000L, ended = false)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 100_000L, ended = false)
 
             saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
 
@@ -257,7 +258,7 @@ class SaveProgressTest {
     fun SV14_notInWatchlist_noStatusCall() =
         runTest {
             coEvery { library.getItem("tt456") } returns null
-            val sample = ProgressSample(positionMs = 10_000L, durationMs = 100_000L, ended = false)
+            val sample = ProgressSample(positionMs = 30_000L, durationMs = 100_000L, ended = false)
             saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
 
             coEvery { library.getItem("tt456") } returns
@@ -265,6 +266,7 @@ class SaveProgressTest {
             saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 2000L)
 
             coVerify(exactly = 0) { library.setStatusById(any<String>(), any<ListStatus>()) }
+            coVerify(exactly = 0) { library.setStatus(any(), any()) }
         }
 
     @Test
@@ -354,5 +356,166 @@ class SaveProgressTest {
             val sample = ProgressSample(positionMs = 20_000L, durationMs = 100_000L, ended = false)
 
             saveProgress(movieTarget, sample, firstOfSession = false, nowMs = 1000L)
+        }
+
+    @Test
+    fun SV20_unlistedMovieAt60s_addedAsWatching() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns null
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
+
+            val slot = slot<MetaPreview>()
+            coVerify(exactly = 1) { library.setStatus(capture(slot), ListStatus.WATCHING) }
+            assertEquals(movieTarget.metaId, slot.captured.id)
+            assertEquals(movieTarget.type, slot.captured.type)
+            assertEquals(movieTarget.name, slot.captured.name)
+            assertEquals(movieTarget.poster, slot.captured.poster)
+        }
+
+    @Test
+    fun SV21_unlistedMovieEndedPosition0_addedAsCompletedDirectly() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns null
+            val sample = ProgressSample(positionMs = 0L, durationMs = 120_000L, ended = true)
+
+            saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 1) { library.setStatus(any(), ListStatus.COMPLETED) }
+            coVerify(exactly = 0) { library.setStatus(any(), ListStatus.WATCHING) }
+        }
+
+    @Test
+    fun SV22_unlistedSeriesEpisode90s_addedAsWatching() =
+        runTest {
+            coEvery { library.getItem(episodeTarget.metaId) } returns null
+            val sample = ProgressSample(positionMs = 90_000L, durationMs = 120_000L, ended = false)
+
+            saveProgress(episodeTarget, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 1) { library.setStatus(any(), ListStatus.WATCHING) }
+        }
+
+    @Test
+    fun SV23_seriesEpisodeBecomesWatched_neverCompleted() =
+        runTest {
+            coEvery { library.getItem(episodeTarget.metaId) } returns
+                LibraryItem(metaId = episodeTarget.metaId, inWatchlist = true, status = ListStatus.WATCHING)
+            val sample = ProgressSample(positionMs = 110_000L, durationMs = 120_000L, ended = false)
+
+            saveProgress(episodeTarget, sample, firstOfSession = false, nowMs = 1000L)
+
+            coVerify(exactly = 0) { library.setStatusById(any(), ListStatus.COMPLETED) }
+            coVerify(exactly = 0) { library.setStatus(any(), ListStatus.COMPLETED) }
+        }
+
+    @Test
+    fun SV24_seriesCompletedUnwatchedEpisode60s_becomesWatching() =
+        runTest {
+            coEvery { library.getItem(episodeTarget.metaId) } returns
+                LibraryItem(metaId = episodeTarget.metaId, inWatchlist = true, status = ListStatus.COMPLETED)
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+
+            saveProgress(episodeTarget, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 1) { library.setStatusById(episodeTarget.metaId, ListStatus.WATCHING) }
+        }
+
+    @Test
+    fun SV25_inWatchlistPlanToWatch_59999msNoCall_then60000msWatching() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns
+                LibraryItem(metaId = movieTarget.metaId, inWatchlist = true, status = ListStatus.PLAN_TO_WATCH)
+
+            val sampleUnder = ProgressSample(positionMs = 59_999L, durationMs = 120_000L, ended = false)
+            saveProgress(movieTarget, sampleUnder, firstOfSession = true, nowMs = 1000L)
+            coVerify(exactly = 0) { library.setStatusById(any(), any()) }
+
+            val sampleQualifying = ProgressSample(positionMs = 60_000L, durationMs = 120_000L, ended = false)
+            saveProgress(movieTarget, sampleQualifying, firstOfSession = false, nowMs = 2000L)
+            coVerify(exactly = 1) { library.setStatusById(movieTarget.metaId, ListStatus.WATCHING) }
+        }
+
+    @Test
+    fun SV26_movieCompletedReplayWatchedBeforeTrue_noStatusCall() =
+        runTest {
+            coEvery { progress.get(any()) } returns
+                WatchProgress(
+                    key = "tt456|tt456",
+                    metaId = "tt456",
+                    videoId = "tt456",
+                    type = "movie",
+                    positionMs = 100_000L,
+                    durationMs = 100_000L,
+                    watched = true,
+                    updatedAt = 500L,
+                )
+            coEvery { library.getItem("tt456") } returns
+                LibraryItem(metaId = "tt456", inWatchlist = true, status = ListStatus.COMPLETED)
+            val sample = ProgressSample(positionMs = 80_000L, durationMs = 100_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
+
+            coVerify(exactly = 0) { library.setStatusById(any(), any()) }
+            coVerify(exactly = 0) { library.setStatus(any(), any()) }
+        }
+
+    @Test
+    fun SV27_movieDroppedBecomesWatched_completed() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns
+                LibraryItem(metaId = movieTarget.metaId, inWatchlist = true, status = ListStatus.DROPPED)
+            val sample = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = false, nowMs = 1000L)
+
+            coVerify(exactly = 1) { library.setStatusById(movieTarget.metaId, ListStatus.COMPLETED) }
+        }
+
+    @Test(expected = IOException::class)
+    fun SV28_setStatusThrowsIOException_propagates() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns null
+            coEvery { library.setStatus(any(), any()) } throws IOException("Network failure")
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 100_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
+        }
+
+    @Test(expected = CancellationException::class)
+    fun SV28_setStatusThrowsCancellationException_propagates() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns null
+            coEvery { library.setStatus(any(), any()) } throws CancellationException("Cancelled")
+            val sample = ProgressSample(positionMs = 60_000L, durationMs = 100_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 1000L)
+        }
+
+    @Test
+    fun SV29_watchingSeriesTicks_noStatusCallOnAnyTick() =
+        runTest {
+            coEvery { library.getItem(episodeTarget.metaId) } returns
+                LibraryItem(metaId = episodeTarget.metaId, inWatchlist = true, status = ListStatus.WATCHING)
+
+            saveProgress(episodeTarget, ProgressSample(60_000L, 120_000L, false), firstOfSession = true, nowMs = 1000L)
+            saveProgress(episodeTarget, ProgressSample(65_000L, 120_000L, false), firstOfSession = false, nowMs = 2000L)
+            saveProgress(episodeTarget, ProgressSample(70_000L, 120_000L, false), firstOfSession = false, nowMs = 3000L)
+
+            coVerify(exactly = 0) { library.setStatusById(any(), any()) }
+            coVerify(exactly = 0) { library.setStatus(any(), any()) }
+        }
+
+    @Test
+    fun SV30_inWatchlistWatchingMovieBecomesWatched_completedOnce() =
+        runTest {
+            coEvery { library.getItem(movieTarget.metaId) } returns
+                LibraryItem(metaId = movieTarget.metaId, inWatchlist = true, status = ListStatus.WATCHING)
+            val sample = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+
+            saveProgress(movieTarget, sample, firstOfSession = false, nowMs = 1000L)
+
+            coVerify(exactly = 1) { library.setStatusById(movieTarget.metaId, ListStatus.COMPLETED) }
         }
 }
