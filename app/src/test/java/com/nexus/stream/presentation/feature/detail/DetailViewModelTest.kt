@@ -42,6 +42,7 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class DetailViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private val metaRepository: MetaRepository = mockk()
@@ -735,5 +736,229 @@ class DetailViewModelTest {
             val futureReady = futureContent.primaryPlay as PrimaryPlayState.Ready
             // S1E2 released -> Next("e2", 1, 2)
             assertEquals(PlayIntent.Next("e2", 1, 2), futureReady.intent)
+        }
+
+    @Test
+    fun DX1_progressFlowEmitsNewRowWhileAlive_primaryPlayUpdatesWithoutRecreating() =
+        runTest(testDispatcher) {
+            val meta = testMeta("movie1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "movie1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val progressFlow = MutableSharedFlow<Map<String, EpisodeProgress>>(replay = 1)
+            coEvery { progressRepository.observeEpisodeProgress("movie1") } returns progressFlow
+
+            progressFlow.emit(emptyMap())
+            val viewModel = createViewModel("movie", "movie1")
+            val initialContent = viewModel.uiState.value as DetailUiState.Content
+            val initialReady = initialContent.primaryPlay as PrimaryPlayState.Ready
+            assertEquals(PlayIntent.Start, initialReady.intent)
+
+            progressFlow.emit(
+                mapOf(
+                    "movie1" to
+                        EpisodeProgress(
+                            "movie1",
+                            positionMs = 20_000L,
+                            durationMs = 60_000L,
+                            watched = false,
+                            updatedAt = 1000L,
+                        ),
+                ),
+            )
+
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            val updatedReady = updatedContent.primaryPlay as PrimaryPlayState.Ready
+            assertEquals(
+                PlayIntent.Resume("movie1", null, null, 20_000L, 60_000L),
+                updatedReady.intent,
+            )
+        }
+
+    @Test
+    fun DX2_fakeClockBeforeAndAfterReleaseDate() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("e4", "Ep 4", "2020-01-01", 1, 4, null, null),
+                    Video("e5", "Ep 5", "2025-06-01", 1, 5, null, null),
+                )
+            val meta = testMeta("series1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "series1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("series1") } returns
+                flowOf(
+                    mapOf(
+                        "e4" to
+                            EpisodeProgress(
+                                "e4",
+                                positionMs = 50_000L,
+                                durationMs = 50_000L,
+                                watched = true,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val beforeClock = { 1_704_067_200_000L }
+            val vmBefore = createViewModel("series", "series1", clock = beforeClock)
+            val contentBefore = vmBefore.uiState.value as DetailUiState.Content
+            val readyBefore = contentBefore.primaryPlay as PrimaryPlayState.Ready
+            assertEquals(PlayIntent.Start, readyBefore.intent)
+
+            val afterClock = { 1_767_225_600_000L }
+            val vmAfter = createViewModel("series", "series1", clock = afterClock)
+            val contentAfter = vmAfter.uiState.value as DetailUiState.Content
+            val readyAfter = contentAfter.primaryPlay as PrimaryPlayState.Ready
+            assertEquals(PlayIntent.Next("e5", 1, 5), readyAfter.intent)
+        }
+
+    @Test
+    @Suppress("LongMethod")
+    fun DX3_tapOnNextAndResumeMovieAndResumeEpisode_opensStreamsSheet() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("e1", "Ep 1", "2020-01-01", 1, 1, null, null),
+                    Video("e2", "Ep 2", "2020-01-01", 1, 2, null, null),
+                )
+            val seriesMeta = testMeta("series1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "series1", false) } returns
+                Outcome.Success(MetaResult(seriesMeta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("series1") } returns
+                flowOf(
+                    mapOf(
+                        "e1" to
+                            EpisodeProgress(
+                                "e1",
+                                positionMs = 50_000L,
+                                durationMs = 50_000L,
+                                watched = true,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+            val seriesVm = createViewModel("series", "series1", clock = { 1_700_000_000_000L })
+            seriesVm.onEvent(DetailEvent.PlayMain)
+            val seriesContent = seriesVm.uiState.value as DetailUiState.Content
+            assertTrue(seriesContent.showStreamsSheet)
+            assertEquals("e2", seriesContent.streamsSheetVideoId)
+
+            val movieMeta = testMeta("movie1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "movie1", false) } returns
+                Outcome.Success(MetaResult(movieMeta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("movie1") } returns
+                flowOf(
+                    mapOf(
+                        "movie1" to
+                            EpisodeProgress(
+                                "movie1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+            val movieVm = createViewModel("movie", "movie1", clock = { 1_700_000_000_000L })
+            movieVm.onEvent(DetailEvent.PlayMain)
+            val movieContent = movieVm.uiState.value as DetailUiState.Content
+            assertTrue(movieContent.showStreamsSheet)
+            assertEquals("movie1", movieContent.streamsSheetVideoId)
+
+            val epMeta = testMeta("series2", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "series2", false) } returns
+                Outcome.Success(MetaResult(epMeta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("series2") } returns
+                flowOf(
+                    mapOf(
+                        "e1" to
+                            EpisodeProgress(
+                                "e1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+            val epVm = createViewModel("series", "series2", clock = { 1_700_000_000_000L })
+            epVm.onEvent(DetailEvent.PlayMain)
+            val epContent = epVm.uiState.value as DetailUiState.Content
+            assertTrue(epContent.showStreamsSheet)
+            assertEquals("e1", epContent.streamsSheetVideoId)
+        }
+
+    @Test
+    fun DX4_collectAllPrimaryPlayEmissions_notReadyThenReadyResume_neverReadyStart() =
+        runTest(testDispatcher) {
+            val meta = testMeta("movie1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "movie1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val progressFlow = MutableSharedFlow<Map<String, EpisodeProgress>>(replay = 1)
+            coEvery { progressRepository.observeEpisodeProgress("movie1") } returns progressFlow
+
+            val emissions = mutableListOf<PrimaryPlayState>()
+            val viewModel = createViewModel("movie", "movie1", clock = { fixedTime })
+            backgroundScope.launch(testDispatcher) {
+                viewModel.uiState.collect { state ->
+                    if (state is DetailUiState.Content) {
+                        emissions.add(state.primaryPlay)
+                    }
+                }
+            }
+
+            assertEquals(listOf(PrimaryPlayState.NotReady), emissions)
+
+            progressFlow.emit(
+                mapOf(
+                    "movie1" to
+                        EpisodeProgress(
+                            "movie1",
+                            positionMs = 20_000L,
+                            durationMs = 60_000L,
+                            watched = false,
+                            updatedAt = 1000L,
+                        ),
+                ),
+            )
+
+            assertEquals(2, emissions.size)
+            assertEquals(PrimaryPlayState.NotReady, emissions[0])
+            assertTrue(emissions[1] is PrimaryPlayState.Ready)
+            val ready = emissions[1] as PrimaryPlayState.Ready
+            assertTrue(ready.intent is PlayIntent.Resume)
+
+            assertTrue(emissions.none { it is PrimaryPlayState.Ready && it.intent is PlayIntent.Start })
+        }
+
+    @Test
+    fun DX5_movieWithDefaultVideoIdDifferentFromId_resumeComputedFromProgressMetaId() =
+        runTest(testDispatcher) {
+            val meta = testMeta("movie1", type = "movie").copy(defaultVideoId = "customDefaultVideoId")
+            coEvery { metaRepository.getMeta("movie", "movie1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("movie1") } returns
+                flowOf(
+                    mapOf(
+                        "movie1" to
+                            EpisodeProgress(
+                                "movie1",
+                                positionMs = 25_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("movie", "movie1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            val ready = content.primaryPlay as PrimaryPlayState.Ready
+            assertEquals(
+                PlayIntent.Resume("movie1", null, null, 25_000L, 60_000L),
+                ready.intent,
+            )
         }
 }

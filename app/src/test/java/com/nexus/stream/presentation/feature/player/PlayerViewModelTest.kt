@@ -66,6 +66,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -2188,7 +2189,7 @@ class PlayerViewModelTest {
             advanceUntilIdle()
 
             coVerify(atLeast = 1) {
-                fakeSaveProgress.invoke(match { it.metaId == "m1" && it.videoId == "v1" }, any(), any(), any())
+                fakeSaveProgress.invoke(match { it.metaId == "m1" && it.videoId == "m1" }, any(), any(), any())
             }
             vm.onCleared()
         }
@@ -2217,9 +2218,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val savedRow =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2228,7 +2229,7 @@ class PlayerViewModelTest {
                     watched = false,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+            coEvery { fakeProgressRepository.get("m1|m1") } returns savedRow
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2268,9 +2269,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val watchedRow =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2279,7 +2280,7 @@ class PlayerViewModelTest {
                     watched = true,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns watchedRow
+            coEvery { fakeProgressRepository.get("m1|m1") } returns watchedRow
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2300,9 +2301,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val row5s =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2311,7 +2312,7 @@ class PlayerViewModelTest {
                     watched = false,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns row5s
+            coEvery { fakeProgressRepository.get("m1|m1") } returns row5s
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2332,9 +2333,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val rowNearEnd =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2343,7 +2344,7 @@ class PlayerViewModelTest {
                     watched = false,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns rowNearEnd
+            coEvery { fakeProgressRepository.get("m1|m1") } returns rowNearEnd
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2364,9 +2365,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val savedRow =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2375,7 +2376,7 @@ class PlayerViewModelTest {
                     watched = false,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+            coEvery { fakeProgressRepository.get("m1|m1") } returns savedRow
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2403,9 +2404,9 @@ class PlayerViewModelTest {
         runTest(testDispatcher) {
             val savedRow =
                 WatchProgress(
-                    key = "m1|v1",
+                    key = "m1|m1",
                     metaId = "m1",
-                    videoId = "v1",
+                    videoId = "m1",
                     type = "movie",
                     season = null,
                     episode = null,
@@ -2414,7 +2415,7 @@ class PlayerViewModelTest {
                     watched = false,
                     updatedAt = 1_000L,
                 )
-            coEvery { fakeProgressRepository.get("m1|v1") } returns savedRow
+            coEvery { fakeProgressRepository.get("m1|m1") } returns savedRow
 
             holder.start(
                 PlaybackSelection("Movie", PlaybackSource.Direct("https://example.com/v.mp4"), "movie", "m1", "v1"),
@@ -2533,7 +2534,7 @@ class PlayerViewModelTest {
             movieTarget != null && movieTarget.isMovie && movieTarget.season == null && movieTarget.episode == null,
         )
         assertEquals("m1", movieTarget?.metaId)
-        assertEquals("v1", movieTarget?.videoId)
+        assertEquals("m1", movieTarget?.videoId)
 
         val epSel =
             PlaybackSelection(
@@ -2815,5 +2816,54 @@ class PlayerViewModelTest {
         override fun abandon() {
             abandonCount++
         }
+    }
+
+    @Test
+    fun PL82_toProgressTarget_movieUsesMetaId_seriesKeepsVideoId() {
+        val mockSource = mockk<PlaybackSource>(relaxed = true)
+
+        val movieDifferentId =
+            PlaybackSelection(
+                title = "Movie Title",
+                source = mockSource,
+                type = "movie",
+                metaId = "tt1234567",
+                videoId = "differentVideoId123",
+            )
+        val movieDiffTarget = movieDifferentId.toProgressTarget()
+        assertNotNull(movieDiffTarget)
+        assertEquals("tt1234567", movieDiffTarget?.metaId)
+        assertEquals("tt1234567", movieDiffTarget?.videoId)
+        assertTrue(movieDiffTarget!!.isMovie)
+
+        val movieSameId =
+            PlaybackSelection(
+                title = "Movie Title",
+                source = mockSource,
+                type = "movie",
+                metaId = "tt1234567",
+                videoId = "tt1234567",
+            )
+        val movieSameTarget = movieSameId.toProgressTarget()
+        assertNotNull(movieSameTarget)
+        assertEquals("tt1234567", movieSameTarget?.metaId)
+        assertEquals("tt1234567", movieSameTarget?.videoId)
+        assertTrue(movieSameTarget!!.isMovie)
+
+        val seriesEp =
+            PlaybackSelection(
+                title = "Series Title",
+                source = mockSource,
+                type = "series",
+                metaId = "tt9999999",
+                videoId = "tt9999999:1:4",
+                season = 1,
+                episode = 4,
+            )
+        val seriesTarget = seriesEp.toProgressTarget()
+        assertNotNull(seriesTarget)
+        assertEquals("tt9999999", seriesTarget?.metaId)
+        assertEquals("tt9999999:1:4", seriesTarget?.videoId)
+        assertFalse(seriesTarget!!.isMovie)
     }
 }

@@ -1334,11 +1334,12 @@ internal fun PlaybackSelection.toProgressTarget(): ProgressTarget? =
     if (metaId.isBlank() || videoId.isBlank()) {
         null
     } else {
+        val isMovieType = type.equals("movie", ignoreCase = true)
         ProgressTarget(
             metaId = metaId,
-            videoId = videoId,
+            videoId = if (isMovieType) metaId else videoId,
             type = type,
-            isMovie = type.equals("movie", ignoreCase = true),
+            isMovie = isMovieType,
             season = season,
             episode = episode,
             name = metaName ?: title,

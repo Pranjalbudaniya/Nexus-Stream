@@ -340,6 +340,88 @@ class PosterActionsTest {
             assertEquals(PosterAction.Play, actions[0])
         }
 
+    @Test
+    fun AX1_movieInProgress_resumeReplacesPlayAtSamePosition() {
+        val resume = PosterAction.Resume(videoId = "tt0111161")
+        val actions =
+            posterActions(
+                type = "movie",
+                trailer = TrailerState.AVAILABLE,
+                status = null,
+                fromContinue = false,
+                resume = resume,
+            )
+        assertEquals(resume, actions[0])
+        assertTrue(actions.none { it is PosterAction.Play })
+    }
+
+    @Test
+    fun AX2_movieNotInProgressOrWatched_playPresentNoResume() {
+        val actionsUnplayed =
+            posterActions(
+                type = "movie",
+                trailer = TrailerState.AVAILABLE,
+                status = null,
+                fromContinue = false,
+                resume = null,
+            )
+        assertEquals(PosterAction.Play, actionsUnplayed[0])
+        assertTrue(actionsUnplayed.none { it is PosterAction.Resume })
+
+        val actionsWatched =
+            posterActions(
+                type = "movie",
+                trailer = TrailerState.AVAILABLE,
+                status = ListStatus.COMPLETED,
+                fromContinue = false,
+                resume = null,
+            )
+        assertEquals(PosterAction.Play, actionsWatched[0])
+        assertTrue(actionsWatched.none { it is PosterAction.Resume })
+    }
+
+    @Test
+    fun AX3_seriesFromContinueWatching_resumePresentNoPlay_otherActionsPresent() {
+        val resume = PosterAction.Resume(videoId = "e1", season = 1, episode = 1)
+        val actions =
+            posterActions(
+                type = "series",
+                trailer = TrailerState.AVAILABLE,
+                status = ListStatus.WATCHING,
+                fromContinue = true,
+                resume = resume,
+            )
+        assertTrue(actions.none { it is PosterAction.Play })
+        assertTrue(actions.any { it is PosterAction.Resume })
+        assertTrue(actions.any { it is PosterAction.Detail })
+        assertTrue(actions.any { it is PosterAction.Trailer })
+        assertTrue(actions.any { it is PosterAction.Watchlist })
+        assertTrue(actions.any { it is PosterAction.RemoveFromContinue })
+    }
+
+    @Test
+    fun AX4_pureFunctionWithoutResumeArg_identicalToPreP10b() {
+        val movieActions = posterActions("movie", TrailerState.AVAILABLE, null, false)
+        assertEquals(4, movieActions.size)
+        assertTrue(movieActions[0] is PosterAction.Play)
+        assertTrue(movieActions[1] is PosterAction.Detail)
+        assertTrue(movieActions[2] is PosterAction.Trailer)
+        assertTrue(movieActions[3] is PosterAction.Watchlist)
+
+        val seriesActions = posterActions("series", TrailerState.NONE, null, false)
+        assertEquals(3, seriesActions.size)
+        assertTrue(seriesActions[0] is PosterAction.Detail)
+        assertTrue(seriesActions[1] is PosterAction.Trailer)
+        assertTrue(seriesActions[2] is PosterAction.Watchlist)
+
+        val seriesContinueActions = posterActions("series", TrailerState.NONE, null, true)
+        assertEquals(4, seriesContinueActions.size)
+        assertTrue(seriesContinueActions[0] is PosterAction.Detail)
+        assertTrue(seriesContinueActions[1] is PosterAction.Trailer)
+        assertTrue(seriesContinueActions[2] is PosterAction.Watchlist)
+        assertTrue(seriesContinueActions[3] is PosterAction.RemoveFromContinue)
+    }
+
     private fun testMeta(
         id: String,
         type: String = "movie",

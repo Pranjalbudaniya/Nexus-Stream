@@ -426,4 +426,225 @@ class ResolvePlayIntentTest {
         assertEquals(TimeLeft(0, 0), timeLeftParts(positionMs = 10_000L, durationMs = 0L))
         assertEquals(TimeLeft(0, 0), timeLeftParts(positionMs = 10_000L, durationMs = -100L))
     }
+
+    @Test
+    fun PX1_gapWatchedSeries_nextPointsAfterNewestWatched() {
+        val videos =
+            (1..8).map { ep ->
+                video("e$ep", season = 1, episode = ep, released = "2020-01-01")
+            }
+        val p =
+            mapOf(
+                progress("e1", watched = true, updatedAt = 1000L),
+                progress("e2", watched = true, updatedAt = 1001L),
+                progress("e3", watched = true, updatedAt = 1002L),
+                progress("e7", watched = true, updatedAt = 5000L),
+            )
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(PlayIntent.Next(videoId = "e8", season = 1, episode = 8), result)
+    }
+
+    @Test
+    fun PX2_nullSeasonAndEpisode_nextCarriesNullsInListOrder() {
+        val videos =
+            listOf(
+                video("a", season = null, episode = null),
+                video("b", season = null, episode = null),
+                video("c", season = null, episode = null),
+            )
+        val p = mapOf(progress("b", watched = true, updatedAt = 1000L))
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(PlayIntent.Next(videoId = "c", season = null, episode = null), result)
+    }
+
+    @Test
+    fun PX3_unsortedVideosAndProgress_identicalResultToSorted() {
+        // PI8 case
+        val pi8Videos =
+            listOf(
+                video("e4", season = 1, episode = 4),
+                video("e5", season = 1, episode = 5),
+            )
+        val pi8Progress = mapOf(progress("e4", watched = true, updatedAt = 1000L))
+        val pi8Sorted = resolvePlayIntent("series", "meta", pi8Videos, pi8Progress, now)
+        val pi8Shuffled =
+            resolvePlayIntent(
+                "series",
+                "meta",
+                pi8Videos.reversed(),
+                pi8Progress,
+                now,
+            )
+        assertEquals(pi8Sorted, pi8Shuffled)
+        assertEquals(PlayIntent.Next("e5", 1, 5), pi8Sorted)
+
+        // PI14 case
+        val pi14Videos =
+            listOf(
+                video("s1e1", season = 1, episode = 1),
+                video("s1e2", season = 1, episode = 2),
+                video("s2e1", season = 2, episode = 1),
+            )
+        val pi14Progress =
+            mapOf(
+                progress("s1e1", watched = true, updatedAt = 1000L),
+                progress("s1e2", watched = true, updatedAt = 1000L),
+            )
+        val pi14Sorted = resolvePlayIntent("series", "meta", pi14Videos, pi14Progress, now)
+        val pi14Shuffled =
+            resolvePlayIntent(
+                "series",
+                "meta",
+                listOf(pi14Videos[1], pi14Videos[2], pi14Videos[0]),
+                mapOf(
+                    progress("s1e2", watched = true, updatedAt = 1000L),
+                    progress("s1e1", watched = true, updatedAt = 1000L),
+                ),
+                now,
+            )
+        assertEquals(pi14Sorted, pi14Shuffled)
+        assertEquals(PlayIntent.Next("s2e1", 2, 1), pi14Sorted)
+    }
+
+    @Test
+    fun PX4_nullReleasedDate_followsVideoIsReleasedRule() {
+        // Real Video.isReleased(now) rule from EpisodeLogic.kt:
+        // fun Video.isReleased(now: Long): Boolean {
+        //     val dateStr = released?.trim().orEmpty()
+        //     if (dateStr.isEmpty()) return true
+        //     val epochMs = parseReleaseDateToEpoch(dateStr)
+        //     return epochMs == null || epochMs <= now
+        // }
+        // For released = null, dateStr is empty, returning true (released).
+        val videos =
+            listOf(
+                video("e4", season = 1, episode = 4, released = "2020-01-01"),
+                video("e5", season = 1, episode = 5, released = null),
+            )
+        val p = mapOf(progress("e4", watched = true, updatedAt = 1000L))
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(PlayIntent.Next(videoId = "e5", season = 1, episode = 5), result)
+    }
+
+    @Test
+    fun PX5_movieWithNonEmptyVideos_usesMovieRule() {
+        val videos = listOf(video("v1", season = 1, episode = 1))
+        val p =
+            mapOf(
+                progress("m1", positionMs = 50_000L, durationMs = 100_000L, watched = false, updatedAt = 1000L),
+            )
+        val result = resolvePlayIntent("movie", "m1", videos, p, now)
+        assertEquals(
+            PlayIntent.Resume(
+                videoId = "m1",
+                season = null,
+                episode = null,
+                positionMs = 50_000L,
+                durationMs = 100_000L,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun PX6_typeTvWithVideos_usesSeriesRule() {
+        val videos =
+            listOf(
+                video("e1", season = 1, episode = 1, released = "2020-01-01"),
+                video("e2", season = 1, episode = 2, released = "2020-01-01"),
+            )
+        val p = mapOf(progress("e1", watched = true, updatedAt = 1000L))
+        val result = resolvePlayIntent("tv", "tv1", videos, p, now)
+        assertEquals(PlayIntent.Next(videoId = "e2", season = 1, episode = 2), result)
+    }
+
+    @Test
+    fun PX7_newestRowWatchedSpecial_noRegularRow_returnsStart() {
+        val videos =
+            listOf(
+                video("s0e1", season = 0, episode = 1),
+                video("s1e1", season = 1, episode = 1),
+            )
+        val p = mapOf(progress("s0e1", watched = true, updatedAt = 1000L))
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(PlayIntent.Start, result)
+    }
+
+    @Test
+    fun PX8_sameUpdatedAt_orderKeyDescendingDecidesTie() {
+        val videos =
+            listOf(
+                video("e3", season = 1, episode = 3),
+                video("e4", season = 1, episode = 4),
+            )
+        val p =
+            mapOf(
+                progress("e3", watched = true, updatedAt = 1000L),
+                progress("e4", positionMs = 20_000L, durationMs = 60_000L, watched = false, updatedAt = 1000L),
+            )
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(
+            PlayIntent.Resume(
+                videoId = "e4",
+                season = 1,
+                episode = 4,
+                positionMs = 20_000L,
+                durationMs = 60_000L,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun PX9_duplicateVideoId_deterministicResultNoCrash() {
+        val videos =
+            listOf(
+                video("dup", season = 1, episode = 1),
+                video("dup", season = 1, episode = 2),
+                video("e3", season = 1, episode = 3),
+            )
+        val p = mapOf(progress("dup", watched = true, updatedAt = 1000L))
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(PlayIntent.Next(videoId = "e3", season = 1, episode = 3), result)
+    }
+
+    @Test
+    fun PX10_unreleasedEpisodeWithResumableRow_returnsResume() {
+        val videos =
+            listOf(
+                video("e5", season = 1, episode = 5, released = "2099-01-01"),
+            )
+        val p =
+            mapOf(
+                progress("e5", positionMs = 30_000L, durationMs = 60_000L, watched = false, updatedAt = 1000L),
+            )
+        val result = resolvePlayIntent("series", "meta", videos, p, now)
+        assertEquals(
+            PlayIntent.Resume(
+                videoId = "e5",
+                season = 1,
+                episode = 5,
+                positionMs = 30_000L,
+                durationMs = 60_000L,
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun TX1_oneHourFiveMinOneSecLeft() {
+        val remaining = (65 * 60 + 1) * 1000L
+        assertEquals(TimeLeft(1, 6), timeLeftParts(positionMs = 0L, durationMs = remaining))
+    }
+
+    @Test
+    fun TX2_positionAboveDuration() {
+        assertEquals(TimeLeft(0, 1), timeLeftParts(positionMs = 70_000L, durationMs = 60_000L))
+    }
+
+    @Test
+    fun TX3_sixtyMinAndOneMsLeft() {
+        val durationMs = 60 * 60 * 1000L + 1L
+        assertEquals(TimeLeft(1, 1), timeLeftParts(positionMs = 0L, durationMs = durationMs))
+    }
 }
