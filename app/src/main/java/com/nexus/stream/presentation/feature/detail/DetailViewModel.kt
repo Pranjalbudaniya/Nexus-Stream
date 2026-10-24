@@ -24,6 +24,7 @@ import com.nexus.stream.domain.usecase.defaultSeason
 import com.nexus.stream.domain.usecase.groupEpisodes
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.domain.usecase.resolvePlayIntent
+import com.nexus.stream.domain.usecase.usesMovieRule
 import com.nexus.stream.domain.usecase.watchActions
 import com.nexus.stream.presentation.navigation.Detail
 import com.nexus.stream.util.youtubeWatchUrlOrNull
@@ -629,7 +630,11 @@ private fun buildPrimaryPlayState(
             }
 
             is PlayIntent.Resume -> {
-                intent.videoId
+                if (usesMovieRule(meta.type, meta.videos)) {
+                    meta.defaultVideoId ?: meta.id
+                } else {
+                    intent.videoId
+                }
             }
 
             is PlayIntent.Next -> {

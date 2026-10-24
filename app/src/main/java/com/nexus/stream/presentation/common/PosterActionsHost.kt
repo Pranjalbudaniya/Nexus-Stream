@@ -280,16 +280,14 @@ fun PosterActionsHost(
                 actions = actions,
                 trailerUrl = state.trailerUrl,
                 onDismiss = { viewModel.dismiss() },
-                onPlay = { targetVideoId ->
+                onPlay = { targetVideoId, season, episode ->
                     viewModel.dismiss()
-                    val year = item.releaseInfo?.take(4)?.toIntOrNull()
                     playbackLauncher.open(
-                        PlaybackRequest(
-                            type = item.type,
-                            metaId = item.id,
-                            videoId = targetVideoId ?: item.id,
-                            title = item.name,
-                            year = year,
+                        posterPlaybackRequest(
+                            item = item,
+                            videoId = targetVideoId,
+                            season = season,
+                            episode = episode,
                         ),
                     )
                 },
@@ -343,7 +341,7 @@ private fun PosterActionsSheet(
     actions: List<PosterAction>,
     trailerUrl: String?,
     onDismiss: () -> Unit,
-    onPlay: (String?) -> Unit,
+    onPlay: (String?, Int?, Int?) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -435,7 +433,7 @@ private fun PosterSheetHeader(item: MetaPreview) {
 private fun PosterActionsList(
     actions: List<PosterAction>,
     trailerUrl: String?,
-    onPlay: (String?) -> Unit,
+    onPlay: (String?, Int?, Int?) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -454,7 +452,7 @@ private fun PosterActionsList(
                         )
                     },
                     label = stringResource(R.string.poster_action_play),
-                    onClick = { onPlay(null) },
+                    onClick = { onPlay(null, null, null) },
                 )
             }
 
@@ -474,7 +472,7 @@ private fun PosterActionsList(
                         )
                     },
                     label = label,
-                    onClick = { onPlay(action.videoId) },
+                    onClick = { onPlay(action.videoId, action.season, action.episode) },
                 )
             }
 
@@ -662,3 +660,25 @@ private fun PosterActionRow(
         )
     }
 }
+
+private const val YEAR_LENGTH = 4
+
+internal fun posterPlaybackRequest(
+    item: MetaPreview,
+    videoId: String?,
+    season: Int?,
+    episode: Int?,
+): PlaybackRequest =
+    PlaybackRequest(
+        type = item.type,
+        metaId = item.id,
+        videoId = videoId ?: item.id,
+        title = item.name,
+        season = season,
+        episode = episode,
+        year = item.releaseInfo?.take(YEAR_LENGTH)?.toIntOrNull(),
+        logoUrl = item.logo,
+        backgroundUrl = item.background,
+        posterUrl = item.poster,
+        metaName = item.name,
+    )

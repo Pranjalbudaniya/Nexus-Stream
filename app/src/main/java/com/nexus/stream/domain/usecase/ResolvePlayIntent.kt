@@ -59,20 +59,23 @@ private data class Candidate(
     val videoWithIndex: VideoWithIndex,
 )
 
+internal fun usesMovieRule(
+    type: String,
+    videos: List<Video>,
+): Boolean = type.equals("movie", ignoreCase = true) || videos.isEmpty()
+
 fun resolvePlayIntent(
     type: String,
     metaId: String,
     videos: List<Video>,
     progress: Map<String, EpisodeProgress>,
     now: Long,
-): PlayIntent {
-    val isMovie = type.equals("movie", ignoreCase = true) || videos.isEmpty()
-    return if (isMovie) {
+): PlayIntent =
+    if (usesMovieRule(type, videos)) {
         resolveMoviePlayIntent(metaId, progress)
     } else {
         resolveSeriesPlayIntent(videos, progress, now)
     }
-}
 
 private fun resolveMoviePlayIntent(
     metaId: String,
