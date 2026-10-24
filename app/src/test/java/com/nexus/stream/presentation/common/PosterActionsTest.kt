@@ -1,10 +1,12 @@
 package com.nexus.stream.presentation.common
 
+import com.nexus.stream.domain.model.ContinueWatchingItem
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.Outcome
 import com.nexus.stream.domain.model.PosterShape
+import com.nexus.stream.domain.model.WatchProgress
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.MetaResult
@@ -20,6 +22,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -182,4 +185,186 @@ class PosterActionsTest {
 
             coVerify { progressRepository.removeFromContinueWatching(movieItem.id) }
         }
+
+    @Test
+    fun PA1_movieWithResumableRow_resumeRowInsteadOfPlay() =
+        runTest {
+            val progress =
+                WatchProgress(
+                    key = "tt0111161|tt0111161",
+                    metaId = "tt0111161",
+                    videoId = "tt0111161",
+                    type = "movie",
+                    positionMs = 20_000L,
+                    durationMs = 100_000L,
+                    watched = false,
+                    updatedAt = 1000L,
+                )
+            coEvery { progressRepository.get("tt0111161|tt0111161") } returns progress
+            coEvery { metaRepository.getMeta("movie", movieItem.id) } returns
+                Outcome.Success(MetaResult(meta = testMeta(movieItem.id), source = MetaSource.FRESH))
+
+            val viewModel = PosterActionsViewModel(metaRepository, libraryRepository, progressRepository)
+            viewModel.show(movieItem, fromContinue = false)
+            advanceUntilIdle()
+
+            val state = viewModel.sheetState.value!!
+            val actions =
+                posterActions(state.item.type, state.trailerState, null, state.fromContinue, state.resumeAction)
+
+            assertTrue(actions[0] is PosterAction.Resume)
+            assertEquals(PosterAction.Resume(videoId = "tt0111161"), actions[0])
+        }
+
+    @Test
+    fun PA2_movieWithoutProgress_play() =
+        runTest {
+            coEvery { progressRepository.get("tt0111161|tt0111161") } returns null
+            coEvery { metaRepository.getMeta("movie", movieItem.id) } returns
+                Outcome.Success(MetaResult(meta = testMeta(movieItem.id), source = MetaSource.FRESH))
+
+            val viewModel = PosterActionsViewModel(metaRepository, libraryRepository, progressRepository)
+            viewModel.show(movieItem, fromContinue = false)
+            advanceUntilIdle()
+
+            val state = viewModel.sheetState.value!!
+            val actions =
+                posterActions(state.item.type, state.trailerState, null, state.fromContinue, state.resumeAction)
+
+            assertEquals(PosterAction.Play, actions[0])
+        }
+
+    @Test
+    fun PA3_seriesFromContinueWatching_inProgress_resumeEpisodeWithVideoId() =
+        runTest {
+            val seriesItem =
+                MetaPreview(
+                    id = "s1",
+                    type = "series",
+                    name = "Series Title",
+                    poster = null,
+                    posterShape = PosterShape.POSTER,
+                    background = null,
+                    logo = null,
+                    description = null,
+                    releaseInfo = "2020",
+                    imdbRating = "8.5",
+                    genres = listOf("Drama"),
+                )
+            val continueItem =
+                ContinueWatchingItem(
+                    metaId = "s1",
+                    type = "series",
+                    name = "Series Title",
+                    poster = null,
+                    videoId = "s1e4",
+                    season = 1,
+                    episode = 4,
+                    positionMs = 15_000L,
+                    durationMs = 60_000L,
+                    updatedAt = 1000L,
+                )
+            coEvery { progressRepository.observeContinueWatching() } returns flowOf(listOf(continueItem))
+            coEvery { metaRepository.getMeta("series", seriesItem.id) } returns
+                Outcome.Success(MetaResult(meta = testMeta("s1", type = "series"), source = MetaSource.FRESH))
+
+            val viewModel = PosterActionsViewModel(metaRepository, libraryRepository, progressRepository)
+            viewModel.show(seriesItem, fromContinue = true)
+            advanceUntilIdle()
+
+            val state = viewModel.sheetState.value!!
+            val actions =
+                posterActions(state.item.type, state.trailerState, null, state.fromContinue, state.resumeAction)
+
+            assertEquals(PosterAction.Resume(videoId = "s1e4", season = 1, episode = 4), actions[0])
+        }
+
+    @Test
+    fun PA4_seriesNotFromContinueWatching_unchangedActions() =
+        runTest {
+            val seriesItem =
+                MetaPreview(
+                    id = "s1",
+                    type = "series",
+                    name = "Series Title",
+                    poster = null,
+                    posterShape = PosterShape.POSTER,
+                    background = null,
+                    logo = null,
+                    description = null,
+                    releaseInfo = "2020",
+                    imdbRating = "8.5",
+                    genres = listOf("Drama"),
+                )
+            coEvery { metaRepository.getMeta("series", seriesItem.id) } returns
+                Outcome.Success(MetaResult(meta = testMeta("s1", type = "series"), source = MetaSource.FRESH))
+
+            val viewModel = PosterActionsViewModel(metaRepository, libraryRepository, progressRepository)
+            viewModel.show(seriesItem, fromContinue = false)
+            advanceUntilIdle()
+
+            val state = viewModel.sheetState.value!!
+            val actions =
+                posterActions(state.item.type, state.trailerState, null, state.fromContinue, state.resumeAction)
+
+            assertTrue(actions.none { it is PosterAction.Play || it is PosterAction.Resume })
+            assertTrue(actions[0] is PosterAction.Detail)
+        }
+
+    @Test
+    fun PA5_watchedMovie_play() =
+        runTest {
+            val progress =
+                WatchProgress(
+                    key = "tt0111161|tt0111161",
+                    metaId = "tt0111161",
+                    videoId = "tt0111161",
+                    type = "movie",
+                    positionMs = 95_000L,
+                    durationMs = 100_000L,
+                    watched = true,
+                    updatedAt = 1000L,
+                )
+            coEvery { progressRepository.get("tt0111161|tt0111161") } returns progress
+            coEvery { metaRepository.getMeta("movie", movieItem.id) } returns
+                Outcome.Success(MetaResult(meta = testMeta(movieItem.id), source = MetaSource.FRESH))
+
+            val viewModel = PosterActionsViewModel(metaRepository, libraryRepository, progressRepository)
+            viewModel.show(movieItem, fromContinue = false)
+            advanceUntilIdle()
+
+            val state = viewModel.sheetState.value!!
+            val actions =
+                posterActions(state.item.type, state.trailerState, null, state.fromContinue, state.resumeAction)
+
+            assertEquals(PosterAction.Play, actions[0])
+        }
+
+    private fun testMeta(
+        id: String,
+        type: String = "movie",
+    ) = MetaDetail(
+        id = id,
+        type = type,
+        name = "Title",
+        poster = null,
+        posterShape = PosterShape.POSTER,
+        background = null,
+        logo = null,
+        description = null,
+        releaseInfo = "2020",
+        released = "2020-01-01",
+        runtime = "100 min",
+        imdbRating = "8.0",
+        genres = listOf("Drama"),
+        cast = emptyList(),
+        directors = emptyList(),
+        country = null,
+        language = null,
+        website = null,
+        links = emptyList(),
+        trailers = emptyList(),
+        videos = emptyList(),
+        defaultVideoId = null,
+    )
 }

@@ -96,7 +96,7 @@ class SaveProgressTest {
         }
 
     @Test
-    fun SV3_existingWatchedRow_writeAtTwentyPercent_watchedStaysTrue_noStatusCall() =
+    fun SV3_existingWatchedRow_writeAtTwentyPercent_returnsSkipped_noWrites() =
         runTest {
             val duration = 100_000L
             val existing =
@@ -117,12 +117,9 @@ class SaveProgressTest {
             val sample = ProgressSample(positionMs = 20_000L, durationMs = duration, ended = false)
             val outcome = saveProgress(movieTarget, sample, firstOfSession = true, nowMs = 2000L)
 
-            assertEquals(SaveOutcome.Saved(watched = true), outcome)
-            val slot = slot<WatchProgress>()
-            coVerify { progress.upsert(capture(slot)) }
-            assertTrue(slot.captured.watched)
-            assertEquals(20_000L, slot.captured.positionMs)
-            assertEquals(2000L, slot.captured.updatedAt)
+            assertEquals(SaveOutcome.Skipped, outcome)
+            coVerify(exactly = 0) { progress.upsert(any()) }
+            coVerify(exactly = 0) { library.ensureSnapshot(any()) }
             coVerify(exactly = 0) { library.setStatusById(any<String>(), any<ListStatus>()) }
         }
 

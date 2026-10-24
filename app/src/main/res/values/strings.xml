@@ -209,7 +209,13 @@
     <string name="detail_coming_soon">Detail screen is coming soon</string>
     <string name="detail_play">Play</string>
     <string name="detail_play_episode">Play S%1$d E%2$d</string>
+    <string name="detail_resume">Resume</string>
     <string name="detail_resume_episode">Resume S%1$d E%2$d</string>
+    <string name="detail_play_next">Play next episode</string>
+    <string name="detail_time_left_min">%1$d min left</string>
+    <string name="detail_time_left_hr">%1$d h left</string>
+    <string name="detail_time_left_hr_min">%1$d h %2$d min left</string>
+    <string name="detail_resume_a11y">Resume, %1$d percent watched, %2$s</string>
     <string name="detail_watchlist_add">+ Watchlist</string>
     <string name="detail_watchlist_in">In watchlist</string>
     <string name="detail_watchlist_add_desc">Add %1$s to watchlist</string>
@@ -283,6 +289,8 @@
 
     <!-- Poster Actions & Badges -->
     <string name="poster_action_play">Play</string>
+    <string name="poster_action_resume">Resume</string>
+    <string name="poster_action_resume_episode">Resume S%1$d E%2$d</string>
     <string name="poster_action_detail">Detail</string>
     <string name="poster_action_trailer_checking">Checking trailer…</string>
     <string name="poster_action_trailer_available">Trailer</string>

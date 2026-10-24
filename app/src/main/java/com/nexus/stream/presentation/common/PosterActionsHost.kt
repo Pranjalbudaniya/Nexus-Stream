@@ -59,7 +59,9 @@ import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.PosterAction
+import com.nexus.stream.domain.usecase.ProgressRules
 import com.nexus.stream.domain.usecase.TrailerState
+import com.nexus.stream.domain.usecase.isResumable
 import com.nexus.stream.domain.usecase.posterActions
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.util.youtubeWatchUrlOrNull
@@ -68,6 +70,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -94,6 +97,7 @@ data class PosterSheetState(
     val fromContinue: Boolean,
     val trailerState: TrailerState = TrailerState.CHECKING,
     val trailerUrl: String? = null,
+    val resumeAction: PosterAction.Resume? = null,
 )
 
 @HiltViewModel
@@ -129,36 +133,83 @@ class PosterActionsViewModel
                     trailerState = TrailerState.CHECKING,
                 )
             viewModelScope.launch {
-                when (val outcome = metaRepository.getMeta(type = item.type, id = item.id)) {
-                    is Outcome.Success -> {
-                        val trailerUrl =
-                            outcome.value.meta.trailers.firstNotNullOfOrNull {
-                                youtubeWatchUrlOrNull(it)
-                            }
-                        _sheetState.update { current ->
-                            if (current?.item?.id == item.id) {
-                                current.copy(
-                                    trailerState =
-                                        if (trailerUrl != null) {
-                                            TrailerState.AVAILABLE
-                                        } else {
-                                            TrailerState.NONE
-                                        },
-                                    trailerUrl = trailerUrl,
-                                )
-                            } else {
-                                current
-                            }
+                val resumeAction = resolveResumeAction(item, fromContinue)
+                _sheetState.update { current ->
+                    if (current?.item?.id == item.id) {
+                        current.copy(resumeAction = resumeAction)
+                    } else {
+                        current
+                    }
+                }
+                loadTrailer(item)
+            }
+        }
+
+        private suspend fun resolveResumeAction(
+            item: MetaPreview,
+            fromContinue: Boolean,
+        ): PosterAction.Resume? =
+            when {
+                item.type.equals("movie", ignoreCase = true) -> {
+                    val progress = progressRepository.get(ProgressRules.progressKey(item.id, item.id))
+                    if (progress != null && isResumable(progress)) {
+                        PosterAction.Resume(videoId = item.id)
+                    } else {
+                        null
+                    }
+                }
+
+                item.type.equals("series", ignoreCase = true) && fromContinue -> {
+                    val continueItem =
+                        progressRepository.observeContinueWatching().firstOrNull()?.firstOrNull {
+                            it.metaId == item.id
+                        }
+                    if (continueItem != null) {
+                        PosterAction.Resume(
+                            videoId = continueItem.videoId,
+                            season = continueItem.season,
+                            episode = continueItem.episode,
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+                else -> {
+                    null
+                }
+            }
+
+        private suspend fun loadTrailer(item: MetaPreview) {
+            when (val outcome = metaRepository.getMeta(type = item.type, id = item.id)) {
+                is Outcome.Success -> {
+                    val trailerUrl =
+                        outcome.value.meta.trailers.firstNotNullOfOrNull {
+                            youtubeWatchUrlOrNull(it)
+                        }
+                    _sheetState.update { current ->
+                        if (current?.item?.id == item.id) {
+                            current.copy(
+                                trailerState =
+                                    if (trailerUrl != null) {
+                                        TrailerState.AVAILABLE
+                                    } else {
+                                        TrailerState.NONE
+                                    },
+                                trailerUrl = trailerUrl,
+                            )
+                        } else {
+                            current
                         }
                     }
+                }
 
-                    is Outcome.Failure -> {
-                        _sheetState.update { current ->
-                            if (current?.item?.id == item.id) {
-                                current.copy(trailerState = TrailerState.NONE)
-                            } else {
-                                current
-                            }
+                is Outcome.Failure -> {
+                    _sheetState.update { current ->
+                        if (current?.item?.id == item.id) {
+                            current.copy(trailerState = TrailerState.NONE)
+                        } else {
+                            current
                         }
                     }
                 }
@@ -215,21 +266,28 @@ fun PosterActionsHost(
         sheetState?.let { state ->
             val item = state.item
             val status = listStatuses[item.id]
-            val actions = posterActions(item.type, state.trailerState, status, state.fromContinue)
+            val actions =
+                posterActions(
+                    type = item.type,
+                    trailer = state.trailerState,
+                    status = status,
+                    fromContinue = state.fromContinue,
+                    resume = state.resumeAction,
+                )
 
             PosterActionsSheet(
                 item = item,
                 actions = actions,
                 trailerUrl = state.trailerUrl,
                 onDismiss = { viewModel.dismiss() },
-                onPlay = {
+                onPlay = { targetVideoId ->
                     viewModel.dismiss()
                     val year = item.releaseInfo?.take(4)?.toIntOrNull()
                     playbackLauncher.open(
                         PlaybackRequest(
                             type = item.type,
                             metaId = item.id,
-                            videoId = item.id,
+                            videoId = targetVideoId ?: item.id,
                             title = item.name,
                             year = year,
                         ),
@@ -285,7 +343,7 @@ private fun PosterActionsSheet(
     actions: List<PosterAction>,
     trailerUrl: String?,
     onDismiss: () -> Unit,
-    onPlay: () -> Unit,
+    onPlay: (String?) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -377,7 +435,7 @@ private fun PosterSheetHeader(item: MetaPreview) {
 private fun PosterActionsList(
     actions: List<PosterAction>,
     trailerUrl: String?,
-    onPlay: () -> Unit,
+    onPlay: (String?) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -396,7 +454,27 @@ private fun PosterActionsList(
                         )
                     },
                     label = stringResource(R.string.poster_action_play),
-                    onClick = onPlay,
+                    onClick = { onPlay(null) },
+                )
+            }
+
+            is PosterAction.Resume -> {
+                val label =
+                    if (action.season != null && action.episode != null) {
+                        stringResource(R.string.poster_action_resume_episode, action.season, action.episode)
+                    } else {
+                        stringResource(R.string.poster_action_resume)
+                    }
+                PosterActionRow(
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    },
+                    label = label,
+                    onClick = { onPlay(action.videoId) },
                 )
             }
 

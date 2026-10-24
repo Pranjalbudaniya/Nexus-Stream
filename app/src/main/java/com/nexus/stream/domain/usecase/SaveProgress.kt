@@ -31,15 +31,24 @@ class SaveProgress
             firstOfSession: Boolean,
             nowMs: Long,
         ): SaveOutcome {
-            if (!ProgressRules.shouldSave(sample)) return SaveOutcome.Skipped
+            val key = ProgressRules.progressKey(target.metaId, target.videoId)
+            return when {
+                !ProgressRules.shouldSave(sample) -> SaveOutcome.Skipped
+                progress.get(key)?.watched == true -> SaveOutcome.Skipped
+                else -> saveSample(target, sample, firstOfSession, nowMs)
+            }
+        }
 
+        private suspend fun saveSample(
+            target: ProgressTarget,
+            sample: ProgressSample,
+            firstOfSession: Boolean,
+            nowMs: Long,
+        ): SaveOutcome {
             val d = sample.durationMs
             val p = if (sample.ended) d else sample.positionMs.coerceIn(0, d)
             val key = ProgressRules.progressKey(target.metaId, target.videoId)
-
-            val existing = progress.get(key)
-            val watchedBefore = existing?.watched == true
-            val watchedNow = watchedBefore || sample.ended || ProgressRules.isWatched(p, d)
+            val watchedNow = sample.ended || ProgressRules.isWatched(p, d)
 
             progress.upsert(
                 WatchProgress(
@@ -63,7 +72,7 @@ class SaveProgress
             updateLibraryStatusIfNeeded(
                 target = target,
                 positionMs = p,
-                watchedBefore = watchedBefore,
+                watchedBefore = false,
                 watchedNow = watchedNow,
             )
 

@@ -159,8 +159,7 @@ fun DetailScreenContent(
                                 listStatus = state.listStatus,
                                 isSynopsisExpanded = state.isSynopsisExpanded,
                                 trailerUrl = state.trailerUrl,
-                                playActionTitle = state.playActionTitle,
-                                isPlayEnabled = state.isPlayEnabled,
+                                primaryPlay = state.primaryPlay,
                                 onPlayMain = {
                                     state.activeVideoId?.let { targetId ->
                                         playbackLauncher.open(

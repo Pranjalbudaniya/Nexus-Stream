@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,12 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -47,6 +51,8 @@ import coil3.request.crossfade
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
+import com.nexus.stream.domain.model.PlayIntent
+import com.nexus.stream.domain.usecase.timeLeftParts
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
 import com.nexus.stream.presentation.common.labelResId
@@ -62,8 +68,7 @@ fun DetailHeader(
     inWatchlist: Boolean,
     isSynopsisExpanded: Boolean,
     trailerUrl: String?,
-    playActionTitle: String,
-    isPlayEnabled: Boolean,
+    primaryPlay: PrimaryPlayState,
     onPlayMain: () -> Unit,
     onOpenWatchOptions: () -> Unit,
     onOpenTrailer: () -> Unit,
@@ -96,19 +101,11 @@ fun DetailHeader(
 
             Spacer(modifier = Modifier.height(NexusTheme.spacing.md))
 
-            NexusButton(
-                onClick = onPlayMain,
-                enabled = isPlayEnabled,
+            PrimaryPlayButton(
+                primaryPlay = primaryPlay,
+                onPlayMain = onPlayMain,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
-                Text(text = playActionTitle)
-            }
+            )
 
             Spacer(modifier = Modifier.height(NexusTheme.spacing.sm))
 
@@ -396,4 +393,158 @@ private fun SynopsisSection(
             )
         }
     }
+}
+
+@Composable
+private fun PrimaryPlayButton(
+    primaryPlay: PrimaryPlayState,
+    onPlayMain: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (primaryPlay) {
+        is PrimaryPlayState.NotReady -> NotReadyPlayButton(modifier)
+        is PrimaryPlayState.Ready -> ReadyPlayButton(primaryPlay, onPlayMain, modifier)
+    }
+}
+
+@Composable
+private fun NotReadyPlayButton(modifier: Modifier = Modifier) {
+    NexusButton(
+        onClick = {},
+        enabled = false,
+        modifier = modifier,
+    ) {
+        Spacer(modifier = Modifier.size(ButtonDefaults.IconSize))
+    }
+}
+
+@Composable
+private fun ReadyPlayButton(
+    ready: PrimaryPlayState.Ready,
+    onPlayMain: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val intent = ready.intent
+    val baseLabel = formatPlayLabel(intent)
+    val resumeVisuals =
+        if (intent is PlayIntent.Resume && intent.durationMs > 0L) {
+            formatResumeVisuals(intent)
+        } else {
+            null
+        }
+
+    val displayLabel =
+        if (resumeVisuals?.timeLeftStr != null) {
+            "$baseLabel • ${resumeVisuals.timeLeftStr}"
+        } else {
+            baseLabel
+        }
+
+    val a11yDesc = resumeVisuals?.a11yDesc
+
+    Box(
+        modifier = modifier.clip(NexusTheme.shapes.button),
+    ) {
+        NexusButton(
+            onClick = onPlayMain,
+            enabled = ready.isEnabled,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (a11yDesc != null) {
+                            Modifier.semantics { contentDescription = a11yDesc }
+                        } else {
+                            Modifier
+                        },
+                    ),
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
+            Text(
+                text = displayLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        if (resumeVisuals != null && resumeVisuals.progressFraction > 0f) {
+            LinearProgressIndicator(
+                progress = { resumeVisuals.progressFraction },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .height(NexusTheme.spacing.xxs),
+                color = MaterialTheme.colorScheme.onPrimary,
+                trackColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+private data class ResumeVisuals(
+    val timeLeftStr: String,
+    val progressFraction: Float,
+    val a11yDesc: String,
+)
+
+@Composable
+private fun formatPlayLabel(intent: PlayIntent): String =
+    when (intent) {
+        is PlayIntent.Start -> {
+            stringResource(R.string.detail_play)
+        }
+
+        is PlayIntent.Resume -> {
+            if (intent.season != null && intent.episode != null) {
+                stringResource(R.string.detail_resume_episode, intent.season, intent.episode)
+            } else {
+                stringResource(R.string.detail_resume)
+            }
+        }
+
+        is PlayIntent.Next -> {
+            if (intent.season != null && intent.episode != null) {
+                stringResource(R.string.detail_play_episode, intent.season, intent.episode)
+            } else {
+                stringResource(R.string.detail_play_next)
+            }
+        }
+    }
+
+@Composable
+private fun formatResumeVisuals(intent: PlayIntent.Resume): ResumeVisuals {
+    val timeLeft = timeLeftParts(intent.positionMs, intent.durationMs)
+    val timeLeftStr =
+        when {
+            timeLeft.hours > 0 && timeLeft.minutes > 0 -> {
+                stringResource(R.string.detail_time_left_hr_min, timeLeft.hours, timeLeft.minutes)
+            }
+
+            timeLeft.hours > 0 -> {
+                stringResource(R.string.detail_time_left_hr, timeLeft.hours)
+            }
+
+            else -> {
+                stringResource(R.string.detail_time_left_min, timeLeft.minutes)
+            }
+        }
+
+    val percent =
+        ((intent.positionMs.toDouble() / intent.durationMs.toDouble()) * 100)
+            .toInt()
+            .coerceIn(0, 100)
+    val a11yDesc = stringResource(R.string.detail_resume_a11y, percent, timeLeftStr)
+    val fraction = (intent.positionMs.toFloat() / intent.durationMs.toFloat()).coerceIn(0f, 1f)
+
+    return ResumeVisuals(
+        timeLeftStr = timeLeftStr,
+        progressFraction = fraction,
+        a11yDesc = a11yDesc,
+    )
 }

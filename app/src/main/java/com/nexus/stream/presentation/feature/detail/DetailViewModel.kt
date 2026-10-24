@@ -10,6 +10,7 @@ import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.Outcome
+import com.nexus.stream.domain.model.PlayIntent
 import com.nexus.stream.domain.model.SeasonGroup
 import com.nexus.stream.domain.model.Video
 import com.nexus.stream.domain.model.toPreview
@@ -22,7 +23,7 @@ import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.defaultSeason
 import com.nexus.stream.domain.usecase.groupEpisodes
 import com.nexus.stream.domain.usecase.isReleased
-import com.nexus.stream.domain.usecase.resumeVideoId
+import com.nexus.stream.domain.usecase.resolvePlayIntent
 import com.nexus.stream.domain.usecase.watchActions
 import com.nexus.stream.presentation.navigation.Detail
 import com.nexus.stream.util.youtubeWatchUrlOrNull
@@ -44,6 +45,16 @@ enum class AllItemsKind {
     DIRECTORS,
 }
 
+sealed interface PrimaryPlayState {
+    data object NotReady : PrimaryPlayState
+
+    data class Ready(
+        val intent: PlayIntent,
+        val targetVideoId: String?,
+        val isEnabled: Boolean = true,
+    ) : PrimaryPlayState
+}
+
 sealed interface DetailUiState {
     data object Loading : DetailUiState
 
@@ -57,9 +68,7 @@ sealed interface DetailUiState {
         val selectedSeason: Int? = null,
         val episodeProgress: Map<String, EpisodeProgress> = emptyMap(),
         val trailerUrl: String? = null,
-        val playActionTitle: String = "Play",
-        val isPlayEnabled: Boolean = true,
-        val activeVideoId: String? = null,
+        val primaryPlay: PrimaryPlayState = PrimaryPlayState.NotReady,
         val isRefreshing: Boolean = false,
         val showStreamsSheet: Boolean = false,
         val streamsSheetVideoId: String? = null,
@@ -68,7 +77,13 @@ sealed interface DetailUiState {
         val watchActions: List<WatchAction> = emptyList(),
         val pendingConfirmationAction: WatchAction? = null,
         val allSheetKind: AllItemsKind? = null,
-    ) : DetailUiState
+    ) : DetailUiState {
+        val activeVideoId: String?
+            get() = (primaryPlay as? PrimaryPlayState.Ready)?.targetVideoId
+
+        val isPlayEnabled: Boolean
+            get() = (primaryPlay as? PrimaryPlayState.Ready)?.isEnabled == true
+    }
 
     data class Error(
         val error: AppError,
@@ -162,6 +177,8 @@ class DetailViewModel(
 
     private var userSelectedSeason: Int? = null
     private var currentListStatus: ListStatus? = null
+    private var progressEmitted: Boolean = false
+    private var latestProgress: Map<String, EpisodeProgress>? = null
 
     @Inject
     constructor(
@@ -490,11 +507,16 @@ class DetailViewModel(
         val currentContent = _uiState.value as? DetailUiState.Content
         val status = currentListStatus ?: currentContent?.listStatus
         val inWatchlist = status != null
-        val progress = currentContent?.episodeProgress.orEmpty()
+        val progress = latestProgress ?: currentContent?.episodeProgress.orEmpty()
         val synopsisExpanded = currentContent?.isSynopsisExpanded ?: false
 
         val selectedSeason = userSelectedSeason ?: calculateDefaultSeason(seasons, progress)
-        val playState = calculatePlayState(meta, progress, clock())
+        val primaryPlay =
+            if (progressEmitted) {
+                buildPrimaryPlayState(meta, progress, clock())
+            } else {
+                PrimaryPlayState.NotReady
+            }
 
         _uiState.value =
             DetailUiState.Content(
@@ -507,9 +529,7 @@ class DetailViewModel(
                 selectedSeason = selectedSeason,
                 episodeProgress = progress,
                 trailerUrl = trailerUrl,
-                playActionTitle = playState.title,
-                isPlayEnabled = playState.isEnabled,
-                activeVideoId = playState.videoId,
+                primaryPlay = primaryPlay,
                 isRefreshing = false,
             )
     }
@@ -524,13 +544,15 @@ class DetailViewModel(
                 val inWatchlist = listStatus != null
                 Triple(inWatchlist, listStatus, progressMap)
             }.collect { (inWatchlist, listStatus, progressMap) ->
+                progressEmitted = true
+                latestProgress = progressMap
                 currentListStatus = listStatus
                 _uiState.update { current ->
                     if (current !is DetailUiState.Content) return@update current
                     val selectedSeason =
                         userSelectedSeason
                             ?: calculateDefaultSeason(current.seasons, progressMap)
-                    val playState = calculatePlayState(current.meta, progressMap, clock())
+                    val primaryPlay = buildPrimaryPlayState(current.meta, progressMap, clock())
                     val actions =
                         if (current.showWatchOptionsSheet) {
                             watchActions(
@@ -551,9 +573,7 @@ class DetailViewModel(
                         listStatus = listStatus,
                         episodeProgress = progressMap,
                         selectedSeason = selectedSeason,
-                        playActionTitle = playState.title,
-                        isPlayEnabled = playState.isEnabled,
-                        activeVideoId = playState.videoId,
+                        primaryPlay = primaryPlay,
                         watchActions = actions,
                     )
                 }
@@ -583,42 +603,62 @@ private fun calculateDefaultSeason(
     return defaultSeason(seasons, latestProgress?.videoId)
 }
 
-private data class PlayState(
-    val title: String,
-    val isEnabled: Boolean,
-    val videoId: String?,
-)
-
-private fun calculatePlayState(
+private fun buildPrimaryPlayState(
     meta: MetaDetail,
     progress: Map<String, EpisodeProgress>,
     now: Long,
-): PlayState {
-    if (meta.type != "series") {
-        return PlayState("Play", true, meta.defaultVideoId ?: meta.id)
-    }
+): PrimaryPlayState.Ready {
+    val intent =
+        resolvePlayIntent(
+            type = meta.type,
+            metaId = meta.id,
+            videos = meta.videos,
+            progress = progress,
+            now = now,
+        )
+    val targetVideoId =
+        when (intent) {
+            is PlayIntent.Start -> {
+                if (meta.type == "series") {
+                    val firstReleased =
+                        meta.videos.firstOrNull { it.isReleased(now) } ?: meta.videos.firstOrNull()
+                    firstReleased?.id
+                } else {
+                    meta.defaultVideoId ?: meta.id
+                }
+            }
 
-    val resumeId = resumeVideoId(meta.videos, progress, now)
-    return when {
-        meta.videos.isEmpty() -> {
-            PlayState("Play", false, null)
-        }
+            is PlayIntent.Resume -> {
+                intent.videoId
+            }
 
-        resumeId != null -> {
-            val video = meta.videos.find { it.id == resumeId }
-            val s = video?.season ?: 1
-            val e = video?.episode ?: 1
-            val inProgress =
-                (progress[resumeId]?.positionMs ?: 0L) > 0L &&
-                    progress[resumeId]?.watched != true
-            val title = if (inProgress) "Resume S$s E$e" else "Play S$s E$e"
-            PlayState(title, true, resumeId)
+            is PlayIntent.Next -> {
+                intent.videoId
+            }
         }
+    val isEnabled =
+        when (intent) {
+            is PlayIntent.Start -> {
+                if (meta.type == "series") {
+                    val firstReleased =
+                        meta.videos.firstOrNull { it.isReleased(now) } ?: meta.videos.firstOrNull()
+                    firstReleased != null
+                } else {
+                    true
+                }
+            }
 
-        else -> {
-            val firstReleased =
-                meta.videos.firstOrNull { it.isReleased(now) } ?: meta.videos.firstOrNull()
-            PlayState("Play", firstReleased != null, firstReleased?.id)
+            is PlayIntent.Resume -> {
+                true
+            }
+
+            is PlayIntent.Next -> {
+                true
+            }
         }
-    }
+    return PrimaryPlayState.Ready(
+        intent = intent,
+        targetVideoId = targetVideoId,
+        isEnabled = isEnabled,
+    )
 }

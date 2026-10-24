@@ -11,6 +11,12 @@ enum class TrailerState {
 sealed interface PosterAction {
     data object Play : PosterAction
 
+    data class Resume(
+        val videoId: String? = null,
+        val season: Int? = null,
+        val episode: Int? = null,
+    ) : PosterAction
+
     data object Detail : PosterAction
 
     data class Trailer(
@@ -29,9 +35,12 @@ fun posterActions(
     trailer: TrailerState,
     status: ListStatus?,
     fromContinue: Boolean,
+    resume: PosterAction.Resume? = null,
 ): List<PosterAction> {
     val actions = mutableListOf<PosterAction>()
-    if (!type.equals("series", ignoreCase = true)) {
+    if (resume != null) {
+        actions.add(resume)
+    } else if (!type.equals("series", ignoreCase = true)) {
         actions.add(PosterAction.Play)
     }
     actions.add(PosterAction.Detail)
