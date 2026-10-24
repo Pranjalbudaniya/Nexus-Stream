@@ -2,6 +2,7 @@ package com.nexus.stream.data.local.db.dao
 
 import com.nexus.stream.data.local.db.entity.WatchProgressEntity
 import com.nexus.stream.domain.model.ContinueRow
+import com.nexus.stream.domain.model.ListStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -36,6 +37,11 @@ class FakeProgressDao(
                             durationMs = newest.durationMs,
                             watched = newest.watched,
                             updatedAt = newest.updatedAt,
+                            inWatchlist = libraryItem?.inWatchlist ?: false,
+                            listStatus =
+                                libraryItem?.listStatus?.let {
+                                    runCatching { ListStatus.valueOf(it) }.getOrNull()
+                                },
                         )
                     }.sortedByDescending { it.updatedAt }
                     .take(40)

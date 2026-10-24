@@ -1,5 +1,10 @@
 package com.nexus.stream.domain.model
 
+enum class ContinueKind {
+    RESUME,
+    UP_NEXT,
+}
+
 data class ContinueWatchingItem(
     val metaId: String,
     val type: String,
@@ -11,11 +16,15 @@ data class ContinueWatchingItem(
     val positionMs: Long,
     val durationMs: Long,
     val updatedAt: Long,
+    val kind: ContinueKind = ContinueKind.RESUME,
 )
+
+val ContinueWatchingItem.canRemove: Boolean
+    get() = kind == ContinueKind.RESUME
 
 val ContinueWatchingItem.progress: Float?
     get() =
-        if (durationMs <= 0L) {
+        if (kind == ContinueKind.UP_NEXT || durationMs <= 0L) {
             null
         } else {
             (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)

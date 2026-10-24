@@ -22,7 +22,9 @@ interface ProgressDao {
             p.positionMs AS positionMs,
             p.durationMs AS durationMs,
             p.watched AS watched,
-            p.updatedAt AS updatedAt
+            p.updatedAt AS updatedAt,
+            coalesce(l.inWatchlist, 0) AS inWatchlist,
+            l.listStatus AS listStatus
         FROM watch_progress p
         LEFT JOIN library_items l ON p.metaId = l.metaId
         WHERE p.key = (

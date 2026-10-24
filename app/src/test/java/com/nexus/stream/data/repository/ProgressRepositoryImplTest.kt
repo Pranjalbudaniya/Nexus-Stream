@@ -5,8 +5,10 @@ import com.nexus.stream.data.local.db.dao.FakeLibraryDao
 import com.nexus.stream.data.local.db.dao.FakeProgressDao
 import com.nexus.stream.data.local.db.entity.LibraryItemEntity
 import com.nexus.stream.data.local.db.entity.WatchProgressEntity
+import com.nexus.stream.domain.model.ContinueKind
 import com.nexus.stream.domain.model.ContinueRow
 import com.nexus.stream.domain.model.EpisodeRef
+import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.usecase.ContinueWatchingRules
@@ -96,6 +98,37 @@ class ProgressRepositoryImplTest {
             assertEquals(1, result.size)
             assertEquals("m1", result[0].metaId)
             assertEquals("Movie 1", result[0].name)
+        }
+
+    @Test
+    fun CR1_observeContinueWatching_passesTheClockToTheRules() =
+        runTest(testDispatcher) {
+            val watchedRow =
+                ContinueRow(
+                    metaId = "s1",
+                    type = "series",
+                    name = "Series 1",
+                    poster = "https://poster.jpg",
+                    videoId = "s1:1:1",
+                    season = 1,
+                    episode = 1,
+                    positionMs = 1800_000L,
+                    durationMs = 1800_000L,
+                    watched = true,
+                    updatedAt = 100_000L,
+                    inWatchlist = true,
+                    listStatus = ListStatus.WATCHING,
+                )
+            fakeDao.continueRows.value = listOf(watchedRow)
+
+            currentTime = 100_000L + 5L * 24 * 60 * 60 * 1000L
+            val result5Days = repository.observeContinueWatching().first()
+            assertEquals(1, result5Days.size)
+            assertEquals(ContinueKind.UP_NEXT, result5Days[0].kind)
+
+            currentTime = 100_000L + 61L * 24 * 60 * 60 * 1000L
+            val result61Days = repository.observeContinueWatching().first()
+            assertTrue(result61Days.isEmpty())
         }
 
     @Test

@@ -49,7 +49,7 @@ class ProgressRepositoryImpl(
     override fun observeContinueWatching(): Flow<List<ContinueWatchingItem>> =
         progressDao
             .observeContinueRows()
-            .map { continueWatchingRules(it) }
+            .map { continueWatchingRules(it, clock()) }
             .distinctUntilChanged()
             .flowOn(dispatcher)
 

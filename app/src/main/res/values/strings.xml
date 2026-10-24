@@ -203,6 +203,8 @@
     <string name="continue_watching_title">Continue watching</string>
     <string name="continue_watching_remove">Remove from Continue watching</string>
     <string name="continue_watching_remove_desc">Remove %1$s from Continue watching</string>
+    <string name="home_continue_up_next">Up next</string>
+    <string name="home_continue_up_next_a11y">%1$s, up next</string>
 
     <!-- Detail screen -->
     <string name="detail_title">Detail</string>

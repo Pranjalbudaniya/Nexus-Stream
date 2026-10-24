@@ -12,4 +12,6 @@ data class ContinueRow(
     val durationMs: Long,
     val watched: Boolean,
     val updatedAt: Long,
+    val inWatchlist: Boolean = false,
+    val listStatus: ListStatus? = null,
 )
