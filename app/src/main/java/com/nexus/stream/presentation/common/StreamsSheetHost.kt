@@ -22,6 +22,7 @@ data class PlaybackRequest(
     val posterUrl: String? = null,
     val metaName: String? = null,
     val autoResume: Boolean = false,
+    val sourceHintKey: String? = null,
 )
 
 fun buildPlaybackRequest(

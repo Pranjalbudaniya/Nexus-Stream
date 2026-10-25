@@ -40,19 +40,56 @@ fun isResumable(row: EpisodeProgress): Boolean = isResumable(row.watched, row.po
 fun isResumable(row: com.nexus.stream.domain.model.WatchProgress): Boolean =
     isResumable(row.watched, row.positionMs, row.durationMs)
 
-private data class EpisodeOrderKey(
+internal data class EpisodeOrderKey(
     val season: Int,
     val episode: Int,
     val originalIndex: Int,
 ) : Comparable<EpisodeOrderKey> {
     override fun compareTo(other: EpisodeOrderKey): Int =
         compareValuesBy(this, other, { it.season }, { it.episode }, { it.originalIndex })
+
+    companion object {
+        fun from(
+            video: Video,
+            index: Int,
+        ): EpisodeOrderKey =
+            EpisodeOrderKey(
+                season = video.season ?: Int.MAX_VALUE,
+                episode = video.episode ?: Int.MAX_VALUE,
+                originalIndex = index,
+            )
+    }
 }
 
-private data class VideoWithIndex(
+internal data class VideoWithIndex(
     val video: Video,
     val orderKey: EpisodeOrderKey,
-)
+) {
+    companion object {
+        fun from(videos: List<Video>): List<VideoWithIndex> =
+            videos.mapIndexed { index, video ->
+                VideoWithIndex(
+                    video = video,
+                    orderKey = EpisodeOrderKey.from(video, index),
+                )
+            }
+    }
+}
+
+internal fun regularEpisodesInOrder(videos: List<Video>): List<VideoWithIndex> =
+    VideoWithIndex
+        .from(videos)
+        .filter { it.video.season != 0 }
+        .sortedBy { it.orderKey }
+
+internal fun firstReleasedRegularAfter(
+    regularEpisodesInOrder: List<VideoWithIndex>,
+    currentOrderKey: EpisodeOrderKey,
+    now: Long,
+): Video? =
+    regularEpisodesInOrder
+        .firstOrNull { it.orderKey > currentOrderKey && it.video.isReleased(now) }
+        ?.video
 
 private data class Candidate(
     val progress: EpisodeProgress,
@@ -100,18 +137,7 @@ private fun resolveSeriesPlayIntent(
     progress: Map<String, EpisodeProgress>,
     now: Long,
 ): PlayIntent {
-    val videosWithIndex =
-        videos.mapIndexed { index, video ->
-            VideoWithIndex(
-                video = video,
-                orderKey =
-                    EpisodeOrderKey(
-                        season = video.season ?: Int.MAX_VALUE,
-                        episode = video.episode ?: Int.MAX_VALUE,
-                        originalIndex = index,
-                    ),
-            )
-        }
+    val videosWithIndex = VideoWithIndex.from(videos)
 
     val videoMap = videosWithIndex.associateBy { it.video.id }
 
@@ -153,15 +179,13 @@ private fun decideCandidate(
         }
 
         row.watched && video.season != 0 -> {
-            val candidateOrderKey = candidate.videoWithIndex.orderKey
             val nextEpisode =
-                regularEpisodesInOrder
-                    .firstOrNull { it.orderKey > candidateOrderKey && it.video.isReleased(now) }
+                firstReleasedRegularAfter(regularEpisodesInOrder, candidate.videoWithIndex.orderKey, now)
             if (nextEpisode != null) {
                 PlayIntent.Next(
-                    videoId = nextEpisode.video.id,
-                    season = nextEpisode.video.season,
-                    episode = nextEpisode.video.episode,
+                    videoId = nextEpisode.id,
+                    season = nextEpisode.season,
+                    episode = nextEpisode.episode,
                 )
             } else {
                 PlayIntent.Start

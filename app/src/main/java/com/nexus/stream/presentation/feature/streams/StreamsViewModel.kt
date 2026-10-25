@@ -5,17 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.stream.R
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.Addon
-import com.nexus.stream.domain.model.EpisodeHint
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
-import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.SourceFingerprint
 import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.model.TypeFilter
-import com.nexus.stream.domain.model.fingerprintOf
 import com.nexus.stream.domain.model.hashAddonKey
 import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
@@ -26,15 +23,14 @@ import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.MagnetLink
 import com.nexus.stream.domain.usecase.ResumeStep
+import com.nexus.stream.domain.usecase.StartPlayback
+import com.nexus.stream.domain.usecase.StartResult
 import com.nexus.stream.domain.usecase.StreamMatching
 import com.nexus.stream.domain.usecase.StreamOrdering
-import com.nexus.stream.domain.usecase.SubtitleHints
 import com.nexus.stream.domain.usecase.decideResume
 import com.nexus.stream.domain.usecase.lastUsedKey
 import com.nexus.stream.domain.usecase.progressKeyFor
-import com.nexus.stream.domain.usecase.resolvePlaybackSource
 import com.nexus.stream.presentation.common.PlaybackRequest
-import com.nexus.stream.presentation.feature.player.PlaybackSelection
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -234,6 +230,7 @@ class StreamsViewModel
         private val playbackCapabilities: PlaybackCapabilities,
         private val playbackSessionHolder: PlaybackSessionHolder,
         private val sourceMemoryRepository: SourceMemoryRepository,
+        private val startPlayback: StartPlayback = StartPlayback(playbackCapabilities, playbackSessionHolder),
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(StreamsUiState())
@@ -437,10 +434,12 @@ class StreamsViewModel
                     lastUsedKey = null,
                 )
             }
+            val progressKey =
+                request.sourceHintKey ?: progressKeyFor(request.type, request.metaId, request.videoId)
             fingerprintDeferred =
                 viewModelScope.async {
                     try {
-                        sourceMemoryRepository.get(progressKeyFor(request.type, request.metaId, request.videoId))
+                        sourceMemoryRepository.get(progressKey)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -668,70 +667,23 @@ class StreamsViewModel
 
         private suspend fun playStream(stream: ParsedStream) {
             val req = _uiState.value.request
-            val hint =
-                if (req?.season != null && req.episode != null) {
-                    EpisodeHint(season = req.season, episode = req.episode)
-                } else {
-                    null
-                }
-            val source = resolvePlaybackSource(stream.stream.source, hint)
-            val title = req?.title ?: stream.displayName
-            val hints =
-                SubtitleHints(
-                    filename = stream.stream.filename,
-                    videoHash = stream.stream.videoHash,
-                    videoSize = stream.stream.videoSize,
-                )
-            when (source) {
-                is PlaybackSource.Direct,
-                is PlaybackSource.DirectWithHeaders,
-                -> {
-                    startPlayback(stream, title, source, req, hints)
+            when (val result = startPlayback(req, stream)) {
+                is StartResult.Started -> {
+                    _effects.emit(StreamsEffect.DismissSheet)
                 }
 
-                is PlaybackSource.Torrent -> {
-                    if (playbackCapabilities.supportsTorrent) {
-                        startPlayback(stream, title, source, req, hints)
-                    } else {
-                        _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
-                    }
+                is StartResult.External -> {
+                    _effects.emit(StreamsEffect.OpenExternalUrl(result.url))
                 }
 
-                is PlaybackSource.External -> {
-                    _effects.emit(StreamsEffect.OpenExternalUrl(source.url))
+                is StartResult.Unsupported -> {
+                    _effects.emit(StreamsEffect.ShowMessage(result.messageRes))
                 }
 
-                is PlaybackSource.Unsupported -> {
-                    _effects.emit(StreamsEffect.ShowMessage(R.string.streams_torrent_engine_notice))
+                is StartResult.NeedsGate -> {
+                    // Not triggered today
                 }
             }
-        }
-
-        private suspend fun startPlayback(
-            stream: ParsedStream,
-            title: String,
-            source: PlaybackSource,
-            req: PlaybackRequest?,
-            hints: SubtitleHints?,
-        ) {
-            val selection =
-                PlaybackSelection(
-                    title = title,
-                    source = source,
-                    type = req?.type ?: "movie",
-                    metaId = req?.metaId.orEmpty(),
-                    videoId = req?.videoId.orEmpty(),
-                    logoUrl = req?.logoUrl,
-                    backgroundUrl = req?.backgroundUrl,
-                    subtitleHints = hints,
-                    season = req?.season,
-                    episode = req?.episode,
-                    posterUrl = req?.posterUrl ?: req?.logoUrl,
-                    metaName = req?.metaName,
-                    sourceFingerprint = fingerprintOf(stream),
-                )
-            playbackSessionHolder.start(selection)
-            _effects.emit(StreamsEffect.DismissSheet)
         }
 
         private fun handleStreamAction(event: StreamsEvent) {

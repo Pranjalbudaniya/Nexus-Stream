@@ -1379,4 +1379,64 @@ class StreamsViewModelTest {
 
             assertNull(playbackSessionHolder.current.value)
         }
+
+    @Test
+    fun SH1_sourceHintKey_isUsedToReadTheFingerprint() =
+        runTest {
+            coEvery { sourceMemoryRepository.get(any()) } returns null
+            val request = sampleRequest.copy(sourceHintKey = "k|k")
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { sourceMemoryRepository.get("k|k") }
+            coVerify(exactly = 0) { sourceMemoryRepository.get("tt123456|tt123456") }
+        }
+
+    @Test
+    fun SH2_noSourceHintKey_usesTheOwnKey() =
+        runTest {
+            coEvery { sourceMemoryRepository.get(any()) } returns null
+            val request = sampleRequest.copy(sourceHintKey = null)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { sourceMemoryRepository.get("tt123456|tt123456") }
+        }
+
+    @Test
+    fun SH3_sourceHintKey_doesNotChangeAnythingElse() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get("hint|hint") } returns f
+            val request = sampleRequest.copy(autoResume = true, sourceHintKey = "hint|hint")
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val hit = cand(key = "hit", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(hit), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            runCurrent()
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            assertEquals("hit", viewModel.uiState.value.lastUsedKey)
+            job.cancel()
+        }
 }
