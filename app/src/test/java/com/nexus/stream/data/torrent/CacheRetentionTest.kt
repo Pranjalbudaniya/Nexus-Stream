@@ -107,4 +107,39 @@ class CacheRetentionTest {
         assertEquals(emptySet<String>(), foldersToWipeAtStart(emptySet(), setOf("abc")))
         assertEquals(setOf("x"), foldersToWipeAtStart(setOf("x"), emptySet()))
     }
+
+    @Test
+    fun AU3_completionAction_cases() {
+        // no entry or Keep on -> NONE
+        assertEquals(CompletionAction.NONE, completionAction(null, clearCacheOnExit = true))
+        assertEquals(CompletionAction.NONE, completionAction(null, clearCacheOnExit = false))
+        assertEquals(
+            CompletionAction.NONE,
+            completionAction(entry(state = LedgerState.ACTIVE), clearCacheOnExit = false),
+        )
+        assertEquals(
+            CompletionAction.NONE,
+            completionAction(entry(state = LedgerState.RETAINED), clearCacheOnExit = false),
+        )
+
+        // ACTIVE -> DELETE_ON_STOP
+        assertEquals(
+            CompletionAction.DELETE_ON_STOP,
+            completionAction(entry(state = LedgerState.ACTIVE), clearCacheOnExit = true),
+        )
+
+        // RETAINED -> DELETE_NOW
+        assertEquals(
+            CompletionAction.DELETE_NOW,
+            completionAction(entry(state = LedgerState.RETAINED), clearCacheOnExit = true),
+        )
+    }
+
+    @Test
+    fun AU4_foldersToWipeAtStart_removesOnlyOrphans() {
+        val onDisk = setOf("kept1", "Kept2", "orphan1", "orphan2")
+        val retained = setOf("kept1", "kept2")
+        val toWipe = foldersToWipeAtStart(onDisk, retained)
+        assertEquals(setOf("orphan1", "orphan2"), toWipe)
+    }
 }

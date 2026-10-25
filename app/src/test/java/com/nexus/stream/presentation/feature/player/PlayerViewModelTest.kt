@@ -36,10 +36,12 @@ import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
 import com.nexus.stream.domain.usecase.PlaybackProgressTracker
+import com.nexus.stream.domain.usecase.ProgressRules
 import com.nexus.stream.domain.usecase.SUBTITLES_OFF
 import com.nexus.stream.domain.usecase.SaveOutcome
 import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.SubtitleHints
+import com.nexus.stream.domain.usecase.progressKeyFor
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -2948,4 +2950,59 @@ class PlayerViewModelTest {
             runCurrent()
             assertNull(fakeEngine.prepareCalls.last().cacheKey)
         }
+
+    @Test
+    fun AU1_completionKey_equalsTheLedgerKey() {
+        val seriesSelection =
+            PlaybackSelection(
+                title = "Series",
+                source = PlaybackSource.Torrent(TorrentRequest(infoHash = "0123456789abcdef0123456789abcdef01234567")),
+                type = "series",
+                metaId = "tt123",
+                videoId = "tt123:1:2",
+            )
+        val seriesTarget = seriesSelection.toProgressTarget()!!
+        val seriesKey1 = ProgressRules.progressKey(seriesTarget.metaId, seriesTarget.videoId)
+        val seriesKey2 = progressKeyFor(seriesSelection.type, seriesSelection.metaId, seriesSelection.videoId)
+        assertEquals("tt123|tt123:1:2", seriesKey1)
+        assertEquals(seriesKey1, seriesKey2)
+
+        val movieDiffSelection =
+            PlaybackSelection(
+                title = "Movie Diff",
+                source = PlaybackSource.Torrent(TorrentRequest(infoHash = "0123456789abcdef0123456789abcdef01234567")),
+                type = "movie",
+                metaId = "kitsu:1",
+                videoId = "kitsu:1:1",
+            )
+        val movieDiffTarget = movieDiffSelection.toProgressTarget()!!
+        val movieDiffKey1 = ProgressRules.progressKey(movieDiffTarget.metaId, movieDiffTarget.videoId)
+        val movieDiffKey2 =
+            progressKeyFor(
+                movieDiffSelection.type,
+                movieDiffSelection.metaId,
+                movieDiffSelection.videoId,
+            )
+        assertEquals("kitsu:1|kitsu:1", movieDiffKey1)
+        assertEquals(movieDiffKey1, movieDiffKey2)
+
+        val movieSameSelection =
+            PlaybackSelection(
+                title = "Movie Same",
+                source = PlaybackSource.Torrent(TorrentRequest(infoHash = "0123456789abcdef0123456789abcdef01234567")),
+                type = "movie",
+                metaId = "tt456",
+                videoId = "tt456",
+            )
+        val movieSameTarget = movieSameSelection.toProgressTarget()!!
+        val movieSameKey1 = ProgressRules.progressKey(movieSameTarget.metaId, movieSameTarget.videoId)
+        val movieSameKey2 =
+            progressKeyFor(
+                movieSameSelection.type,
+                movieSameSelection.metaId,
+                movieSameSelection.videoId,
+            )
+        assertEquals("tt456|tt456", movieSameKey1)
+        assertEquals(movieSameKey1, movieSameKey2)
+    }
 }

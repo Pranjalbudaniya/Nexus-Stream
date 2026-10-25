@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +29,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -460,57 +464,18 @@ private fun ReadyPlayButton(
     Box(
         modifier = modifier.clip(NexusTheme.shapes.button),
     ) {
-        NexusButton(
-            onClick = onPlayMain,
-            enabled = ready.isEnabled,
-            interactionSource = interactionSource,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (isResume) {
-                            Modifier.clearAndSetSemantics { }
-                        } else if (a11yDesc != null) {
-                            Modifier.semantics { contentDescription = a11yDesc }
-                        } else {
-                            Modifier
-                        },
-                    ),
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
-            )
-            Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
-            Text(
-                text = displayLabel,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        if (resumeVisuals != null && resumeVisuals.progressFraction > 0f) {
-            LinearProgressIndicator(
-                progress = { resumeVisuals.progressFraction },
+        if (isResume) {
+            Surface(
+                shape = NexusTheme.shapes.button,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .height(NexusTheme.spacing.xxs),
-                color = MaterialTheme.colorScheme.onPrimary,
-                trackColor = MaterialTheme.colorScheme.primary,
-            )
-        }
-
-        if (isResume) {
-            Box(
-                modifier =
-                    Modifier
-                        .matchParentSize()
                         .combinedClickable(
                             interactionSource = interactionSource,
-                            indication = null,
+                            indication = ripple(),
+                            enabled = ready.isEnabled,
                             onClick = onPlayMain,
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -525,6 +490,70 @@ private fun ReadyPlayButton(
                                 Modifier
                             },
                         ),
+            ) {
+                Row(
+                    modifier =
+                        Modifier
+                            .defaultMinSize(
+                                minWidth = ButtonDefaults.MinWidth,
+                                minHeight = ButtonDefaults.MinHeight,
+                            ).padding(ButtonDefaults.ContentPadding),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                    )
+                    Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
+                    Text(
+                        text = displayLabel,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        } else {
+            NexusButton(
+                onClick = onPlayMain,
+                enabled = ready.isEnabled,
+                interactionSource = interactionSource,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (a11yDesc != null) {
+                                Modifier.semantics { contentDescription = a11yDesc }
+                            } else {
+                                Modifier
+                            },
+                        ),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
+                Text(
+                    text = displayLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (resumeVisuals != null && resumeVisuals.progressFraction > 0f) {
+            LinearProgressIndicator(
+                progress = { resumeVisuals.progressFraction },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .height(NexusTheme.spacing.xxs),
+                color = MaterialTheme.colorScheme.onPrimary,
+                trackColor = MaterialTheme.colorScheme.primary,
             )
         }
     }

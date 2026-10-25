@@ -286,7 +286,12 @@ class DetailViewModel(
             DetailEvent.DismissStreamsSheet -> {
                 _uiState.update {
                     if (it is DetailUiState.Content) {
-                        it.copy(showStreamsSheet = false, streamsSheetAutoResume = false)
+                        it.copy(
+                            showStreamsSheet = false,
+                            streamsSheetVideoId = null,
+                            streamsSheetTitle = null,
+                            streamsSheetAutoResume = false,
+                        )
                     } else {
                         it
                     }

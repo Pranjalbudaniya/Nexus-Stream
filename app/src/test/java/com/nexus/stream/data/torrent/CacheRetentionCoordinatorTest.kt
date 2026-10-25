@@ -400,4 +400,44 @@ class CacheRetentionCoordinatorTest {
 
             assertTrue(ledger.entries.isEmpty())
         }
+
+    @Test
+    fun AU2_watchedWhileActive_thenStop_deletes_whenKeepCacheOff() =
+        runTest {
+            // Keep cache OFF: clearCacheOnExit = true
+            clearCacheOnExit = true
+            val coordinator = createCoordinator()
+            val key = "tt123|tt123:1:1"
+            val hash = "0123456789abcdef0123456789abcdef01234567"
+            val fileIdx = 0
+            val fileSize = 1_000_000L
+
+            // onReady marks active
+            coordinator.onReady(key, hash, fileIdx, fileSize)
+            assertEquals(LedgerState.ACTIVE, ledger.get(key)?.state)
+
+            // onWatched while active
+            coordinator.onWatched(key)
+            assertTrue(files.deletedFiles.isEmpty())
+
+            // onStop with completed = false
+            files.diskBytes[hash to fileIdx] = 500_000L
+            val keptOff = coordinator.onStop(key, hash, fileIdx, fileSize, completed = false)
+            assertFalse(keptOff)
+            assertNull(ledger.get(key))
+            assertTrue(files.deletedFiles.contains(hash to fileIdx))
+
+            // Keep cache ON: clearCacheOnExit = false
+            clearCacheOnExit = false
+            val coordinator2 = createCoordinator()
+            val key2 = "tt123|tt123:1:2"
+            val hash2 = "fedcba9876543210fedcba9876543210fedcba98"
+            coordinator2.onReady(key2, hash2, fileIdx, fileSize)
+            coordinator2.onWatched(key2)
+            files.diskBytes[hash2 to fileIdx] = 500_000L
+            val keptOn = coordinator2.onStop(key2, hash2, fileIdx, fileSize, completed = false)
+            assertTrue(keptOn)
+            assertEquals(LedgerState.RETAINED, ledger.get(key2)?.state)
+            assertFalse(files.deletedFiles.contains(hash2 to fileIdx))
+        }
 }

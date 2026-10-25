@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.nexus.stream.presentation.feature.detail
 
 import android.content.ActivityNotFoundException
@@ -140,6 +142,14 @@ fun DetailScreenContent(
 
             is DetailUiState.Content -> {
                 val playbackLauncher = LocalPlayback.current
+                val sheetRequest = streamsSheetRequest(state.meta, state)
+                LaunchedEffect(sheetRequest) {
+                    if (sheetRequest != null) {
+                        playbackLauncher.open(sheetRequest)
+                        onEvent(DetailEvent.DismissStreamsSheet)
+                    }
+                }
+
                 NexusRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { onEvent(DetailEvent.Refresh) },
@@ -160,32 +170,8 @@ fun DetailScreenContent(
                                 isSynopsisExpanded = state.isSynopsisExpanded,
                                 trailerUrl = state.trailerUrl,
                                 primaryPlay = state.primaryPlay,
-                                onPlayMain = {
-                                    onEvent(DetailEvent.PlayMain)
-                                    state.activeVideoId?.let { targetId ->
-                                        playbackLauncher.open(
-                                            buildPlaybackRequest(
-                                                meta = state.meta,
-                                                videoId = targetId,
-                                                title = state.meta.name,
-                                                autoResume = state.streamsSheetAutoResume,
-                                            ),
-                                        )
-                                    }
-                                },
-                                onChooseSource = {
-                                    onEvent(DetailEvent.ChooseSource)
-                                    state.activeVideoId?.let { targetId ->
-                                        playbackLauncher.open(
-                                            buildPlaybackRequest(
-                                                meta = state.meta,
-                                                videoId = targetId,
-                                                title = state.meta.name,
-                                                autoResume = false,
-                                            ),
-                                        )
-                                    }
-                                },
+                                onPlayMain = { onEvent(DetailEvent.PlayMain) },
+                                onChooseSource = { onEvent(DetailEvent.ChooseSource) },
                                 onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
                                 onOpenTrailer = { onEvent(DetailEvent.OpenTrailer) },
                                 onDownload = { onEvent(DetailEvent.Download()) },
@@ -215,20 +201,7 @@ fun DetailScreenContent(
                                 SeriesEpisodesSection(
                                     content = state,
                                     onSelectSeason = { onEvent(DetailEvent.SelectSeason(it)) },
-                                    onPlayEpisode = { videoId ->
-                                        val video = state.meta.videos.find { it.id == videoId }
-                                        if (video != null && !video.isReleased(System.currentTimeMillis())) {
-                                            onEvent(DetailEvent.PlayEpisode(videoId))
-                                        } else if (video != null) {
-                                            playbackLauncher.open(
-                                                buildPlaybackRequest(
-                                                    meta = state.meta,
-                                                    videoId = video.id,
-                                                    title = "${state.meta.name} - ${video.title}",
-                                                ),
-                                            )
-                                        }
-                                    },
+                                    onPlayEpisode = { videoId -> onEvent(DetailEvent.PlayEpisode(videoId)) },
                                     onToggleWatched = { onEvent(DetailEvent.ToggleWatched(it)) },
                                     onDownload = { onEvent(DetailEvent.Download(it)) },
                                     modifier =
@@ -637,5 +610,21 @@ private fun UnwatchConfirmDialog(
                 Text(text = stringResource(R.string.watch_options_unwatch_cancel))
             }
         },
+    )
+}
+
+fun streamsSheetRequest(
+    meta: MetaDetail,
+    state: DetailUiState.Content,
+): PlaybackRequest? {
+    val videoId = state.streamsSheetVideoId
+    if (!state.showStreamsSheet || videoId == null) {
+        return null
+    }
+    return buildPlaybackRequest(
+        meta = meta,
+        videoId = videoId,
+        title = state.streamsSheetTitle ?: meta.name,
+        autoResume = state.streamsSheetAutoResume,
     )
 }

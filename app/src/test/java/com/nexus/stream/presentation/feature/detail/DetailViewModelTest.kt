@@ -37,6 +37,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -1459,5 +1461,276 @@ class DetailViewModelTest {
             assertTrue(updatedContent.showStreamsSheet)
             assertFalse(updatedContent.streamsSheetAutoResume)
             assertEquals("kitsu:1:1", updatedContent.streamsSheetVideoId)
+        }
+
+    @Test
+    fun RD1_detailResumeTap_sheetRequestHasAutoResumeTrue() =
+        runTest(testDispatcher) {
+            val video = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val meta = testMeta("m1", type = "series", videos = listOf(video))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "m1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val stateAfter = viewModel.uiState.value as DetailUiState.Content
+            val request = streamsSheetRequest(stateAfter.meta, stateAfter)
+            assertNotNull(request)
+            assertTrue(request!!.autoResume)
+            assertEquals("m1:1", request.videoId)
+        }
+
+    @Test
+    fun RD2_detailChooseSource_sheetRequestHasAutoResumeFalse() =
+        runTest(testDispatcher) {
+            val video = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val meta = testMeta("m1", type = "series", videos = listOf(video))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "m1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.ChooseSource)
+            val stateAfter = viewModel.uiState.value as DetailUiState.Content
+            val request = streamsSheetRequest(stateAfter.meta, stateAfter)
+            assertNotNull(request)
+            assertFalse(request!!.autoResume)
+            assertEquals("m1:1", request.videoId)
+        }
+
+    @Test
+    fun RD3_episodeRowTap_sheetRequestHasAutoResumeFalse() =
+        runTest(testDispatcher) {
+            val v1 = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val v2 = Video("m1:2", "Ep 2", "1960-01-01", season = 1, episode = 2, null, null)
+            val meta = testMeta("m1", type = "series", videos = listOf(v1, v2))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "m1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.PlayEpisode("m1:2"))
+            val stateAfter = viewModel.uiState.value as DetailUiState.Content
+            val request = streamsSheetRequest(stateAfter.meta, stateAfter)
+            assertNotNull(request)
+            assertFalse(request!!.autoResume)
+            assertEquals("m1:2", request.videoId)
+        }
+
+    @Test
+    fun RD4_startAndNextTaps_sheetRequestHasAutoResumeFalse() =
+        runTest(testDispatcher) {
+            // Case 1: Ready(Start)
+            val v1 = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val metaStart = testMeta("m1", type = "series", videos = listOf(v1))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(metaStart, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns flowOf(emptyMap())
+
+            val vmStart = createViewModel("series", "m1")
+            val contentStart = vmStart.uiState.value as DetailUiState.Content
+            assertTrue(contentStart.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((contentStart.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Start)
+
+            vmStart.onEvent(DetailEvent.PlayMain)
+            val stateStartAfter = vmStart.uiState.value as DetailUiState.Content
+            val reqStart = streamsSheetRequest(stateStartAfter.meta, stateStartAfter)
+            assertNotNull(reqStart)
+            assertFalse(reqStart!!.autoResume)
+
+            // Case 2: Ready(Next)
+            val v2 = Video("m1:2", "Ep 2", "1960-01-01", season = 1, episode = 2, null, null)
+            val metaNext = testMeta("m1", type = "series", videos = listOf(v1, v2))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(metaNext, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 60_000L,
+                                durationMs = 60_000L,
+                                watched = true,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val vmNext = createViewModel("series", "m1")
+            val contentNext = vmNext.uiState.value as DetailUiState.Content
+            assertTrue(contentNext.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((contentNext.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Next)
+
+            vmNext.onEvent(DetailEvent.PlayMain)
+            val stateNextAfter = vmNext.uiState.value as DetailUiState.Content
+            val reqNext = streamsSheetRequest(stateNextAfter.meta, stateNextAfter)
+            assertNotNull(reqNext)
+            assertFalse(reqNext!!.autoResume)
+        }
+
+    @Test
+    fun RD5_tapThenChooseThenTap_noStickyFlag() =
+        runTest(testDispatcher) {
+            val video = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val meta = testMeta("m1", type = "series", videos = listOf(video))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "m1")
+
+            // 1. PlayMain
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val s1 = viewModel.uiState.value as DetailUiState.Content
+            val req1 = streamsSheetRequest(s1.meta, s1)
+            assertNotNull(req1)
+            assertTrue(req1!!.autoResume)
+
+            // 2. Dismiss then ChooseSource
+            viewModel.onEvent(DetailEvent.DismissStreamsSheet)
+            viewModel.onEvent(DetailEvent.ChooseSource)
+            val s2 = viewModel.uiState.value as DetailUiState.Content
+            val req2 = streamsSheetRequest(s2.meta, s2)
+            assertNotNull(req2)
+            assertFalse(req2!!.autoResume)
+
+            // 3. Dismiss then PlayMain
+            viewModel.onEvent(DetailEvent.DismissStreamsSheet)
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val s3 = viewModel.uiState.value as DetailUiState.Content
+            val req3 = streamsSheetRequest(s3.meta, s3)
+            assertNotNull(req3)
+            assertTrue(req3!!.autoResume)
+        }
+
+    @Test
+    fun RD6_dismiss_resetsTheFlag_andTheVideoId() =
+        runTest(testDispatcher) {
+            val video = Video("m1:1", "Ep 1", "1960-01-01", season = 1, episode = 1, null, null)
+            val meta = testMeta("m1", type = "series", videos = listOf(video))
+            coEvery { metaRepository.getMeta("series", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns
+                flowOf(
+                    mapOf(
+                        "m1:1" to
+                            EpisodeProgress(
+                                "m1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "m1")
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val sBefore = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(sBefore.showStreamsSheet)
+            assertTrue(sBefore.streamsSheetAutoResume)
+            assertEquals("m1:1", sBefore.streamsSheetVideoId)
+
+            viewModel.onEvent(DetailEvent.DismissStreamsSheet)
+            val sAfter = viewModel.uiState.value as DetailUiState.Content
+            assertFalse(sAfter.showStreamsSheet)
+            assertFalse(sAfter.streamsSheetAutoResume)
+            assertNull(sAfter.streamsSheetVideoId)
+            assertNull(streamsSheetRequest(sAfter.meta, sAfter))
+        }
+
+    @Test
+    fun RD7_movieWithDefaultVideoId_resumeRequestUsesDefaultVideoId_andAutoResumeTrue() =
+        runTest(testDispatcher) {
+            val meta = testMeta("kitsu:1", type = "movie").copy(defaultVideoId = "kitsu:1:1")
+            coEvery { metaRepository.getMeta("movie", "kitsu:1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("kitsu:1") } returns
+                flowOf(
+                    mapOf(
+                        "kitsu:1" to
+                            EpisodeProgress(
+                                "kitsu:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("movie", "kitsu:1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val stateAfter = viewModel.uiState.value as DetailUiState.Content
+            val request = streamsSheetRequest(stateAfter.meta, stateAfter)
+            assertNotNull(request)
+            assertEquals("kitsu:1:1", request!!.videoId)
+            assertTrue(request.autoResume)
         }
 }
