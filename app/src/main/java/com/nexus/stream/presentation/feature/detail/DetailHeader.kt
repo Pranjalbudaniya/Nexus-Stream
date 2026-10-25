@@ -3,6 +3,8 @@ package com.nexus.stream.presentation.feature.detail
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,11 +38,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,6 +77,7 @@ fun DetailHeader(
     trailerUrl: String?,
     primaryPlay: PrimaryPlayState,
     onPlayMain: () -> Unit,
+    onChooseSource: () -> Unit = {},
     onOpenWatchOptions: () -> Unit,
     onOpenTrailer: () -> Unit,
     onDownload: () -> Unit,
@@ -104,6 +112,7 @@ fun DetailHeader(
             PrimaryPlayButton(
                 primaryPlay = primaryPlay,
                 onPlayMain = onPlayMain,
+                onChooseSource = onChooseSource,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -399,11 +408,12 @@ private fun SynopsisSection(
 private fun PrimaryPlayButton(
     primaryPlay: PrimaryPlayState,
     onPlayMain: () -> Unit,
+    onChooseSource: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (primaryPlay) {
         is PrimaryPlayState.NotReady -> NotReadyPlayButton(modifier)
-        is PrimaryPlayState.Ready -> ReadyPlayButton(primaryPlay, onPlayMain, modifier)
+        is PrimaryPlayState.Ready -> ReadyPlayButton(primaryPlay, onPlayMain, onChooseSource, modifier)
     }
 }
 
@@ -422,6 +432,7 @@ private fun NotReadyPlayButton(modifier: Modifier = Modifier) {
 private fun ReadyPlayButton(
     ready: PrimaryPlayState.Ready,
     onPlayMain: () -> Unit,
+    onChooseSource: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val intent = ready.intent
@@ -441,6 +452,10 @@ private fun ReadyPlayButton(
         }
 
     val a11yDesc = resumeVisuals?.a11yDesc
+    val isResume = intent is PlayIntent.Resume && ready.isEnabled
+    val haptic = LocalHapticFeedback.current
+    val chooseSourceLabel = stringResource(R.string.detail_choose_source_a11y)
+    val interactionSource = remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier.clip(NexusTheme.shapes.button),
@@ -448,11 +463,14 @@ private fun ReadyPlayButton(
         NexusButton(
             onClick = onPlayMain,
             enabled = ready.isEnabled,
+            interactionSource = interactionSource,
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .then(
-                        if (a11yDesc != null) {
+                        if (isResume) {
+                            Modifier.clearAndSetSemantics { }
+                        } else if (a11yDesc != null) {
                             Modifier.semantics { contentDescription = a11yDesc }
                         } else {
                             Modifier
@@ -482,6 +500,31 @@ private fun ReadyPlayButton(
                         .height(NexusTheme.spacing.xxs),
                 color = MaterialTheme.colorScheme.onPrimary,
                 trackColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        if (isResume) {
+            Box(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .combinedClickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onPlayMain,
+                            onLongClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onChooseSource()
+                            },
+                            onLongClickLabel = chooseSourceLabel,
+                            role = Role.Button,
+                        ).then(
+                            if (a11yDesc != null) {
+                                Modifier.semantics { contentDescription = a11yDesc }
+                            } else {
+                                Modifier
+                            },
+                        ),
             )
         }
     }

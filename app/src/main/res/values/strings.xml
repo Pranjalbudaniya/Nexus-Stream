@@ -218,6 +218,7 @@
     <string name="detail_time_left_hr">%1$d h left</string>
     <string name="detail_time_left_hr_min">%1$d h %2$d min left</string>
     <string name="detail_resume_a11y">Resume, %1$d percent watched, %2$s</string>
+    <string name="detail_choose_source_a11y">Choose another source</string>
     <string name="detail_watchlist_add">+ Watchlist</string>
     <string name="detail_watchlist_in">In watchlist</string>
     <string name="detail_watchlist_add_desc">Add %1$s to watchlist</string>

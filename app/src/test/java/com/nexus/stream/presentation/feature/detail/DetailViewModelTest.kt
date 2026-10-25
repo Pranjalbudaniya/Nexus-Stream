@@ -1318,4 +1318,146 @@ class DetailViewModelTest {
                 )
             assertFalse(request.autoResume)
         }
+
+    @Test
+    fun DL1_chooseSource_onResume_opensTheSheetWithAutoResumeFalse() =
+        runTest(testDispatcher) {
+            val v1 = Video("tt1:1:1", "S1 E1", "2020-01-01", 1, 1, null, null)
+            val meta = testMeta("tt1", type = "series", videos = listOf(v1))
+            coEvery { metaRepository.getMeta("series", "tt1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns
+                flowOf(
+                    mapOf(
+                        "tt1:1:1" to
+                            EpisodeProgress(
+                                "tt1:1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "tt1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.ChooseSource)
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(updatedContent.showStreamsSheet)
+            assertFalse(updatedContent.streamsSheetAutoResume)
+            assertEquals("tt1:1:1", updatedContent.streamsSheetVideoId)
+        }
+
+    @Test
+    fun DL2_tapOnResume_stillUsesAutoResumeTrue() =
+        runTest(testDispatcher) {
+            val v1 = Video("tt1:1:1", "S1 E1", "2020-01-01", 1, 1, null, null)
+            val meta = testMeta("tt1", type = "series", videos = listOf(v1))
+            coEvery { metaRepository.getMeta("series", "tt1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns
+                flowOf(
+                    mapOf(
+                        "tt1:1:1" to
+                            EpisodeProgress(
+                                "tt1:1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "tt1")
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(updatedContent.showStreamsSheet)
+            assertTrue(updatedContent.streamsSheetAutoResume)
+            assertEquals("tt1:1:1", updatedContent.streamsSheetVideoId)
+        }
+
+    @Test
+    fun DL3_chooseSource_onStartOrNext_doesNothing() =
+        runTest(testDispatcher) {
+            val v1 = Video("tt1:1:1", "S1 E1", null, 1, 1, null, null)
+            val v2 = Video("tt1:1:2", "S1 E2", null, 1, 2, null, null)
+            val meta = testMeta("tt1", type = "series", videos = listOf(v1, v2))
+            coEvery { metaRepository.getMeta("series", "tt1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            // Sub-case A: Ready(Start)
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns flowOf(emptyMap())
+            val vmStart = createViewModel("series", "tt1")
+            val contentStart = vmStart.uiState.value as DetailUiState.Content
+            assertTrue((contentStart.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Start)
+            vmStart.onEvent(DetailEvent.ChooseSource)
+            assertFalse((vmStart.uiState.value as DetailUiState.Content).showStreamsSheet)
+
+            // Sub-case B: Ready(Next)
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns
+                flowOf(
+                    mapOf(
+                        "tt1:1:1" to
+                            EpisodeProgress(
+                                "tt1:1:1",
+                                positionMs = 60_000L,
+                                durationMs = 60_000L,
+                                watched = true,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+            val vmNext = createViewModel("series", "tt1")
+            val contentNext = vmNext.uiState.value as DetailUiState.Content
+            assertTrue((contentNext.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Next)
+            vmNext.onEvent(DetailEvent.ChooseSource)
+            assertFalse((vmNext.uiState.value as DetailUiState.Content).showStreamsSheet)
+        }
+
+    @Test
+    fun DL4_chooseSource_whenNotReady_doesNothing() =
+        runTest(testDispatcher) {
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns Outcome.Failure(AppError.Network)
+            val viewModel = createViewModel("movie", "m1")
+            assertTrue(viewModel.uiState.value is DetailUiState.Error)
+            viewModel.onEvent(DetailEvent.ChooseSource)
+            assertTrue(viewModel.uiState.value is DetailUiState.Error)
+        }
+
+    @Test
+    fun DL5_chooseSource_movieWithDefaultVideoId_usesDefaultVideoId() =
+        runTest(testDispatcher) {
+            val meta = testMeta("kitsu:1", type = "movie").copy(defaultVideoId = "kitsu:1:1")
+            coEvery { metaRepository.getMeta("movie", "kitsu:1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("kitsu:1") } returns
+                flowOf(
+                    mapOf(
+                        "kitsu:1" to
+                            EpisodeProgress(
+                                "kitsu:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("movie", "kitsu:1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.ChooseSource)
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(updatedContent.showStreamsSheet)
+            assertFalse(updatedContent.streamsSheetAutoResume)
+            assertEquals("kitsu:1:1", updatedContent.streamsSheetVideoId)
+        }
 }

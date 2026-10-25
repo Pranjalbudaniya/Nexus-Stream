@@ -173,6 +173,19 @@ fun DetailScreenContent(
                                         )
                                     }
                                 },
+                                onChooseSource = {
+                                    onEvent(DetailEvent.ChooseSource)
+                                    state.activeVideoId?.let { targetId ->
+                                        playbackLauncher.open(
+                                            buildPlaybackRequest(
+                                                meta = state.meta,
+                                                videoId = targetId,
+                                                title = state.meta.name,
+                                                autoResume = false,
+                                            ),
+                                        )
+                                    }
+                                },
                                 onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
                                 onOpenTrailer = { onEvent(DetailEvent.OpenTrailer) },
                                 onDownload = { onEvent(DetailEvent.Download()) },

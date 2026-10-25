@@ -105,6 +105,8 @@ sealed interface DetailEvent {
 
     data object PlayMain : DetailEvent
 
+    data object ChooseSource : DetailEvent
+
     data class PlayEpisode(
         val videoId: String,
     ) : DetailEvent
@@ -217,16 +219,15 @@ class DetailViewModel(
         when (event) {
             DetailEvent.PlayMain -> {
                 content.activeVideoId?.let { targetId ->
-                    val autoResume =
-                        content.primaryPlay is PrimaryPlayState.Ready &&
-                            content.primaryPlay.intent is PlayIntent.Resume
-                    _uiState.update {
-                        content.copy(
-                            showStreamsSheet = true,
-                            streamsSheetVideoId = targetId,
-                            streamsSheetTitle = content.meta.name,
-                            streamsSheetAutoResume = autoResume,
-                        )
+                    openStreamsSheet(content, targetId, content.meta.name, isResumable(content))
+                }
+                true
+            }
+
+            DetailEvent.ChooseSource -> {
+                if (isResumable(content)) {
+                    content.activeVideoId?.let { targetId ->
+                        openStreamsSheet(content, targetId, content.meta.name, autoResume = false)
                     }
                 }
                 true
@@ -237,14 +238,12 @@ class DetailViewModel(
                 if (video != null && !video.isReleased(clock())) {
                     viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Not released yet")) }
                 } else if (video != null) {
-                    _uiState.update {
-                        content.copy(
-                            showStreamsSheet = true,
-                            streamsSheetVideoId = event.videoId,
-                            streamsSheetTitle = "${content.meta.name} - ${video.title}",
-                            streamsSheetAutoResume = false,
-                        )
-                    }
+                    openStreamsSheet(
+                        content,
+                        event.videoId,
+                        "${content.meta.name} - ${video.title}",
+                        autoResume = false,
+                    )
                 }
                 true
             }
@@ -265,6 +264,22 @@ class DetailViewModel(
                 false
             }
         }
+
+    private fun openStreamsSheet(
+        content: DetailUiState.Content,
+        targetId: String,
+        title: String,
+        autoResume: Boolean,
+    ) {
+        _uiState.update {
+            content.copy(
+                showStreamsSheet = true,
+                streamsSheetVideoId = targetId,
+                streamsSheetTitle = title,
+                streamsSheetAutoResume = autoResume,
+            )
+        }
+    }
 
     private fun handleSheetEvent(event: DetailEvent): Boolean =
         when (event) {
@@ -679,3 +694,6 @@ private fun buildPrimaryPlayState(
         isEnabled = isEnabled,
     )
 }
+
+private fun isResumable(content: DetailUiState.Content): Boolean =
+    content.primaryPlay is PrimaryPlayState.Ready && content.primaryPlay.intent is PlayIntent.Resume
