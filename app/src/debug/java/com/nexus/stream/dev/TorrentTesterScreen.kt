@@ -193,6 +193,7 @@ fun TorrentTesterScreen(
                         isBlockedMetered = state.isBlockedMetered,
                         onAllowMeteredOnce = { onEvent(TorrentTesterEvent.AllowMeteredOnce) },
                         noPlayerFound = noPlayerFound,
+                        reusedBytesOnAdd = state.reusedBytesOnAdd,
                     )
                 }
             }
@@ -208,6 +209,7 @@ private fun TorrentStatusSection(
     isBlockedMetered: Boolean,
     onAllowMeteredOnce: () -> Unit,
     noPlayerFound: Boolean,
+    reusedBytesOnAdd: Long = 0L,
 ) {
     val spacing = NexusTheme.spacing
 
@@ -282,6 +284,12 @@ private fun TorrentStatusSection(
                             ),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
+                    )
+
+                    val reusedMib = reusedBytesOnAdd / (1024L * 1024L)
+                    Text(
+                        text = "Reused on add: $reusedMib MiB",
+                        style = MaterialTheme.typography.bodyMedium,
                     )
 
                     NexusButton(

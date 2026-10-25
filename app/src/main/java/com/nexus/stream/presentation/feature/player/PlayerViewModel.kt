@@ -40,6 +40,7 @@ import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.clampSubtitleDelay
 import com.nexus.stream.domain.usecase.groupByLanguage
 import com.nexus.stream.domain.usecase.matchTrackByLanguage
+import com.nexus.stream.domain.usecase.progressKeyFor
 import com.nexus.stream.domain.usecase.progressVideoId
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -939,8 +940,15 @@ class PlayerViewModel
                 }
 
                 is PlaybackSource.Torrent -> {
-                    activeTorrentRequest = source.request
-                    startTorrentPlayback(source.request)
+                    val cacheKey =
+                        if (selection.metaId.isNotBlank() && selection.videoId.isNotBlank()) {
+                            progressKeyFor(selection.type, selection.metaId, selection.videoId)
+                        } else {
+                            null
+                        }
+                    val req = source.request.copy(cacheKey = cacheKey)
+                    activeTorrentRequest = req
+                    startTorrentPlayback(req)
                 }
 
                 is PlaybackSource.External, is PlaybackSource.Unsupported -> {

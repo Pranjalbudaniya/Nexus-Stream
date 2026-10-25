@@ -11,6 +11,7 @@ data class TorrentRequest(
     val fileIdx: Int? = null,
     val episodeHint: EpisodeHint? = null,
     val allowMetered: Boolean = false,
+    val cacheKey: String? = null,
 )
 
 data class TorrentFile(

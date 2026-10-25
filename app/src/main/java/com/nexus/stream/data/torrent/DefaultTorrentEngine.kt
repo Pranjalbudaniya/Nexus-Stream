@@ -51,7 +51,10 @@ open class DefaultTorrentEngine
     @Inject
     constructor(
         private val backend: TorrentBackend,
+        private val coordinator: CacheRetentionCoordinator?,
     ) : TorrentEngine {
+        constructor(backend: TorrentBackend) : this(backend, null)
+
         private val sessions = ConcurrentHashMap<String, SessionRecord>()
 
         private class SessionRecord(
@@ -83,6 +86,9 @@ open class DefaultTorrentEngine
                 val session = SessionRecord()
                 sessions[hash] = session
 
+                var readyFileIndex: Int? = null
+                var readyFileSize: Long? = null
+
                 try {
                     send(TorrentState.FetchingMetadata)
                     backend.add(hash, buildMagnet(hash, request.trackers))
@@ -91,6 +97,7 @@ open class DefaultTorrentEngine
                     val idx = resolveFileIndex(meta.files, request, session) ?: return@channelFlow
 
                     val file = meta.files[idx]
+                    coordinator?.recordReusedOnAdd(hash, idx)
                     val target =
                         targetPieces(
                             fileOffset = file.offsetBytes,
@@ -104,6 +111,13 @@ open class DefaultTorrentEngine
                     pollBuffering(hash, target.all, session)
                     if (session.stopped.isCompleted) return@channelFlow
 
+                    readyFileIndex = idx
+                    readyFileSize = file.sizeBytes
+
+                    if (request.cacheKey != null) {
+                        coordinator?.onReady(request.cacheKey, hash, idx, file.sizeBytes)
+                    }
+
                     val fileName = file.path.substringAfterLast('/').substringAfterLast('\\')
                     send(TorrentState.Ready(idx, fileName, file.sizeBytes))
                     session.stopped.await()
@@ -114,13 +128,37 @@ open class DefaultTorrentEngine
                 } catch (_: Exception) {
                     send(TorrentState.Failed(AppError.Unknown()))
                 } finally {
-                    withContext(NonCancellable) {
-                        runCatching { backend.remove(hash) }
-                    }
-                    sessions.remove(hash, session)
-                    session.finished.complete(Unit)
+                    cleanupSession(request, hash, readyFileIndex, readyFileSize, session)
                 }
             }
+
+        private suspend fun cleanupSession(
+            request: TorrentRequest,
+            hash: String,
+            readyFileIndex: Int?,
+            readyFileSize: Long?,
+            session: SessionRecord,
+        ) {
+            withContext(NonCancellable) {
+                runCatching {
+                    val keep =
+                        if (request.cacheKey != null && readyFileIndex != null && readyFileSize != null) {
+                            coordinator?.onStop(
+                                key = request.cacheKey,
+                                hash = hash,
+                                fileIdx = readyFileIndex,
+                                fileSize = readyFileSize,
+                                completed = false,
+                            )
+                        } else {
+                            null
+                        }
+                    backend.remove(hash, keep = keep)
+                }
+            }
+            sessions.remove(hash, session)
+            session.finished.complete(Unit)
+        }
 
         private suspend fun ProducerScope<TorrentState>.awaitMetadataOrNull(
             hash: String,

@@ -92,7 +92,10 @@ private class ServingFakeBackend : TorrentBackend {
         return snapshotResult
     }
 
-    override suspend fun remove(infoHash: String) {
+    override suspend fun remove(
+        infoHash: String,
+        keep: Boolean?,
+    ) {
         // No-op for test fake
     }
 }

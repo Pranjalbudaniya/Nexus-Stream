@@ -88,14 +88,17 @@ class JLibTorrentBackend
             val numFiles = ti.numFiles()
             val filesList = ArrayList<BackendFile>(numFiles)
             for (i in 0 until numFiles) {
+                val path = fs.filePath(i)
+                val size = fs.fileSize(i)
                 filesList.add(
                     BackendFile(
                         index = i,
-                        path = fs.filePath(i),
-                        sizeBytes = fs.fileSize(i),
+                        path = path,
+                        sizeBytes = size,
                         offsetBytes = fs.fileOffset(i),
                     ),
                 )
+                cache.registerFile(hash, i, path, size)
             }
             handle.prioritizeFiles(Priority.array(Priority.IGNORE, numFiles))
 
@@ -220,38 +223,40 @@ class JLibTorrentBackend
                 }
             }
 
-        override suspend fun remove(infoHash: String) =
-            withContext(io) {
-                val hash = infoHash.lowercase()
-                val keep = cache.keepAfterStop()
-                deferredMap.remove(hash)?.cancel()
-                errorHashes.remove(hash)
+        override suspend fun remove(
+            infoHash: String,
+            keep: Boolean?,
+        ) = withContext(io) {
+            val hash = infoHash.lowercase()
+            val shouldKeep = keep ?: cache.keepAfterStop()
+            deferredMap.remove(hash)?.cancel()
+            errorHashes.remove(hash)
 
-                runCatching {
-                    val sm = sessionManager
-                    if (sm != null) {
-                        val handle = sm.find(Sha1Hash(hash))
-                        if (handle != null && handle.isValid) {
-                            if (keep) {
-                                sm.remove(handle)
-                            } else {
-                                sm.remove(handle, SessionHandle.DELETE_FILES)
-                            }
+            runCatching {
+                val sm = sessionManager
+                if (sm != null) {
+                    val handle = sm.find(Sha1Hash(hash))
+                    if (handle != null && handle.isValid) {
+                        if (shouldKeep) {
+                            sm.remove(handle)
+                        } else {
+                            sm.remove(handle, SessionHandle.DELETE_FILES)
                         }
                     }
-                }.onFailure { if (it is CancellationException) throw it }
-
-                if (!keep) {
-                    runCatching {
-                        val torrentDir = File(cache.root, hash)
-                        if (torrentDir.exists()) {
-                            torrentDir.deleteRecursively()
-                        }
-                    }.onFailure { if (it is CancellationException) throw it }
                 }
+            }.onFailure { if (it is CancellationException) throw it }
 
-                cache.onRemoved(hash, kept = keep)
+            if (!shouldKeep) {
+                runCatching {
+                    val torrentDir = File(cache.root, hash)
+                    if (torrentDir.exists()) {
+                        torrentDir.deleteRecursively()
+                    }
+                }.onFailure { if (it is CancellationException) throw it }
             }
+
+            cache.onRemoved(hash, kept = shouldKeep)
+        }
 
         override fun fileOf(
             infoHash: String,

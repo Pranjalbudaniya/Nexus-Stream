@@ -19,18 +19,24 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.nexus.stream.R
+import com.nexus.stream.data.torrent.CacheLedger
+import com.nexus.stream.data.torrent.LedgerEntry
+import com.nexus.stream.data.torrent.TorrentCacheFiles
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.ThemeUiState
 import com.nexus.stream.presentation.theme.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class DevToolsActivity : ComponentActivity() {
@@ -40,6 +46,10 @@ class DevToolsActivity : ComponentActivity() {
     private val databaseDevViewModel: DatabaseDevViewModel by viewModels()
     private val torrentTesterViewModel: TorrentTesterViewModel by viewModels()
     private val proxyTesterViewModel: ProxyTesterViewModel by viewModels()
+
+    @Inject lateinit var cacheLedger: CacheLedger
+
+    @Inject lateinit var cacheFiles: TorrentCacheFiles
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +62,8 @@ class DevToolsActivity : ComponentActivity() {
                 databaseDevViewModel = databaseDevViewModel,
                 torrentTesterViewModel = torrentTesterViewModel,
                 proxyTesterViewModel = proxyTesterViewModel,
+                cacheLedger = cacheLedger,
+                cacheFiles = cacheFiles,
             )
         }
     }
@@ -65,6 +77,8 @@ private fun DevToolsContent(
     databaseDevViewModel: DatabaseDevViewModel,
     torrentTesterViewModel: TorrentTesterViewModel,
     proxyTesterViewModel: ProxyTesterViewModel,
+    cacheLedger: CacheLedger,
+    cacheFiles: TorrentCacheFiles,
 ) {
     val uiState by themeViewModel.uiState.collectAsState()
     val state = uiState as? ThemeUiState.Ready ?: return
@@ -153,6 +167,8 @@ private fun DevToolsContent(
                         onNavigateProxyTester = { currentScreen = DevScreen.PROXY_TESTER },
                         onNavigateHomeTestData = { currentScreen = DevScreen.HOME_TEST_DATA },
                         onNavigateDatabase = { currentScreen = DevScreen.DATABASE },
+                        cacheLedger = cacheLedger,
+                        cacheFiles = cacheFiles,
                     )
                 }
             }
@@ -163,6 +179,8 @@ private fun DevToolsContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DevToolsMenu(
+    cacheLedger: CacheLedger,
+    cacheFiles: TorrentCacheFiles,
     onNavigateGallery: () -> Unit,
     onNavigateTester: () -> Unit,
     onNavigateTorrentTester: () -> Unit,
@@ -170,6 +188,18 @@ private fun DevToolsMenu(
     onNavigateHomeTestData: () -> Unit,
     onNavigateDatabase: () -> Unit,
 ) {
+    var ledgerEntries by remember { mutableStateOf<List<Pair<LedgerEntry, Pair<Int, Long>>>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        val entries = cacheLedger.all()
+        ledgerEntries =
+            entries.map { entry ->
+                val bytes = cacheFiles.bytesOnDisk(entry.infoHash, entry.fileIdx)
+                val total = cacheFiles.fileSize(entry.infoHash, entry.fileIdx)
+                val pct = if (total > 0L) (bytes * 100 / total).toInt() else 0
+                val mib = total / (1024L * 1024L)
+                entry to (pct to mib)
+            }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -247,6 +277,13 @@ private fun DevToolsMenu(
                         Modifier
                             .fillMaxWidth()
                             .clickable(onClick = onNavigateDatabase),
+                )
+            }
+            items(ledgerEntries.size) { i ->
+                val (entry, stats) = ledgerEntries[i]
+                ListItem(
+                    headlineContent = { Text(entry.key) },
+                    supportingContent = { Text("${entry.state} | ${stats.first}% | ${stats.second} MiB") },
                 )
             }
         }

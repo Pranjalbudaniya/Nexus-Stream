@@ -27,6 +27,7 @@ class SaveProgressTest {
     private val progress: ProgressRepository = mockk(relaxed = true)
     private val library: LibraryRepository = mockk(relaxed = true)
     private val sourceMemory: SourceMemoryRepository = mockk(relaxed = true)
+    private val cacheCompletion: com.nexus.stream.domain.repository.CacheCompletion = mockk(relaxed = true)
     private lateinit var saveProgress: SaveProgress
 
     private val episodeTarget =
@@ -57,7 +58,7 @@ class SaveProgressTest {
 
     @Before
     fun setUp() {
-        saveProgress = SaveProgress(progress, library, sourceMemory)
+        saveProgress = SaveProgress(progress, library, sourceMemory, cacheCompletion)
     }
 
     @Test
@@ -621,5 +622,65 @@ class SaveProgressTest {
             val movTarget = movieTarget.copy(source = testFp)
             saveProgress(movTarget, ProgressSample(60_000L, 120_000L, false), firstOfSession = true, nowMs = 1000L)
             coVerify(exactly = 1) { sourceMemory.remember("tt456|tt456", testFp) }
+        }
+
+    @Test
+    fun SC1_becameWatched_callsCacheCompletionOnce() =
+        runTest {
+            val sample = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+            val outcome = saveProgress(episodeTarget, sample, firstOfSession = false, nowMs = 1000L)
+            assertEquals(SaveOutcome.Saved(watched = true), outcome)
+            coVerify(exactly = 1) { cacheCompletion.onWatched("tt123|tt123:1:2") }
+        }
+
+    @Test
+    fun SC2_ticksReplayAndSkips_doNotCall() =
+        runTest {
+            val unwatched = ProgressSample(positionMs = 10_000L, durationMs = 100_000L, ended = false)
+            saveProgress(episodeTarget, unwatched, firstOfSession = false, nowMs = 1000L)
+
+            coEvery { progress.get("tt123|tt123:1:2") } returns
+                WatchProgress(
+                    key = "tt123|tt123:1:2",
+                    metaId = "tt123",
+                    videoId = "tt123:1:2",
+                    type = "series",
+                    season = 1,
+                    episode = 2,
+                    positionMs = 95_000L,
+                    durationMs = 100_000L,
+                    watched = true,
+                    updatedAt = 1000L,
+                )
+            val replayed = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+            saveProgress(episodeTarget, replayed, firstOfSession = false, nowMs = 2000L)
+
+            val skipped = ProgressSample(positionMs = 0L, durationMs = 0L, ended = false)
+            saveProgress(episodeTarget, skipped, firstOfSession = false, nowMs = 3000L)
+
+            coVerify(exactly = 0) { cacheCompletion.onWatched(any()) }
+        }
+
+    @Test
+    fun SC3_cacheCompletionThrowsIOException_progressStillSaved() =
+        runTest {
+            coEvery { cacheCompletion.onWatched(any()) } throws IOException("disk error")
+            val sample = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+            val outcome = saveProgress(episodeTarget, sample, firstOfSession = false, nowMs = 1000L)
+            assertEquals(SaveOutcome.Saved(watched = true), outcome)
+        }
+
+    @Test
+    fun SC4_cacheCompletionThrowsCancellation_propagates() =
+        runTest {
+            coEvery { cacheCompletion.onWatched(any()) } throws CancellationException("cancelled")
+            val sample = ProgressSample(positionMs = 95_000L, durationMs = 100_000L, ended = false)
+            var caught = false
+            try {
+                saveProgress(episodeTarget, sample, firstOfSession = false, nowMs = 1000L)
+            } catch (_: CancellationException) {
+                caught = true
+            }
+            assertTrue(caught)
         }
 }

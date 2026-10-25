@@ -6,10 +6,12 @@ import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.model.ProgressSample
 import com.nexus.stream.domain.model.ProgressTarget
 import com.nexus.stream.domain.model.WatchProgress
+import com.nexus.stream.domain.repository.CacheCompletion
 import com.nexus.stream.domain.repository.LibraryItem
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.repository.SourceMemoryRepository
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 sealed interface SaveOutcome {
@@ -26,7 +28,14 @@ class SaveProgress
         private val progress: ProgressRepository,
         private val library: LibraryRepository,
         private val sourceMemory: SourceMemoryRepository,
+        private val cacheCompletion: CacheCompletion?,
     ) {
+        constructor(
+            progress: ProgressRepository,
+            library: LibraryRepository,
+            sourceMemory: SourceMemoryRepository,
+        ) : this(progress, library, sourceMemory, null)
+
         suspend operator fun invoke(
             target: ProgressTarget,
             sample: ProgressSample,
@@ -72,11 +81,21 @@ class SaveProgress
                 if (target.source != null) {
                     try {
                         sourceMemory.remember(key, target.source)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
                         // ignore non-cancellation failures
                     }
+                }
+            }
+
+            if (watchedNow) {
+                try {
+                    cacheCompletion?.onWatched(key)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // ignore non-cancellation failures
                 }
             }
 

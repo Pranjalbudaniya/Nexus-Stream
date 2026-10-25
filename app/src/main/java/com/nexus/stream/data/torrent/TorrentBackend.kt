@@ -24,7 +24,10 @@ interface TorrentBackend {
         pieces: List<Int>,
     ): TorrentSnapshot
 
-    suspend fun remove(infoHash: String)
+    suspend fun remove(
+        infoHash: String,
+        keep: Boolean? = null,
+    )
 }
 
 data class BackendFile(

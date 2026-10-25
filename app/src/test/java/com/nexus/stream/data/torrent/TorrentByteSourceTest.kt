@@ -600,7 +600,10 @@ class TorrentByteSourceTest {
                 ?: TorrentSnapshot(piecesHave = pieces.size, downloadSpeedBps = 0L, peers = 1)
         }
 
-        override suspend fun remove(infoHash: String) {
+        override suspend fun remove(
+            infoHash: String,
+            keep: Boolean?,
+        ) {
             // No-op for test fake
         }
     }

@@ -22,6 +22,10 @@ import javax.inject.Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class SourceMemoryDataStore
 
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class CacheLedgerDataStore
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DataStoreModule {
@@ -47,5 +51,18 @@ object DataStoreModule {
             corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
             scope = CoroutineScope(ioDispatcher + SupervisorJob()),
             produceFile = { context.preferencesDataStoreFile("source_memory") },
+        )
+
+    @Provides
+    @Singleton
+    @CacheLedgerDataStore
+    fun provideCacheLedgerDataStore(
+        @ApplicationContext context: Context,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            scope = CoroutineScope(ioDispatcher + SupervisorJob()),
+            produceFile = { context.preferencesDataStoreFile("cache_ledger") },
         )
 }

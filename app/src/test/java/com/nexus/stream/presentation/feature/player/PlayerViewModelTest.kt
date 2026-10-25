@@ -2896,4 +2896,56 @@ class PlayerViewModelTest {
             )
         assertNull(withoutFp.toProgressTarget()?.source)
     }
+
+    @Test
+    fun PL84_torrentRequest_carriesTheProgressKey() =
+        runTest {
+            val torrentReq = TorrentRequest(infoHash = "0123456789abcdef0123456789abcdef01234567")
+            val torrentSource = PlaybackSource.Torrent(request = torrentReq)
+
+            // Case 1: Series episode
+            val seriesHolder = PlaybackSessionHolder()
+            seriesHolder.start(
+                PlaybackSelection(
+                    title = "Series Ep",
+                    source = torrentSource,
+                    type = "series",
+                    metaId = "tt123",
+                    videoId = "tt123:1:2",
+                ),
+            )
+            createViewModel(seriesHolder)
+            runCurrent()
+            assertEquals("tt123|tt123:1:2", fakeEngine.prepareCalls.last().cacheKey)
+
+            // Case 2: Movie with defaultVideoId
+            val movieHolder = PlaybackSessionHolder()
+            movieHolder.start(
+                PlaybackSelection(
+                    title = "Movie",
+                    source = torrentSource,
+                    type = "movie",
+                    metaId = "tt456",
+                    videoId = "tt456",
+                ),
+            )
+            createViewModel(movieHolder)
+            runCurrent()
+            assertEquals("tt456|tt456", fakeEngine.prepareCalls.last().cacheKey)
+
+            // Case 3: Selection without ids
+            val noIdsHolder = PlaybackSessionHolder()
+            noIdsHolder.start(
+                PlaybackSelection(
+                    title = "No Ids",
+                    source = torrentSource,
+                    type = "movie",
+                    metaId = "",
+                    videoId = "",
+                ),
+            )
+            createViewModel(noIdsHolder)
+            runCurrent()
+            assertNull(fakeEngine.prepareCalls.last().cacheKey)
+        }
 }

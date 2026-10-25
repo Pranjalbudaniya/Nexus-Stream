@@ -8,6 +8,9 @@ import com.nexus.stream.domain.model.TorrentFailReason
 import com.nexus.stream.domain.model.TorrentFile
 import com.nexus.stream.domain.model.TorrentRequest
 import com.nexus.stream.domain.model.TorrentState
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -72,8 +75,15 @@ class DefaultTorrentEngineTest {
             return if (snapshotQueue.isNotEmpty()) snapshotQueue.removeAt(0) else defaultSnapshot
         }
 
-        override suspend fun remove(infoHash: String) {
+        val removedKept: MutableList<Pair<String, Boolean?>> =
+            Collections.synchronizedList(mutableListOf())
+
+        override suspend fun remove(
+            infoHash: String,
+            keep: Boolean?,
+        ) {
             callLog.add("remove:$infoHash")
+            removedKept.add(infoHash to keep)
         }
     }
 
@@ -535,5 +545,105 @@ class DefaultTorrentEngineTest {
             }
 
             assertTrue(backend.callLog.contains("remove:$validHash"))
+        }
+
+    @Test
+    fun EN1_ready_callsOnReady_withTheRequestKey() =
+        runTest {
+            val backend = FakeTorrentBackend()
+            val coordinator: CacheRetentionCoordinator = mockk(relaxed = true)
+            val engine = DefaultTorrentEngine(backend, coordinator)
+            backend.metadataResult = sampleMetadata(listOf(BackendFile(0, "movie.mkv", 1000L, 0L)))
+            backend.defaultSnapshot = TorrentSnapshot(100, 0L, 0)
+
+            val job =
+                launch {
+                    engine.prepare(TorrentRequest(infoHash = validHash, fileIdx = 0, cacheKey = "k")).test {
+                        assertEquals(TorrentState.FetchingMetadata, awaitItem())
+                        val ready = awaitItem()
+                        assertTrue(ready is TorrentState.Ready)
+                        cancelAndIgnoreRemainingEvents()
+                    }
+                }
+            runCurrent()
+            job.join()
+
+            coVerify(exactly = 1) { coordinator.onReady("k", validHash, 0, 1000L) }
+        }
+
+    @Test
+    fun EN2_end_callsOnStop_beforeTheBackendRemove() =
+        runTest {
+            val callOrder = Collections.synchronizedList(mutableListOf<String>())
+            val backend = FakeTorrentBackend()
+            val coordinator: CacheRetentionCoordinator = mockk(relaxed = true)
+            coEvery { coordinator.onStop(any(), any(), any(), any(), any()) } coAnswers {
+                callOrder.add("onStop")
+                true
+            }
+            val engine = DefaultTorrentEngine(backend, coordinator)
+            backend.metadataResult = sampleMetadata(listOf(BackendFile(0, "movie.mkv", 1000L, 0L)))
+            backend.defaultSnapshot = TorrentSnapshot(100, 0L, 0)
+
+            val job =
+                launch {
+                    engine.prepare(TorrentRequest(infoHash = validHash, fileIdx = 0, cacheKey = "k")).test {
+                        assertEquals(TorrentState.FetchingMetadata, awaitItem())
+                        val ready = awaitItem()
+                        assertTrue(ready is TorrentState.Ready)
+                        cancelAndIgnoreRemainingEvents()
+                    }
+                }
+            runCurrent()
+            job.join()
+
+            assertEquals(listOf("onStop"), callOrder)
+            assertEquals(listOf(validHash to true), backend.removedKept)
+        }
+
+    @Test
+    fun EN3_noCacheKey_noCoordinatorCalls_oldBehaviour() =
+        runTest {
+            val backend = FakeTorrentBackend()
+            val coordinator: CacheRetentionCoordinator = mockk(relaxed = true)
+            val engine = DefaultTorrentEngine(backend, coordinator)
+            backend.metadataResult = sampleMetadata(listOf(BackendFile(0, "movie.mkv", 1000L, 0L)))
+            backend.defaultSnapshot = TorrentSnapshot(100, 0L, 0)
+
+            val job =
+                launch {
+                    engine.prepare(TorrentRequest(infoHash = validHash, fileIdx = 0, cacheKey = null)).test {
+                        assertEquals(TorrentState.FetchingMetadata, awaitItem())
+                        val ready = awaitItem()
+                        assertTrue(ready is TorrentState.Ready)
+                        cancelAndIgnoreRemainingEvents()
+                    }
+                }
+            runCurrent()
+            job.join()
+
+            coVerify(exactly = 0) { coordinator.onReady(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { coordinator.onStop(any(), any(), any(), any(), any()) }
+            assertEquals(listOf(validHash to null), backend.removedKept)
+        }
+
+    @Test
+    fun EN4_failureBeforeReady_callsNothing() =
+        runTest {
+            val backend = FakeTorrentBackend()
+            backend.awaitMetadataError = TorrentBackendException(TorrentFailReason.ENGINE_UNAVAILABLE)
+            val coordinator: CacheRetentionCoordinator = mockk(relaxed = true)
+            val engine = DefaultTorrentEngine(backend, coordinator)
+
+            engine.prepare(TorrentRequest(infoHash = validHash, fileIdx = 0, cacheKey = "k")).test {
+                assertEquals(TorrentState.FetchingMetadata, awaitItem())
+                val failed = awaitItem()
+                assertTrue(failed is TorrentState.Failed)
+                awaitComplete()
+            }
+
+            coVerify(exactly = 0) { coordinator.onReady(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { coordinator.onStop(any(), any(), any(), any(), any()) }
+            assertEquals(listOf(validHash to null), backend.removedKept)
         }
 }

@@ -16,10 +16,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 private const val BYTES_PER_BLOCK: Long = 512L
+private const val REGISTRY_FILE = ".nexus_files"
 
 internal fun diskBytes(file: File): Long =
     runCatching {
@@ -52,6 +55,150 @@ internal fun listCacheEntries(
     }
 }
 
+private fun isDeletableEmptyParent(
+    parent: File?,
+    dir: File,
+): Boolean {
+    if (parent == null || parent == dir) return false
+    return parent.isDirectory && parent.listFiles()?.isEmpty() == true
+}
+
+internal class DefaultTorrentCacheFiles(
+    val root: File,
+    private val io: CoroutineDispatcher,
+    private val fileBytes: (File) -> Long,
+) : TorrentCacheFiles {
+    private val fileRegistry = ConcurrentHashMap<String, ConcurrentHashMap<Int, Pair<String, Long>>>()
+
+    override fun registerFile(
+        hash: String,
+        fileIdx: Int,
+        relativePath: String,
+        sizeBytes: Long,
+    ) {
+        val lowerHash = hash.lowercase()
+        fileRegistry.computeIfAbsent(lowerHash) { ConcurrentHashMap() }[fileIdx] = Pair(relativePath, sizeBytes)
+        runCatching {
+            val dir = File(root, lowerHash)
+            if (dir.exists() || dir.mkdirs()) {
+                val regFile = File(dir, REGISTRY_FILE)
+                regFile.appendText("$fileIdx|$relativePath|$sizeBytes\n")
+            }
+        }
+    }
+
+    private fun ensureRegistryLoaded(
+        lowerHash: String,
+        dir: File,
+    ) {
+        val regFile = File(dir, REGISTRY_FILE)
+        if (regFile.exists()) {
+            runCatching {
+                regFile.forEachLine { line ->
+                    val parts = line.split('|')
+                    if (parts.size >= 2) {
+                        val idx = parts[0].toIntOrNull()
+                        val path = parts[1]
+                        val size = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                        if (idx != null) {
+                            fileRegistry.computeIfAbsent(lowerHash) { ConcurrentHashMap() }[idx] = Pair(path, size)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun fileOf(
+        hash: String,
+        fileIdx: Int,
+    ): File? {
+        val lowerHash = hash.lowercase()
+        val dir = File(root, lowerHash)
+        ensureRegistryLoaded(lowerHash, dir)
+        val inMem = fileRegistry[lowerHash]?.get(fileIdx)?.first
+        return when {
+            inMem != null -> resolveInside(root, lowerHash, inMem)
+            fileIdx == 0 && dir.exists() -> dir.listFiles()?.firstOrNull { it.isFile && it.name != REGISTRY_FILE }
+            else -> null
+        }
+    }
+
+    override suspend fun bytesOnDisk(
+        hash: String,
+        fileIdx: Int,
+    ): Long =
+        withContext(io) {
+            val f = fileOf(hash, fileIdx)
+            if (f != null && f.exists() && f.isFile) fileBytes(f) else 0L
+        }
+
+    override suspend fun fileSize(
+        hash: String,
+        fileIdx: Int,
+    ): Long =
+        withContext(io) {
+            val lowerHash = hash.lowercase()
+            val recorded = fileRegistry[lowerHash]?.get(fileIdx)?.second
+            if (recorded != null && recorded > 0L) return@withContext recorded
+            val f = fileOf(hash, fileIdx)
+            if (f != null && f.exists() && f.isFile) f.length() else 0L
+        }
+
+    override suspend fun deleteFile(
+        hash: String,
+        fileIdx: Int,
+    ) {
+        withContext(io) {
+            val f = fileOf(hash, fileIdx)
+            if (f != null && f.exists()) {
+                f.delete()
+                val dir = File(root, hash.lowercase())
+                var parent = f.parentFile
+                while (isDeletableEmptyParent(parent, dir)) {
+                    parent?.delete()
+                    parent = parent?.parentFile
+                }
+            }
+        }
+    }
+
+    override suspend fun deleteFolderIfEmpty(hash: String) {
+        withContext(io) {
+            val dir = File(root, hash.lowercase())
+            if (dir.exists() && dir.isDirectory) {
+                val children = dir.listFiles() ?: emptyArray()
+                val meaningful = children.filter { it.name != REGISTRY_FILE }
+                if (meaningful.isEmpty()) {
+                    dir.deleteRecursively()
+                    fileRegistry.remove(hash.lowercase())
+                }
+            }
+        }
+    }
+
+    override suspend fun deleteFolder(hash: String) {
+        withContext(io) {
+            val dir = File(root, hash.lowercase())
+            if (dir.exists()) {
+                dir.deleteRecursively()
+            }
+            fileRegistry.remove(hash.lowercase())
+        }
+    }
+
+    override suspend fun listFolders(): Set<String> =
+        withContext(io) {
+            if (!root.exists()) return@withContext emptySet()
+            root
+                .listFiles()
+                ?.filter { it.isDirectory }
+                ?.map { it.name.lowercase() }
+                ?.toSet()
+                .orEmpty()
+        }
+}
+
 @Singleton
 class TorrentCacheStore internal constructor(
     val root: File,
@@ -60,12 +207,14 @@ class TorrentCacheStore internal constructor(
     private val io: CoroutineDispatcher,
     private val nowMs: () -> Long,
     private val fileBytes: (File) -> Long,
-) : TorrentCache {
+) : TorrentCache,
+    TorrentCacheFiles by DefaultTorrentCacheFiles(root, io, fileBytes) {
     @Inject
     constructor(
         @ApplicationContext context: Context,
         prefs: TorrentPrefsRepository,
         @IoDispatcher io: CoroutineDispatcher,
+        coordinatorProvider: Provider<CacheRetentionCoordinator>,
     ) : this(
         root = File(context.cacheDir, DIR_NAME),
         limitBytes = { cacheLimitBytes(prefs.cacheLimitGb.first()) },
@@ -73,10 +222,17 @@ class TorrentCacheStore internal constructor(
         io = io,
         nowMs = System::currentTimeMillis,
         fileBytes = ::diskBytes,
-    )
+    ) {
+        this.coordinatorProvider = { coordinatorProvider.get() }
+    }
+
+    internal var coordinatorProvider: (() -> CacheRetentionCoordinator?)? = null
 
     private val activeHashes = Collections.synchronizedSet(mutableSetOf<String>())
     private val mutex = Mutex()
+
+    @Volatile
+    var lastReusedBytes: Long = 0L
 
     fun markActive(hash: String) {
         activeHashes.add(hash.lowercase())
@@ -103,10 +259,16 @@ class TorrentCacheStore internal constructor(
                 if (!root.exists()) {
                     root.mkdirs()
                 }
-                if (!keepAfterStop()) {
-                    root.listFiles()?.forEach { it.deleteRecursively() }
-                } else {
+                val coordinator = coordinatorProvider?.invoke()
+                if (coordinator != null) {
+                    coordinator.onSessionStart()
                     trimInternal()
+                } else {
+                    if (!keepAfterStop()) {
+                        root.listFiles()?.forEach { it.deleteRecursively() }
+                    } else {
+                        trimInternal()
+                    }
                 }
             }
         }
@@ -143,6 +305,7 @@ class TorrentCacheStore internal constructor(
     override suspend fun clearCache() {
         withContext(io) {
             mutex.withLock {
+                coordinatorProvider?.invoke()?.clearAll()
                 if (!root.exists()) return@withLock
                 val inUse = activeHashes.toSet()
                 root.listFiles()?.forEach { child ->

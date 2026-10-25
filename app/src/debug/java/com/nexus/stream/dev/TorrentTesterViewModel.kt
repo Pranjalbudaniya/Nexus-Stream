@@ -2,6 +2,7 @@ package com.nexus.stream.dev
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.stream.data.torrent.TorrentCacheStore
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.TorrentRequest
@@ -35,6 +36,7 @@ data class TorrentTesterUiState(
     val cacheSizeBytes: Long = 0L,
     val keepDataAfterStop: Boolean = false,
     val cacheLimitGb: Int = 2,
+    val reusedBytesOnAdd: Long = 0L,
 )
 
 sealed interface TorrentTesterEvent {
@@ -225,33 +227,39 @@ class TorrentTesterViewModel
                             _uiState.update { currentState -> currentState.copy(running = false) }
                             refreshCacheSize()
                         }.collect { newState ->
-                            if (newState is TorrentState.Ready) {
-                                localUrl = newState.localUrl
-                                _uiState.update { currentState ->
-                                    currentState.copy(
-                                        state = newState.copy(localUrl = null),
-                                        isBlockedMetered = false,
-                                    )
-                                }
-                            } else if (newState is TorrentState.Failed && newState.error is AppError.MeteredBlocked) {
-                                localUrl = null
-                                _uiState.update { currentState ->
-                                    currentState.copy(
-                                        state = newState,
-                                        isBlockedMetered = true,
-                                    )
-                                }
-                            } else {
-                                localUrl = null
-                                _uiState.update { currentState ->
-                                    currentState.copy(
-                                        state = newState,
-                                        isBlockedMetered = false,
-                                    )
-                                }
-                            }
+                            handleTorrentState(newState)
                         }
                 }
+        }
+
+        private fun handleTorrentState(newState: TorrentState) {
+            if (newState is TorrentState.Ready) {
+                val reused = (cache as? TorrentCacheStore)?.lastReusedBytes ?: 0L
+                localUrl = newState.localUrl
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        state = newState.copy(localUrl = null),
+                        isBlockedMetered = false,
+                        reusedBytesOnAdd = reused,
+                    )
+                }
+            } else if (newState is TorrentState.Failed && newState.error is AppError.MeteredBlocked) {
+                localUrl = null
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        state = newState,
+                        isBlockedMetered = true,
+                    )
+                }
+            } else {
+                localUrl = null
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        state = newState,
+                        isBlockedMetered = false,
+                    )
+                }
+            }
         }
 
         private fun onStop() {
