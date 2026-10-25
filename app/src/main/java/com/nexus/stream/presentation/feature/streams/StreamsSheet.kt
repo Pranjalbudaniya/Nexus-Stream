@@ -216,6 +216,8 @@ private fun StreamsSheetContent(
             onEvent = onEvent,
         )
 
+        StreamsResumeStatusRow(uiState.resume)
+
         StreamsListContent(uiState = uiState, onEvent = onEvent)
     }
 }
@@ -327,6 +329,45 @@ private fun StreamsStatusRow(
 }
 
 @Composable
+private fun StreamsResumeStatusRow(
+    resume: ResumeUi,
+    modifier: Modifier = Modifier,
+) {
+    if (resume == ResumeUi.None) return
+    val spacing = NexusTheme.spacing
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+    ) {
+        when (resume) {
+            ResumeUi.Looking -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.streams_resume_looking),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ResumeUi.NotFound -> {
+                Text(
+                    text = stringResource(R.string.streams_resume_not_found),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ResumeUi.None -> {}
+        }
+    }
+}
+
+@Composable
 private fun StreamsListContent(
     uiState: StreamsUiState,
     onEvent: (StreamsEvent) -> Unit,
@@ -371,6 +412,7 @@ private fun StreamsListContent(
             items(uiState.filteredStreams, key = { it.key }) { stream ->
                 StreamRow(
                     stream = stream,
+                    isLastUsed = stream.key == uiState.lastUsedKey,
                     onClick = { onEvent(StreamsEvent.PlayStream(stream)) },
                     onShowDetails = { onEvent(StreamsEvent.ShowDetails(stream)) },
                     onCopyFileName = { onEvent(StreamsEvent.CopyFileName(it)) },

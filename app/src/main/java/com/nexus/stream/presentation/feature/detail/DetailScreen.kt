@@ -161,12 +161,14 @@ fun DetailScreenContent(
                                 trailerUrl = state.trailerUrl,
                                 primaryPlay = state.primaryPlay,
                                 onPlayMain = {
+                                    onEvent(DetailEvent.PlayMain)
                                     state.activeVideoId?.let { targetId ->
                                         playbackLauncher.open(
                                             buildPlaybackRequest(
                                                 meta = state.meta,
                                                 videoId = targetId,
                                                 title = state.meta.name,
+                                                autoResume = state.streamsSheetAutoResume,
                                             ),
                                         )
                                     }

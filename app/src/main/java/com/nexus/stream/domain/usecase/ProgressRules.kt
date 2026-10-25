@@ -36,3 +36,15 @@ object ProgressRules {
             else -> saved.positionMs
         }
 }
+
+fun progressVideoId(
+    type: String,
+    metaId: String,
+    videoId: String,
+): String = if (type.equals("movie", ignoreCase = true)) metaId else videoId
+
+fun progressKeyFor(
+    type: String,
+    metaId: String,
+    videoId: String,
+): String = ProgressRules.progressKey(metaId, progressVideoId(type, metaId, videoId))

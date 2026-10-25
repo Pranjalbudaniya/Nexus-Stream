@@ -65,6 +65,7 @@ fun StreamRow(
     onOpenMagnet: () -> Unit,
     onOpenLink: () -> Unit,
     modifier: Modifier = Modifier,
+    isLastUsed: Boolean = false,
 ) {
     val spacing = NexusTheme.spacing
     var menuExpanded by remember { mutableStateOf(false) }
@@ -136,7 +137,7 @@ fun StreamRow(
                 StreamBadgesRow(stream)
 
                 // Line 6: via Addon and warning/header badges
-                StreamFooterBadgesRow(stream)
+                StreamFooterBadgesRow(stream = stream, isLastUsed = isLastUsed)
             }
 
             Box {
@@ -210,7 +211,10 @@ private fun StreamBadgesRow(stream: ParsedStream) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StreamFooterBadgesRow(stream: ParsedStream) {
+private fun StreamFooterBadgesRow(
+    stream: ParsedStream,
+    isLastUsed: Boolean = false,
+) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
         verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
@@ -231,28 +235,21 @@ private fun StreamFooterBadgesRow(stream: ParsedStream) {
             )
         }
 
+        if (isLastUsed) {
+            StreamChipBadge(
+                text = stringResource(R.string.streams_last_used),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+
         when (stream.kind) {
             StreamKind.Direct -> StreamChipBadge(stringResource(R.string.streams_badge_direct))
             StreamKind.Torrent -> StreamChipBadge(stringResource(R.string.streams_badge_torrent))
             StreamKind.ExternalLink -> StreamChipBadge(stringResource(R.string.streams_badge_link))
         }
 
-        when (stream.match) {
-            StreamMatch.WRONG_EPISODE -> {
-                StreamWarningBadge(stringResource(R.string.streams_badge_wrong_episode))
-            }
-
-            StreamMatch.WRONG_SEASON -> {
-                StreamWarningBadge(stringResource(R.string.streams_badge_wrong_season))
-            }
-
-            StreamMatch.WRONG_YEAR -> {
-                StreamWarningBadge(stringResource(R.string.streams_badge_wrong_year))
-            }
-
-            StreamMatch.OK, StreamMatch.UNKNOWN -> {
-            }
-        }
+        StreamMatchBadge(stream.match)
 
         if (stream.releaseType == ReleaseType.CAM) {
             StreamWarningBadge(stringResource(R.string.streams_badge_cam))
@@ -260,6 +257,26 @@ private fun StreamFooterBadgesRow(stream: ParsedStream) {
 
         if (stream.needsHeaders) {
             StreamChipBadge(stringResource(R.string.streams_badge_special_headers))
+        }
+    }
+}
+
+@Composable
+private fun StreamMatchBadge(match: StreamMatch) {
+    when (match) {
+        StreamMatch.WRONG_EPISODE -> {
+            StreamWarningBadge(stringResource(R.string.streams_badge_wrong_episode))
+        }
+
+        StreamMatch.WRONG_SEASON -> {
+            StreamWarningBadge(stringResource(R.string.streams_badge_wrong_season))
+        }
+
+        StreamMatch.WRONG_YEAR -> {
+            StreamWarningBadge(stringResource(R.string.streams_badge_wrong_year))
+        }
+
+        StreamMatch.OK, StreamMatch.UNKNOWN -> {
         }
     }
 }
@@ -410,17 +427,6 @@ private fun buildLanguagesLine(stream: ParsedStream): String? {
     }
 }
 
-private fun buildAudioBadge(stream: ParsedStream): String? {
-    val parts = mutableListOf<String>()
-    if (stream.audio.isNotEmpty()) {
-        parts.add(stream.audio.joinToString(" ") { it.name.replace('_', ' ') })
-    }
-    if (stream.channels != null) {
-        parts.add(stream.channels)
-    }
-    return if (parts.isEmpty()) null else parts.joinToString(" ")
-}
-
 private fun collectBadges(stream: ParsedStream): List<String> {
     val result = mutableListOf<String>()
     stream.resolution?.let { res ->
@@ -442,6 +448,15 @@ private fun collectBadges(stream: ParsedStream): List<String> {
             }
         result.add(label)
     }
-    buildAudioBadge(stream)?.let { result.add(it) }
+    val audioParts =
+        buildList {
+            if (stream.audio.isNotEmpty()) {
+                add(stream.audio.joinToString(" ") { it.name.replace('_', ' ') })
+            }
+            stream.channels?.let { add(it) }
+        }
+    if (audioParts.isNotEmpty()) {
+        result.add(audioParts.joinToString(" "))
+    }
     return result
 }

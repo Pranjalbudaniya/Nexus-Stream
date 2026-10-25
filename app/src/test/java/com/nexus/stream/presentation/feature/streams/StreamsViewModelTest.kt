@@ -18,11 +18,16 @@ import com.nexus.stream.domain.model.StreamMatch
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.model.TypeFilter
+import com.nexus.stream.domain.model.hashAddonKey
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
+import com.nexus.stream.domain.repository.SourceMemoryRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
+import com.nexus.stream.domain.usecase.cand
+import com.nexus.stream.domain.usecase.fp
+import com.nexus.stream.domain.usecase.progressKeyFor
 import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import io.mockk.coEvery
@@ -36,8 +41,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -48,6 +55,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("LargeClass")
@@ -56,6 +64,7 @@ class StreamsViewModelTest {
     private val streamRepository = mockk<StreamRepository>()
     private val addonRepository = mockk<AddonRepository>()
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
+    private val sourceMemoryRepository = mockk<SourceMemoryRepository>(relaxed = true)
     private val playbackSessionHolder = PlaybackSessionHolder()
 
     private val quickPlayFlow = MutableStateFlow(false)
@@ -192,6 +201,7 @@ class StreamsViewModelTest {
             playerPrefsRepository = playerPrefsRepository,
             playbackCapabilities = capabilities,
             playbackSessionHolder = playbackSessionHolder,
+            sourceMemoryRepository = sourceMemoryRepository,
             defaultDispatcher = testDispatcher,
         )
 
@@ -930,5 +940,443 @@ class StreamsViewModelTest {
             val selection = playbackSessionHolder.current.value
             assertNotNull(selection)
             assertNull(selection?.sourceFingerprint)
+        }
+
+    @Test
+    fun AR1_autoResume_matchFound_startsItOnce() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val hit = cand(key = "hit", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(hit), answered = 1, total = 2, failures = emptyList(), done = false),
+            )
+            runCurrent()
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+            job.cancel()
+        }
+
+    @Test
+    fun AR2_autoResume_noFingerprint_behavesAsBefore() =
+        runTest {
+            coEvery { sourceMemoryRepository.get(any()) } returns null
+            quickPlayFlow.value = true
+            val request = sampleRequest.copy(autoResume = true)
+            val s1 = createParsedStream("s1", resolution = 1080)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            streamFlow.emit(
+                StreamsState(items = listOf(s1), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            advanceUntilIdle()
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+            job.cancel()
+        }
+
+    @Test
+    fun AR3_autoResume_noMatch_afterAddonAnswered_notFound_startsNothing() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            runCurrent()
+
+            assertNull(playbackSessionHolder.current.value)
+            assertEquals(ResumeUi.NotFound, viewModel.uiState.value.resume)
+        }
+
+    @Test
+    fun AR4_autoResume_noMatch_quickPlayOn_doesNotQuickPlay() =
+        runTest {
+            quickPlayFlow.value = true
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            runCurrent()
+
+            assertNull(playbackSessionHolder.current.value)
+            assertEquals(ResumeUi.NotFound, viewModel.uiState.value.resume)
+        }
+
+    @Test
+    fun AR5_autoResume_fingerprintAddonNotEnabled_notFoundAtOnce() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("disabled-addon")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            assertEquals(ResumeUi.NotFound, viewModel.uiState.value.resume)
+            assertNull(playbackSessionHolder.current.value)
+        }
+
+    @Test
+    fun AR6_userPicksBeforeAutoPick_noAutoStart() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 0, total = 1, failures = emptyList(), done = false),
+            )
+            runCurrent()
+            assertEquals(ResumeUi.Looking, viewModel.uiState.value.resume)
+
+            val other = cand(key = "other", addon = "addon-1", binge = "diff")
+            viewModel.onEvent(StreamsEvent.PlayStream(other))
+            runCurrent()
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+
+            val hit = cand(key = "hit", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(miss, hit), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            runCurrent()
+
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+            job.cancel()
+        }
+
+    @Test
+    fun AR7_autoResume_matchArrivesInALaterEmission_startsThen() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 0, total = 2, failures = emptyList(), done = false),
+            )
+            runCurrent()
+            assertNull(playbackSessionHolder.current.value)
+            assertEquals(ResumeUi.Looking, viewModel.uiState.value.resume)
+
+            val hit = cand(key = "hit", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(miss, hit), answered = 1, total = 2, failures = emptyList(), done = false),
+            )
+            runCurrent()
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            job.cancel()
+        }
+
+    @Test
+    fun AR8_autoResume_waitCapReached_notFound() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 0, total = 1, failures = emptyList(), done = false),
+            )
+            runCurrent()
+            assertEquals(ResumeUi.Looking, viewModel.uiState.value.resume)
+
+            advanceTimeBy(12_000L)
+            runCurrent()
+
+            assertEquals(ResumeUi.NotFound, viewModel.uiState.value.resume)
+            assertNull(playbackSessionHolder.current.value)
+        }
+
+    @Test
+    fun AR9_autoResume_isOneShot() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val hit1 = cand(key = "hit1", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(hit1), answered = 1, total = 2, failures = emptyList(), done = false),
+            )
+            runCurrent()
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+
+            val hit2 = cand(key = "hit2", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(hit1, hit2), answered = 2, total = 2, failures = emptyList(), done = true),
+            )
+            runCurrent()
+            assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
+            job.cancel()
+        }
+
+    @Test
+    fun AR10_plainPlay_withFingerprint_noAutoStart_butBadge() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = false)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = true))
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            val hit = cand(key = "hit", addon = "addon-1", binge = "g")
+            streamFlow.emit(
+                StreamsState(items = listOf(hit), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            advanceUntilIdle()
+
+            assertNull(playbackSessionHolder.current.value)
+            assertEquals("hit", viewModel.uiState.value.lastUsedKey)
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+        }
+
+    @Test
+    fun AR11_badge_isOnTheBestMatchOnly() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g", res = 1080)
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = false)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            val bestMatch = cand(key = "best", addon = "addon-1", binge = "g", res = 1080)
+            val goodMatch = cand(key = "good", addon = "addon-1", binge = "g", res = 720)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(goodMatch, bestMatch),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("best", viewModel.uiState.value.lastUsedKey)
+        }
+
+    @Test
+    fun AR12_movieKey_usesMetaIdTwice() =
+        runTest {
+            coEvery { sourceMemoryRepository.get(any()) } returns null
+            val movieRequest =
+                PlaybackRequest(
+                    type = "movie",
+                    metaId = "kitsu:1",
+                    videoId = "kitsu:1:1",
+                    title = "Movie",
+                    autoResume = true,
+                )
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(movieRequest))
+            advanceUntilIdle()
+
+            coVerify { sourceMemoryRepository.get("kitsu:1|kitsu:1") }
+        }
+
+    @Test
+    fun AR13_fingerprintReadFails_treatedAsNone_noCrash() =
+        runTest {
+            coEvery { sourceMemoryRepository.get(any()) } throws IOException("disk read error")
+            quickPlayFlow.value = true
+            val request = sampleRequest.copy(autoResume = true)
+            val s1 = createParsedStream("s1", resolution = 1080)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            advanceUntilIdle()
+
+            streamFlow.emit(
+                StreamsState(items = listOf(s1), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            advanceUntilIdle()
+
+            assertEquals(ResumeUi.None, viewModel.uiState.value.resume)
+            assertNotNull(playbackSessionHolder.current.value)
+            job.cancel()
+        }
+
+    @Test
+    fun AR14_autoResume_torrentUnsupported_sameOutcomeAsATap() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g", kind = StreamKind.Torrent.toString())
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel(PlaybackCapabilities(supportsTorrent = false))
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val hitTorrent =
+                cand(
+                    key = "hit",
+                    addon = "addon-1",
+                    kind = StreamKind.Torrent,
+                    hash = "0123456789abcdef0123456789abcdef01234567",
+                    binge = "g",
+                )
+            streamFlow.emit(
+                StreamsState(items = listOf(hitTorrent), answered = 1, total = 1, failures = emptyList(), done = true),
+            )
+            runCurrent()
+
+            assertNull(playbackSessionHolder.current.value)
+            assertTrue(
+                effects.any {
+                    it is StreamsEffect.ShowMessage &&
+                        it.messageRes == R.string.streams_torrent_engine_notice
+                },
+            )
+            job.cancel()
+        }
+
+    @Test
+    fun AR15_clearedViewModel_cancelsThePendingWait() =
+        runTest {
+            activeAddonsFlow.value = listOf(createTestAddon("addon-1", "Addon 1", transportUrl = "addon-1"))
+            val f = fp(addons = listOf(hashAddonKey("addon-1")), binge = "g")
+            coEvery { sourceMemoryRepository.get(any()) } returns f
+            val request = sampleRequest.copy(autoResume = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val miss = cand(key = "miss", addon = "addon-1", binge = "other", res = 720)
+            streamFlow.emit(
+                StreamsState(items = listOf(miss), answered = 0, total = 1, failures = emptyList(), done = false),
+            )
+            runCurrent()
+            assertEquals(ResumeUi.Looking, viewModel.uiState.value.resume)
+
+            val onClearedMethod =
+                androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared").apply {
+                    isAccessible = true
+                }
+            onClearedMethod.invoke(viewModel)
+
+            advanceTimeBy(12_000L)
+            runCurrent()
+
+            assertNull(playbackSessionHolder.current.value)
         }
 }

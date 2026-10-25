@@ -1188,4 +1188,134 @@ class DetailViewModelTest {
             val updatedContent = viewModel.uiState.value as DetailUiState.Content
             assertEquals("tt1:1:4", updatedContent.streamsSheetVideoId)
         }
+
+    @Test
+    fun FR1_detailResumeTap_requestHasAutoResumeTrue() =
+        runTest(testDispatcher) {
+            val meta = testMeta("kitsu:1", type = "movie").copy(defaultVideoId = "kitsu:1:1")
+            coEvery { metaRepository.getMeta("movie", "kitsu:1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("kitsu:1") } returns
+                flowOf(
+                    mapOf(
+                        "kitsu:1" to
+                            EpisodeProgress(
+                                "kitsu:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("movie", "kitsu:1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.PlayMain)
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(updatedContent.streamsSheetAutoResume)
+            val request =
+                com.nexus.stream.presentation.common.buildPlaybackRequest(
+                    meta = updatedContent.meta,
+                    videoId = updatedContent.streamsSheetVideoId!!,
+                    title = updatedContent.streamsSheetTitle!!,
+                    autoResume = updatedContent.streamsSheetAutoResume,
+                )
+            assertTrue(request.autoResume)
+        }
+
+    @Test
+    fun FR2_detailStartAndNextTap_autoResumeFalse() =
+        runTest(testDispatcher) {
+            val metaMovie = testMeta("m1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(metaMovie, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("m1") } returns flowOf(emptyMap())
+
+            val startVm = createViewModel("movie", "m1")
+            val startContent = startVm.uiState.value as DetailUiState.Content
+            assertTrue(startContent.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((startContent.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Start)
+
+            startVm.onEvent(DetailEvent.PlayMain)
+            val updatedStartContent = startVm.uiState.value as DetailUiState.Content
+            assertFalse(updatedStartContent.streamsSheetAutoResume)
+
+            val videos =
+                listOf(
+                    Video("tt1:1:1", "Ep 1", null, 1, 1, null, null),
+                    Video("tt1:1:2", "Ep 2", null, 1, 2, null, null),
+                )
+            val metaSeries = testMeta("tt1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "tt1", false) } returns
+                Outcome.Success(MetaResult(metaSeries, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns
+                flowOf(
+                    mapOf(
+                        "tt1:1:1" to
+                            EpisodeProgress(
+                                "tt1:1:1",
+                                watched = true,
+                                positionMs = 60_000L,
+                                durationMs = 60_000L,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val nextVm = createViewModel("series", "tt1")
+            val nextContent = nextVm.uiState.value as DetailUiState.Content
+            assertTrue(nextContent.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((nextContent.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Next)
+
+            nextVm.onEvent(DetailEvent.PlayMain)
+            val updatedNextContent = nextVm.uiState.value as DetailUiState.Content
+            assertFalse(updatedNextContent.streamsSheetAutoResume)
+        }
+
+    @Test
+    fun FR3_episodeRowTap_autoResumeFalse() =
+        runTest(testDispatcher) {
+            val videos =
+                listOf(
+                    Video("tt1:1:1", "Ep 1", null, 1, 1, null, null),
+                    Video("tt1:1:2", "Ep 2", null, 1, 2, null, null),
+                )
+            val meta = testMeta("tt1", type = "series", videos = videos)
+            coEvery { metaRepository.getMeta("series", "tt1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("tt1") } returns
+                flowOf(
+                    mapOf(
+                        "tt1:1:1" to
+                            EpisodeProgress(
+                                "tt1:1:1",
+                                positionMs = 20_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "tt1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(content.primaryPlay is PrimaryPlayState.Ready)
+            assertTrue((content.primaryPlay as PrimaryPlayState.Ready).intent is PlayIntent.Resume)
+
+            viewModel.onEvent(DetailEvent.PlayEpisode("tt1:1:2"))
+            val updatedContent = viewModel.uiState.value as DetailUiState.Content
+            assertFalse(updatedContent.streamsSheetAutoResume)
+            val request =
+                com.nexus.stream.presentation.common.buildPlaybackRequest(
+                    meta = updatedContent.meta,
+                    videoId = updatedContent.streamsSheetVideoId!!,
+                    title = updatedContent.streamsSheetTitle!!,
+                    autoResume = updatedContent.streamsSheetAutoResume,
+                )
+            assertFalse(request.autoResume)
+        }
 }

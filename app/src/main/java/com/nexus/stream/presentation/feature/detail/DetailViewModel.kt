@@ -74,6 +74,7 @@ sealed interface DetailUiState {
         val showStreamsSheet: Boolean = false,
         val streamsSheetVideoId: String? = null,
         val streamsSheetTitle: String? = null,
+        val streamsSheetAutoResume: Boolean = false,
         val showWatchOptionsSheet: Boolean = false,
         val watchActions: List<WatchAction> = emptyList(),
         val pendingConfirmationAction: WatchAction? = null,
@@ -216,11 +217,15 @@ class DetailViewModel(
         when (event) {
             DetailEvent.PlayMain -> {
                 content.activeVideoId?.let { targetId ->
+                    val autoResume =
+                        content.primaryPlay is PrimaryPlayState.Ready &&
+                            content.primaryPlay.intent is PlayIntent.Resume
                     _uiState.update {
                         content.copy(
                             showStreamsSheet = true,
                             streamsSheetVideoId = targetId,
                             streamsSheetTitle = content.meta.name,
+                            streamsSheetAutoResume = autoResume,
                         )
                     }
                 }
@@ -237,6 +242,7 @@ class DetailViewModel(
                             showStreamsSheet = true,
                             streamsSheetVideoId = event.videoId,
                             streamsSheetTitle = "${content.meta.name} - ${video.title}",
+                            streamsSheetAutoResume = false,
                         )
                     }
                 }
@@ -263,7 +269,13 @@ class DetailViewModel(
     private fun handleSheetEvent(event: DetailEvent): Boolean =
         when (event) {
             DetailEvent.DismissStreamsSheet -> {
-                _uiState.update { if (it is DetailUiState.Content) it.copy(showStreamsSheet = false) else it }
+                _uiState.update {
+                    if (it is DetailUiState.Content) {
+                        it.copy(showStreamsSheet = false, streamsSheetAutoResume = false)
+                    } else {
+                        it
+                    }
+                }
                 true
             }
 

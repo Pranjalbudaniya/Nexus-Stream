@@ -40,6 +40,7 @@ import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.clampSubtitleDelay
 import com.nexus.stream.domain.usecase.groupByLanguage
 import com.nexus.stream.domain.usecase.matchTrackByLanguage
+import com.nexus.stream.domain.usecase.progressVideoId
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -1337,7 +1338,7 @@ internal fun PlaybackSelection.toProgressTarget(): ProgressTarget? =
         val isMovieType = type.equals("movie", ignoreCase = true)
         ProgressTarget(
             metaId = metaId,
-            videoId = if (isMovieType) metaId else videoId,
+            videoId = progressVideoId(type, metaId, videoId),
             type = type,
             isMovie = isMovieType,
             season = season,

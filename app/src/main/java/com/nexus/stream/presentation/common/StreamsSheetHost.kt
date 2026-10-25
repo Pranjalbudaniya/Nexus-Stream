@@ -21,12 +21,14 @@ data class PlaybackRequest(
     val backgroundUrl: String? = null,
     val posterUrl: String? = null,
     val metaName: String? = null,
+    val autoResume: Boolean = false,
 )
 
 fun buildPlaybackRequest(
     meta: com.nexus.stream.domain.model.MetaDetail,
     videoId: String,
     title: String,
+    autoResume: Boolean = false,
 ): PlaybackRequest {
     val activeVideo = meta.videos.find { it.id == videoId }
     val parts = videoId.split(":")
@@ -48,6 +50,7 @@ fun buildPlaybackRequest(
         backgroundUrl = meta.background,
         posterUrl = meta.poster,
         metaName = meta.name,
+        autoResume = autoResume,
     )
 }
 

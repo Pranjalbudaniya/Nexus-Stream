@@ -3,7 +3,9 @@ package com.nexus.stream.presentation.common
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PosterPlaybackRequestTest {
@@ -87,5 +89,21 @@ class PosterPlaybackRequestTest {
         assertNull(req.backgroundUrl)
         assertNull(req.logoUrl)
         assertNull(req.year)
+    }
+
+    @Test
+    fun FR4_posterResumeRow_autoResumeTrue() {
+        val req = posterPlaybackRequest(basePreview, videoId = "tt1:1:4", season = 1, episode = 4, autoResume = true)
+        assertTrue(req.autoResume)
+    }
+
+    @Test
+    fun FR5_posterPlayRow_autoResumeFalse() {
+        val defaultReq = posterPlaybackRequest(basePreview, videoId = null, season = null, episode = null)
+        assertFalse(defaultReq.autoResume)
+
+        val playReq =
+            posterPlaybackRequest(basePreview, videoId = null, season = null, episode = null, autoResume = false)
+        assertFalse(playReq.autoResume)
     }
 }

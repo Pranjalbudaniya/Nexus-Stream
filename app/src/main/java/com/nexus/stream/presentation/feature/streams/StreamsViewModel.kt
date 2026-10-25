@@ -9,29 +9,40 @@ import com.nexus.stream.domain.model.EpisodeHint
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.model.PlaybackSource
+import com.nexus.stream.domain.model.SourceFingerprint
 import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSort
 import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.domain.model.fingerprintOf
+import com.nexus.stream.domain.model.hashAddonKey
 import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
+import com.nexus.stream.domain.repository.SourceMemoryRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.MagnetLink
+import com.nexus.stream.domain.usecase.ResumeStep
 import com.nexus.stream.domain.usecase.StreamMatching
 import com.nexus.stream.domain.usecase.StreamOrdering
 import com.nexus.stream.domain.usecase.SubtitleHints
+import com.nexus.stream.domain.usecase.decideResume
+import com.nexus.stream.domain.usecase.lastUsedKey
+import com.nexus.stream.domain.usecase.progressKeyFor
 import com.nexus.stream.domain.usecase.resolvePlaybackSource
 import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.feature.player.PlaybackSelection
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -45,12 +56,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+private const val RESUME_WAIT_MS = 12_000L
+
 data class AddonFilterOption(
     val transportUrl: String,
     val displayName: String,
     val count: Int,
     val failed: Boolean = false,
 )
+
+enum class ResumeUi {
+    None,
+    Looking,
+    NotFound,
+}
 
 data class StreamsUiState(
     val request: PlaybackRequest? = null,
@@ -89,6 +108,8 @@ data class StreamsUiState(
     val failures: List<AddonFailure> = emptyList(),
     val isDone: Boolean = false,
     val quickPlayHandled: Boolean = false,
+    val resume: ResumeUi = ResumeUi.None,
+    val lastUsedKey: String? = null,
 ) {
     val filters: StreamFilters
         get() =
@@ -203,7 +224,7 @@ sealed interface StreamsEvent {
 }
 
 @HiltViewModel
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class StreamsViewModel
     @Inject
     constructor(
@@ -212,6 +233,7 @@ class StreamsViewModel
         private val playerPrefsRepository: PlayerPrefsRepository,
         private val playbackCapabilities: PlaybackCapabilities,
         private val playbackSessionHolder: PlaybackSessionHolder,
+        private val sourceMemoryRepository: SourceMemoryRepository,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(StreamsUiState())
@@ -222,7 +244,13 @@ class StreamsViewModel
 
         private var loadingJob: Job? = null
         private var addonJob: Job? = null
+        private var waitJob: Job? = null
+        private var fingerprintDeferred: Deferred<SourceFingerprint?>? = null
         private var cachedActiveAddons: List<Addon> = emptyList()
+        private var addonsLoaded = false
+        private var userPicked = false
+        private var handled = false
+        private var waitExpired = false
 
         init {
             viewModelScope.launch {
@@ -361,6 +389,8 @@ class StreamsViewModel
         private fun handleStreamActionEvent(event: StreamsEvent): Boolean =
             when (event) {
                 is StreamsEvent.PlayStream -> {
+                    userPicked = true
+                    _uiState.update { it.copy(resume = ResumeUi.None) }
                     viewModelScope.launch { playStream(event.stream) }
                     true
                 }
@@ -382,6 +412,13 @@ class StreamsViewModel
         private fun handleSetRequest(request: PlaybackRequest) {
             loadingJob?.cancel()
             addonJob?.cancel()
+            waitJob?.cancel()
+            fingerprintDeferred?.cancel()
+            cachedActiveAddons = emptyList()
+            addonsLoaded = false
+            userPicked = false
+            handled = false
+            waitExpired = false
             _uiState.update {
                 StreamsUiState(
                     request = request,
@@ -396,7 +433,31 @@ class StreamsViewModel
                     preferredQuality = it.preferredQuality,
                     hideCam = it.hideCam,
                     quickPlayHandled = false,
+                    resume = if (request.autoResume) ResumeUi.Looking else ResumeUi.None,
+                    lastUsedKey = null,
                 )
+            }
+            fingerprintDeferred =
+                viewModelScope.async {
+                    try {
+                        sourceMemoryRepository.get(progressKeyFor(request.type, request.metaId, request.videoId))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            if (request.autoResume) {
+                viewModelScope.launch {
+                    fingerprintDeferred?.await()
+                    evaluateResumeDecision()
+                }
+                waitJob =
+                    viewModelScope.launch {
+                        delay(RESUME_WAIT_MS)
+                        waitExpired = true
+                        evaluateResumeDecision()
+                    }
             }
             observeActiveAddons(request)
             startLoading(request = request, forceRefresh = false, onlyAddons = null, mergeExisting = false)
@@ -407,6 +468,8 @@ class StreamsViewModel
             loadingJob = null
             addonJob?.cancel()
             addonJob = null
+            waitJob?.cancel()
+            fingerprintDeferred?.cancel()
             _uiState.update { StreamsUiState() }
         }
 
@@ -419,7 +482,11 @@ class StreamsViewModel
                                 it.manifest.supports("stream", request.type, request.videoId)
                             }
                         cachedActiveAddons = matching
+                        addonsLoaded = true
                         _uiState.update { StreamsFilterReducer.updateActiveAddons(it, matching) }
+                        if (request.autoResume) {
+                            evaluateResumeDecision()
+                        }
                     }
                 }
         }
@@ -490,12 +557,16 @@ class StreamsViewModel
                     val enriched =
                         emission.items.map {
                             val match =
-                                StreamMatching.matchOf(
-                                    it.fileName,
-                                    request.season,
-                                    request.episode,
-                                    request.year,
-                                )
+                                if (it.fileName.isNullOrBlank()) {
+                                    it.match
+                                } else {
+                                    StreamMatching.matchOf(
+                                        it.fileName,
+                                        request.season,
+                                        request.episode,
+                                        request.year,
+                                    )
+                                }
                             it.copy(match = match)
                         }
                     if (initialItems.isEmpty()) {
@@ -514,9 +585,12 @@ class StreamsViewModel
                 )
             }
 
+            evaluateResumeDecision()
+            val suppressQuickPlay = request.autoResume && awaitFingerprint() != null
+
             if (emission.done && !_uiState.value.quickPlayHandled) {
                 _uiState.update { it.copy(quickPlayHandled = true) }
-                if (playerPrefsRepository.quickPlay.first()) {
+                if (!suppressQuickPlay && playerPrefsRepository.quickPlay.first()) {
                     val candidate =
                         StreamOrdering.bestPlayable(
                             list = combined,
@@ -527,6 +601,67 @@ class StreamsViewModel
                     if (candidate != null) {
                         playStream(candidate)
                     }
+                }
+            }
+        }
+
+        private suspend fun awaitFingerprint(): SourceFingerprint? =
+            try {
+                fingerprintDeferred?.await()
+            } catch (_: Exception) {
+                null
+            }
+
+        private suspend fun evaluateResumeDecision() {
+            val req = _uiState.value.request
+            if (req == null || fingerprintDeferred == null) return
+            val fp = awaitFingerprint()
+            val allStreams = _uiState.value.allStreams
+            val key = lastUsedKey(fp, allStreams)
+            _uiState.update { it.copy(lastUsedKey = key) }
+
+            if (!req.autoResume) return
+
+            val isAddonDisabled =
+                if (addonsLoaded && fp != null && fp.addonKeyHashes.isNotEmpty()) {
+                    fp.addonKeyHashes.none { hash -> cachedActiveAddons.any { hashAddonKey(it.transportUrl) == hash } }
+                } else {
+                    false
+                }
+            val allDone = _uiState.value.isDone
+            val addonAnswered = isAddonDisabled || allDone
+
+            val step =
+                decideResume(
+                    autoResume = req.autoResume,
+                    fingerprint = fp,
+                    streams = allStreams,
+                    addonAnswered = addonAnswered,
+                    allDone = allDone,
+                    waitExpired = waitExpired,
+                    userPicked = userPicked,
+                    handled = handled,
+                )
+
+            if (step !is ResumeStep.Waiting) waitJob?.cancel()
+            when (step) {
+                ResumeStep.Waiting -> {
+                    _uiState.update { it.copy(resume = ResumeUi.Looking) }
+                }
+
+                is ResumeStep.Start -> {
+                    handled = true
+                    _uiState.update { it.copy(resume = ResumeUi.None) }
+                    playStream(step.stream)
+                }
+
+                ResumeStep.NotFound -> {
+                    handled = true
+                    _uiState.update { it.copy(resume = ResumeUi.NotFound) }
+                }
+
+                ResumeStep.NotApplicable -> {
+                    _uiState.update { it.copy(resume = ResumeUi.None) }
                 }
             }
         }

@@ -343,6 +343,9 @@
     <string name="streams_empty_no_streams">No streams found.</string>
     <string name="streams_empty_no_quality_match">No streams in this quality.</string>
     <string name="streams_more_options">More options for %1$s</string>
+    <string name="streams_resume_looking">Looking for your last source…</string>
+    <string name="streams_resume_not_found">Your last source isn’t available. Pick another one.</string>
+    <string name="streams_last_used">Last used</string>
 
     <!-- Player settings -->
     <string name="settings_player_title">Player</string>

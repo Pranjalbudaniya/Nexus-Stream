@@ -168,6 +168,7 @@ class StreamsFilterViewModelTest {
             playerPrefsRepository = playerPrefsRepository,
             playbackCapabilities = defaultCapabilities,
             playbackSessionHolder = playbackSessionHolder,
+            sourceMemoryRepository = mockk(relaxed = true),
             defaultDispatcher = testDispatcher,
         )
 

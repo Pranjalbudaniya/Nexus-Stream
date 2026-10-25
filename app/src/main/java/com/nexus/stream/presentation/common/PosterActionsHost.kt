@@ -280,7 +280,7 @@ fun PosterActionsHost(
                 actions = actions,
                 trailerUrl = state.trailerUrl,
                 onDismiss = { viewModel.dismiss() },
-                onPlay = { targetVideoId, season, episode ->
+                onPlay = { targetVideoId, season, episode, autoResume ->
                     viewModel.dismiss()
                     playbackLauncher.open(
                         posterPlaybackRequest(
@@ -288,6 +288,7 @@ fun PosterActionsHost(
                             videoId = targetVideoId,
                             season = season,
                             episode = episode,
+                            autoResume = autoResume,
                         ),
                     )
                 },
@@ -341,7 +342,7 @@ private fun PosterActionsSheet(
     actions: List<PosterAction>,
     trailerUrl: String?,
     onDismiss: () -> Unit,
-    onPlay: (String?, Int?, Int?) -> Unit,
+    onPlay: (String?, Int?, Int?, Boolean) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -433,7 +434,7 @@ private fun PosterSheetHeader(item: MetaPreview) {
 private fun PosterActionsList(
     actions: List<PosterAction>,
     trailerUrl: String?,
-    onPlay: (String?, Int?, Int?) -> Unit,
+    onPlay: (String?, Int?, Int?, Boolean) -> Unit,
     onDetail: () -> Unit,
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
@@ -452,7 +453,7 @@ private fun PosterActionsList(
                         )
                     },
                     label = stringResource(R.string.poster_action_play),
-                    onClick = { onPlay(null, null, null) },
+                    onClick = { onPlay(null, null, null, false) },
                 )
             }
 
@@ -472,7 +473,7 @@ private fun PosterActionsList(
                         )
                     },
                     label = label,
-                    onClick = { onPlay(action.videoId, action.season, action.episode) },
+                    onClick = { onPlay(action.videoId, action.season, action.episode, true) },
                 )
             }
 
@@ -668,6 +669,7 @@ internal fun posterPlaybackRequest(
     videoId: String?,
     season: Int?,
     episode: Int?,
+    autoResume: Boolean = false,
 ): PlaybackRequest =
     PlaybackRequest(
         type = item.type,
@@ -681,4 +683,5 @@ internal fun posterPlaybackRequest(
         backgroundUrl = item.background,
         posterUrl = item.poster,
         metaName = item.name,
+        autoResume = autoResume,
     )
