@@ -10,6 +10,7 @@ import com.nexus.stream.data.local.db.dao.AddonDao
 import com.nexus.stream.data.local.db.dao.LibraryDao
 import com.nexus.stream.data.local.db.dao.MetaCacheDao
 import com.nexus.stream.data.local.db.dao.ProgressDao
+import com.nexus.stream.data.local.db.dao.SearchHistoryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,6 +47,9 @@ object DatabaseModule {
 
     @Provides
     fun provideMetaCacheDao(database: NexusDatabase): MetaCacheDao = database.metaCacheDao()
+
+    @Provides
+    fun provideSearchHistoryDao(database: NexusDatabase): SearchHistoryDao = database.searchHistoryDao()
 
     @Provides
     @Singleton

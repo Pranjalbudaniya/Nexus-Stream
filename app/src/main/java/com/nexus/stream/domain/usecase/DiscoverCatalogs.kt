@@ -14,7 +14,7 @@ import com.nexus.stream.domain.model.supportsSkip
 
 private const val YEAR_DIGIT_COUNT = 4
 
-private data class RawDiscoverCandidate(
+internal data class RawCatalogCandidate(
     val addonName: String,
     val transportUrl: String,
     val spec: CatalogSpec,
@@ -24,8 +24,11 @@ private data class RawDiscoverCandidate(
     val supportsSkip: Boolean,
 )
 
-fun buildDiscoverCatalogs(addons: List<Addon>): List<DiscoverCatalog> {
-    val candidates = mutableListOf<RawDiscoverCandidate>()
+internal fun buildCatalogsPipeline(
+    addons: List<Addon>,
+    extractCandidate: (Addon, CatalogSpec) -> RawCatalogCandidate?,
+): List<DiscoverCatalog> {
+    val candidates = mutableListOf<RawCatalogCandidate>()
     val seenKeys = mutableSetOf<String>()
 
     val sortedAddons = addons.filter { it.enabled }.sortedBy { it.position }
@@ -61,10 +64,15 @@ fun buildDiscoverCatalogs(addons: List<Addon>): List<DiscoverCatalog> {
     }
 }
 
-private fun extractCandidate(
+fun buildDiscoverCatalogs(addons: List<Addon>): List<DiscoverCatalog> =
+    buildCatalogsPipeline(addons) { addon, spec ->
+        extractDiscoverCandidate(addon, spec)
+    }
+
+private fun extractDiscoverCandidate(
     addon: Addon,
     spec: CatalogSpec,
-): RawDiscoverCandidate? {
+): RawCatalogCandidate? {
     val genreExtra = spec.extras.find { it.name == "genre" }
     val options =
         genreExtra
@@ -90,7 +98,7 @@ private fun extractCandidate(
             null
         }
 
-    return RawDiscoverCandidate(
+    return RawCatalogCandidate(
         addonName = addon.manifest.name,
         transportUrl = addon.transportUrl,
         spec = spec,

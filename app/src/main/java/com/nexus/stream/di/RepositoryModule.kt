@@ -10,6 +10,7 @@ import com.nexus.stream.data.repository.CommunityAddonsRepositoryImpl
 import com.nexus.stream.data.repository.LibraryRepositoryImpl
 import com.nexus.stream.data.repository.MetaRepositoryImpl
 import com.nexus.stream.data.repository.ProgressRepositoryImpl
+import com.nexus.stream.data.repository.SearchHistoryRepositoryImpl
 import com.nexus.stream.data.repository.StreamRepositoryImpl
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.repository.AddonRepository
@@ -20,6 +21,7 @@ import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.repository.SearchHistoryRepository
 import com.nexus.stream.domain.repository.SettingsRepository
 import com.nexus.stream.domain.repository.StreamRepository
 import com.nexus.stream.domain.repository.TorrentPrefsRepository
@@ -32,6 +34,7 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 interface RepositoryModule {
     @Binds
     @Singleton
@@ -76,6 +79,10 @@ interface RepositoryModule {
     @Binds
     @Singleton
     fun bindTorrentPrefsRepository(impl: TorrentPrefsRepositoryImpl): TorrentPrefsRepository
+
+    @Binds
+    @Singleton
+    fun bindSearchHistoryRepository(impl: SearchHistoryRepositoryImpl): SearchHistoryRepository
 
     companion object {
         @Provides
