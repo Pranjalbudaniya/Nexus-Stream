@@ -62,8 +62,8 @@ const val DISCOVER_SKELETON_COUNT = 12
 private val DISCOVER_CHIP_MIN_HEIGHT = 36.dp
 private val DISCOVER_CHIP_TOUCH_TARGET = 40.dp
 private val DISCOVER_CHIP_MAX_WIDTH = 200.dp
-private val DISCOVER_GRID_MIN_POSTER_DP = 100.dp
-private val DISCOVER_GRID_MIN_LANDSCAPE_DP = 150.dp
+internal val DISCOVER_GRID_MIN_POSTER_DP = 100.dp
+internal val DISCOVER_GRID_MIN_LANDSCAPE_DP = 150.dp
 
 @Composable
 internal fun discoverTypeText(type: String): String =

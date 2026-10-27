@@ -40,6 +40,11 @@ fun NexusNavHost(
             tabReselects.events.filter { it == TopLevelDestination.DISCOVER }
         }
 
+    val libraryReselects =
+        remember(tabReselects) {
+            tabReselects.events.filter { it == TopLevelDestination.LIBRARY }
+        }
+
     NavHost(
         navController = navController,
         startDestination = Home,
@@ -67,7 +72,13 @@ fun NexusNavHost(
             DownloadsScreen()
         }
         composable<Library> {
-            LibraryScreen()
+            LibraryScreen(
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
+                onNavigateToDiscover = { navController.navigate(Discover) },
+                reselectEvents = libraryReselects,
+            )
         }
         composable<Settings> {
             SettingsScreen(

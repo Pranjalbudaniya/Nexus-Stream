@@ -169,7 +169,65 @@
     <string name="home_title">Nexus Stream</string>
     <string name="home_placeholder">Home</string>
     <string name="library_title">Library</string>
-    <string name="library_placeholder">Library</string>
+
+    <!-- Library tab -->
+    <string name="library_tab_watchlist">Watchlist</string>
+    <string name="library_tab_history">History</string>
+
+    <!-- Watchlist filter & sort chips -->
+    <string name="library_filter_all_statuses">All statuses</string>
+    <string name="library_filter_all_types">All types</string>
+    <string name="library_sort_recently_added">Recently added</string>
+    <string name="library_sort_title_az">Title (A to Z)</string>
+    <string name="library_sort_title_za">Title (Z to A)</string>
+
+    <!-- Watchlist card status labels -->
+    <string name="library_status_watching">Watching</string>
+    <string name="library_status_plan_to_watch">Plan to watch</string>
+    <string name="library_status_completed">Completed</string>
+    <string name="library_status_on_hold">On hold</string>
+    <string name="library_status_dropped">Dropped</string>
+
+    <!-- History buckets -->
+    <string name="library_history_bucket_today">Today</string>
+    <string name="library_history_bucket_yesterday">Yesterday</string>
+    <string name="library_history_bucket_last_7_days">Last 7 days</string>
+    <string name="library_history_bucket_last_30_days">Last 30 days</string>
+    <string name="library_history_bucket_earlier">Earlier</string>
+
+    <!-- History controls -->
+    <string name="library_history_clear_button">Clear history</string>
+    <string name="library_history_truncated_footer">Showing latest 500 items</string>
+
+    <!-- History remove dialog -->
+    <string name="library_history_remove_dialog_title">Remove from history?</string>
+    <string name="library_history_remove_dialog_message">Remove \"%1$s\" from your watch history?</string>
+    <string name="library_history_remove_dialog_message_unknown">Remove this item from your watch history?</string>
+    <string name="library_history_remove_dialog_confirm">Remove</string>
+    <string name="library_history_remove_dialog_dismiss">Cancel</string>
+
+    <!-- History clear dialog -->
+    <string name="library_history_clear_dialog_title">Clear watch history?</string>
+    <string name="library_history_clear_dialog_message">This will remove all items from your watch history. Your watchlist won\'t be affected.</string>
+    <string name="library_history_clear_dialog_confirm">Clear history</string>
+    <string name="library_history_clear_dialog_dismiss">Cancel</string>
+
+    <!-- Snackbars -->
+    <string name="library_history_removed_snackbar">Removed from history</string>
+    <string name="library_history_cleared_snackbar">Watch history cleared</string>
+
+    <!-- Empty states -->
+    <string name="library_watchlist_empty_title">Your watchlist is empty</string>
+    <string name="library_watchlist_empty_body">Save movies and series you want to watch later.</string>
+    <string name="library_watchlist_empty_action">Explore Discover</string>
+    <string name="library_watchlist_filtered_empty_title">No titles match this filter</string>
+    <string name="library_watchlist_filtered_empty_body">Try picking a different status or type filter.</string>
+    <string name="library_watchlist_filtered_empty_action">Clear filters</string>
+    <string name="library_history_empty_title">No watch history yet</string>
+    <string name="library_history_empty_body">Titles you play will show up here so you can pick up where you left off.</string>
+    <string name="library_history_filtered_empty_title">No history matches this type</string>
+    <string name="library_history_filtered_empty_body">Try selecting a different type filter.</string>
+    <string name="library_history_filtered_empty_action">Clear filter</string>
     <string name="downloads_title">Downloads</string>
     <string name="downloads_empty_title">No downloads yet</string>
     <string name="downloads_empty_body">Downloads are coming soon.</string>
