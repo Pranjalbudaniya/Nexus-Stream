@@ -6,6 +6,7 @@ import com.nexus.stream.domain.repository.HistoryRepository
 import com.nexus.stream.domain.repository.WatchlistRepository
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -20,4 +21,14 @@ interface LibraryListsModule {
     @Binds
     @Singleton
     fun bindHistoryRepository(impl: HistoryRepositoryImpl): HistoryRepository
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideClock(): java.time.Clock = java.time.Clock.systemDefaultZone()
+
+        @Provides
+        @Singleton
+        fun provideZoneId(): java.time.ZoneId = java.time.ZoneId.systemDefault()
+    }
 }
