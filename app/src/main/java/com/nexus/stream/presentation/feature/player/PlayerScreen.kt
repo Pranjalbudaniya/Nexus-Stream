@@ -139,6 +139,10 @@ fun PlayerScreen(
                         },
                     )
                 }
+
+                PlayerEffect.SwitchToNext -> {}
+
+                is PlayerEffect.ChooseNextSource -> {}
             }
         }
     }

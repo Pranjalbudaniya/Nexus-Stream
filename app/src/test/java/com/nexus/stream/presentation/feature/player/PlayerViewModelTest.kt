@@ -42,12 +42,15 @@ import com.nexus.stream.domain.usecase.SaveOutcome
 import com.nexus.stream.domain.usecase.SaveProgress
 import com.nexus.stream.domain.usecase.SubtitleHints
 import com.nexus.stream.domain.usecase.progressKeyFor
+import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verifyOrder
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -56,6 +59,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -114,7 +118,19 @@ class PlayerViewModelTest {
         h: PlaybackSessionHolder = holder,
         loader: LoadOnlineSubtitles = loadOnlineSubtitlesUseCase,
         importer: SubtitleFileImporter = fakeSubtitleImporter,
+        nextEpisodeController: NextEpisodeController? = null,
     ): PlayerViewModel {
+        val nextFactory =
+            object : NextEpisodeController.Factory(
+                finder = mockk(relaxed = true),
+                sameSource = mockk(relaxed = true),
+                sourceMemory = mockk(relaxed = true),
+                startPlayback = mockk(relaxed = true),
+                playerPrefsRepository = fakePrefs,
+            ) {
+                override fun create(scope: CoroutineScope): NextEpisodeController =
+                    nextEpisodeController ?: super.create(scope)
+            }
         val vm =
             PlayerViewModel(
                 holder = h,
@@ -128,6 +144,7 @@ class PlayerViewModelTest {
                 subtitleFileImporter = importer,
                 saveProgress = fakeSaveProgress,
                 progressRepository = fakeProgressRepository,
+                nextEpisodeControllerFactory = nextFactory,
                 ioDispatcher = Dispatchers.Unconfined,
                 mainDispatcher = testDispatcher,
             )
@@ -2696,6 +2713,12 @@ class PlayerViewModelTest {
                     .SubtitleStyle(),
             )
         override val subtitleStyle: Flow<com.nexus.stream.domain.model.SubtitleStyle> = subtitleStyleFlow
+        val autoPlayNextFlow = MutableStateFlow(true)
+        override val autoPlayNext: Flow<Boolean> = autoPlayNextFlow
+
+        override suspend fun setAutoPlayNext(enabled: Boolean) {
+            autoPlayNextFlow.value = enabled
+        }
 
         override suspend fun setQuickPlay(enabled: Boolean) {
             // No-op for tests
@@ -3005,4 +3028,78 @@ class PlayerViewModelTest {
         assertEquals("tt456|tt456", movieSameKey1)
         assertEquals(movieSameKey1, movieSameKey2)
     }
+
+    @Test
+    fun PB1_playerViewModel_forwardsSnapshotsAndFirstPlaying_toTheController() =
+        runTest(testDispatcher) {
+            val selection =
+                PlaybackSelection(
+                    title = "Test",
+                    source = PlaybackSource.Direct("https://example.com/stream.mp4"),
+                    type = "series",
+                    metaId = "tt1",
+                    videoId = "tt1:1:1",
+                )
+            holder.start(selection)
+
+            val fakeNextCtrl = mockk<NextEpisodeController>(relaxed = true)
+            every { fakeNextCtrl.state } returns MutableStateFlow(NextEpisodeState())
+            every { fakeNextCtrl.effects } returns emptyFlow<NextEpisodeEffect>()
+
+            val vm = createViewModel(nextEpisodeController = fakeNextCtrl)
+            advanceUntilIdle()
+            val ctrl = fakeFactory.createdControllers.first()
+
+            ctrl.snapshotFlow.value = PlayerSnapshot(isPlaying = true, durationMs = 600_000L, positionMs = 10_000L)
+            runCurrent()
+
+            coVerify(exactly = 1) { fakeNextCtrl.onPlaybackStarted(selection) }
+            coVerify(atLeast = 1) { fakeNextCtrl.onSnapshot(600_000L, 10_000L, false) }
+        }
+
+    @Test
+    fun PB2_playerViewModel_effectsReachTheScreen() =
+        runTest(testDispatcher) {
+            val fakeNextCtrl = mockk<NextEpisodeController>(relaxed = true)
+            val effectsFlow = MutableSharedFlow<NextEpisodeEffect>()
+            every { fakeNextCtrl.state } returns MutableStateFlow(NextEpisodeState())
+            every { fakeNextCtrl.effects } returns effectsFlow
+
+            val vm = createViewModel(nextEpisodeController = fakeNextCtrl)
+            advanceUntilIdle()
+            val collectedEffects = mutableListOf<PlayerEffect>()
+            val job = launch { vm.effects.collect { collectedEffects.add(it) } }
+            runCurrent()
+
+            effectsFlow.emit(NextEpisodeEffect.SwitchToNext)
+            runCurrent()
+
+            val req = PlaybackRequest(type = "series", metaId = "s1", videoId = "s1:1:2", title = "Ep 2")
+            effectsFlow.emit(NextEpisodeEffect.ChooseNextSource(req))
+            runCurrent()
+
+            assertEquals(2, collectedEffects.size)
+            assertEquals(PlayerEffect.SwitchToNext, collectedEffects[0])
+            assertEquals(PlayerEffect.ChooseNextSource(req), collectedEffects[1])
+            job.cancel()
+        }
+
+    @Test
+    fun PB3_playerViewModel_clearedCancelsTheController() =
+        runTest(testDispatcher) {
+            val fakeNextCtrl = mockk<NextEpisodeController>(relaxed = true)
+            every { fakeNextCtrl.state } returns MutableStateFlow(NextEpisodeState())
+            every { fakeNextCtrl.effects } returns emptyFlow<NextEpisodeEffect>()
+
+            val vm = createViewModel(nextEpisodeController = fakeNextCtrl)
+            val mockTracker = mockk<PlaybackProgressTracker>(relaxed = true)
+            vm.progressTracker = mockTracker
+
+            vm.onCleared()
+
+            verifyOrder {
+                mockTracker.flush()
+                fakeNextCtrl.clear()
+            }
+        }
 }

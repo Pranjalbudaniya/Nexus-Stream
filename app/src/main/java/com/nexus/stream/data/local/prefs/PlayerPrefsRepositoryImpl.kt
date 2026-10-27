@@ -51,6 +51,12 @@ class PlayerPrefsRepositoryImpl
                     prefs[KEY_QUICK_PLAY] ?: false
                 }.distinctUntilChanged()
 
+        override val autoPlayNext: Flow<Boolean> =
+            safeData
+                .map { prefs ->
+                    prefs[KEY_AUTO_PLAY_NEXT] ?: true
+                }.distinctUntilChanged()
+
         override val sort: Flow<StreamSort> =
             safeData
                 .map { prefs ->
@@ -241,8 +247,15 @@ class PlayerPrefsRepositoryImpl
             }
         }
 
+        override suspend fun setAutoPlayNext(enabled: Boolean) {
+            dataStore.edit { prefs ->
+                prefs[KEY_AUTO_PLAY_NEXT] = enabled
+            }
+        }
+
         companion object {
             val KEY_QUICK_PLAY = booleanPreferencesKey("quick_play")
+            val KEY_AUTO_PLAY_NEXT = booleanPreferencesKey("auto_play_next")
             val KEY_STREAM_SORT = stringPreferencesKey("stream_sort")
             val KEY_PREFERRED_LANGUAGE = stringPreferencesKey("preferred_language")
             val KEY_PREFERRED_QUALITY = intPreferencesKey("preferred_quality")
