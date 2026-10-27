@@ -3,6 +3,7 @@ package com.nexus.stream.presentation.feature.player
 import com.nexus.stream.domain.model.PlaybackSource
 import com.nexus.stream.domain.model.SourceFingerprint
 import com.nexus.stream.domain.usecase.SubtitleHints
+import com.nexus.stream.presentation.common.PlaybackRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,6 +27,7 @@ data class PlaybackSelection(
     val posterUrl: String? = null,
     val metaName: String? = null,
     val sourceFingerprint: SourceFingerprint? = null,
+    val request: PlaybackRequest? = null,
 ) {
     override fun toString(): String = "PlaybackSelection(title=$title, type=$type, metaId=$metaId)"
 }

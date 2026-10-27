@@ -212,4 +212,14 @@ class StartPlaybackTest {
             val srcNoHint = (resNoHint as StartResult.Started).selection.source as PlaybackSource.Torrent
             assertNull(srcNoHint.request.episodeHint)
         }
+
+    @Test
+    fun NG7_startPlayback_setsTheRequestOnTheSelection() =
+        runTest {
+            val stream = createParsedStream("d1", StreamSource.Url("https://example.com/video.mp4", emptyMap()))
+            val useCase = StartPlayback(defaultCapabilities, holder)
+            val result = useCase(sampleRequest, stream)
+            assertTrue(result is StartResult.Started)
+            assertEquals(sampleRequest, (result as StartResult.Started).selection.request)
+        }
 }

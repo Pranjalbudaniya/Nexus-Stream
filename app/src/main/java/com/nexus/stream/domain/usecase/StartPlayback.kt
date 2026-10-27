@@ -115,5 +115,6 @@ class StartPlayback
                 posterUrl = request?.posterUrl ?: request?.logoUrl,
                 metaName = request?.metaName,
                 sourceFingerprint = fingerprintOf(stream),
+                request = request,
             )
     }

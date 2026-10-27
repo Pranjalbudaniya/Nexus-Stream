@@ -260,4 +260,30 @@ class SameSourceFinderTest {
             val result = finder.find(sampleRequest, fingerprint)
             assertEquals(SameSourceResult.NotFound(SameSourceReason.NO_MATCH), result)
         }
+
+    @Test
+    fun NG6_sameSource_ignoresNotOkAndExternalStreams() =
+        runTest {
+            val addonUrl = "https://addon1.com/manifest.json"
+            every { addonRepository.observeActive() } returns
+                flowOf(listOf(createTestAddon("addon-1", "Addon 1", addonUrl)))
+            val fingerprint = fp(addons = listOf(hashAddonKey(addonUrl)), binge = "g")
+
+            val externalStream = cand(key = "ext", addon = addonUrl, binge = "g", external = true)
+            val notOkStream = cand(key = "bad", addon = addonUrl, binge = "g", ok = false)
+
+            every { streamRepository.streams(sampleRequest.type, sampleRequest.videoId, false, null) } returns
+                flowOf(
+                    StreamsState(
+                        items = listOf(externalStream, notOkStream),
+                        answered = 1,
+                        total = 1,
+                        failures = emptyList(),
+                        done = true,
+                    ),
+                )
+
+            val result = finder.find(sampleRequest, fingerprint)
+            assertEquals(SameSourceResult.NotFound(SameSourceReason.NO_MATCH), result)
+        }
 }

@@ -180,4 +180,57 @@ class NextEpisodeTest {
         assertEquals("tt1:1:3", nextFromResolver)
         assertEquals(nextFromResolver, nextFromFinder)
     }
+
+    @Test
+    fun NG1_lastOfSeason_firstOfNextSeason() {
+        val videos = (1..8).map { video(1, it) } + (1..3).map { video(2, it) }
+        val next = nextRegularEpisode(videos, "tt1:1:8", now)
+        assertNotNull(next)
+        assertEquals("tt1:2:1", next?.id)
+        assertEquals(2, next?.season)
+        assertEquals(1, next?.episode)
+    }
+
+    @Test
+    fun NG2_blankAndGarbageReleased_countAsReleased() {
+        val v1 = video(1, 1, released = past)
+        val v2 = video(1, 2, released = "")
+        val v3 = video(1, 3, released = "garbage-date-format")
+        val videos = listOf(v1, v2, v3)
+
+        val nextFromV1 = nextRegularEpisode(videos, "tt1:1:1", now)
+        assertEquals("tt1:1:2", nextFromV1?.id)
+
+        val nextFromV2 = nextRegularEpisode(videos, "tt1:1:2", now)
+        assertEquals("tt1:1:3", nextFromV2?.id)
+    }
+
+    @Test
+    fun NG3_resolverAndNextShareTheOrdering() {
+        val videos =
+            listOf(
+                video(2, 2),
+                video(1, 1),
+                video(2, 1),
+                video(1, 3),
+                video(1, 2),
+            )
+        val progressWatchedE2 =
+            mapOf(
+                "tt1:1:2" to
+                    EpisodeProgress(
+                        videoId = "tt1:1:2",
+                        positionMs = 60_000L,
+                        durationMs = 60_000L,
+                        watched = true,
+                        updatedAt = 1000L,
+                    ),
+            )
+        val intent = resolvePlayIntent("series", "tt1", videos, progressWatchedE2, now)
+        assertTrue(intent is PlayIntent.Next)
+        val nextFromResolver = (intent as PlayIntent.Next).videoId
+
+        val nextFromFinder = nextRegularEpisode(videos, "tt1:1:2", now)?.id
+        assertEquals(nextFromResolver, nextFromFinder)
+    }
 }
