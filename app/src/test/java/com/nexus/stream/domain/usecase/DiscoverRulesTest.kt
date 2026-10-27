@@ -1,9 +1,11 @@
 package com.nexus.stream.domain.usecase
 
+import com.nexus.stream.domain.model.FilterControl
 import com.nexus.stream.domain.model.GenreKind
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.model.TypeDisplay
+import com.nexus.stream.domain.model.filterControlOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -68,6 +70,22 @@ class DiscoverRulesTest {
     fun GT2_otherTypes_areCapitalisedText() {
         assertEquals(TypeDisplay.Custom("Tv"), typeDisplay("tv"))
         assertEquals(TypeDisplay.Custom("Channel"), typeDisplay("channel"))
+    }
+
+    @Test
+    fun FC1_oneEntry_isText() {
+        assertEquals(FilterControl.Text, filterControlOf(1))
+    }
+
+    @Test
+    fun FC2_twoOrMoreEntries_isDropdown() {
+        assertEquals(FilterControl.Dropdown, filterControlOf(2))
+        assertEquals(FilterControl.Dropdown, filterControlOf(7))
+    }
+
+    @Test
+    fun FC3_noEntries_isHidden() {
+        assertEquals(FilterControl.Hidden, filterControlOf(0))
     }
 
     private fun createMeta(

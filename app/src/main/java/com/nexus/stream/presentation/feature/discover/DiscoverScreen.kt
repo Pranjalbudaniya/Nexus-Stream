@@ -3,16 +3,17 @@ package com.nexus.stream.presentation.feature.discover
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -20,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
@@ -65,7 +65,6 @@ fun DiscoverScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiscoverScreenContent(
     uiState: DiscoverUiState,
@@ -77,22 +76,18 @@ fun DiscoverScreenContent(
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.discover_title),
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-            )
-        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         NexusRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { onEvent(DiscoverEvent.Refresh) },
-            modifier = Modifier.padding(padding),
+            modifier =
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .padding(top = statusBarTop + NexusTheme.spacing.sm),
         ) {
             when (uiState.phase) {
                 is DiscoverPhase.NoAddons -> {
@@ -113,23 +108,16 @@ fun DiscoverScreenContent(
 
                 else -> {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        if (uiState.types.isNotEmpty()) {
-                            TypeChipsRow(
-                                types = uiState.types,
-                                selectedType = uiState.selectedType,
-                                onSelectType = { onEvent(DiscoverEvent.SelectType(it)) },
-                            )
-                        }
-
-                        if (uiState.catalogs.isNotEmpty() || uiState.genreUi != null) {
-                            FiltersRow(
-                                catalogs = uiState.catalogs,
-                                selectedCatalogKey = uiState.selectedCatalogKey,
-                                onSelectCatalog = { onEvent(DiscoverEvent.SelectCatalog(it)) },
-                                genreUi = uiState.genreUi,
-                                onSelectGenre = { onEvent(DiscoverEvent.SelectGenre(it)) },
-                            )
-                        }
+                        FiltersRow(
+                            types = uiState.types,
+                            selectedType = uiState.selectedType,
+                            onSelectType = { onEvent(DiscoverEvent.SelectType(it)) },
+                            catalogs = uiState.catalogs,
+                            selectedCatalogKey = uiState.selectedCatalogKey,
+                            onSelectCatalog = { onEvent(DiscoverEvent.SelectCatalog(it)) },
+                            genreUi = uiState.genreUi,
+                            onSelectGenre = { onEvent(DiscoverEvent.SelectGenre(it)) },
+                        )
 
                         DiscoverPhaseBody(
                             uiState = uiState,
@@ -288,21 +276,9 @@ private val previewBaseState =
     )
 
 @Preview(name = "DiscoverScreen - Content Light")
-@Composable
-internal fun DiscoverScreenContentLightPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Content, items = previewItems),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
 @Preview(name = "DiscoverScreen - Content Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DiscoverScreenContentDarkPreview() {
+internal fun DiscoverScreenContentPreview() {
     NexusTheme {
         DiscoverScreenContent(
             uiState = previewBaseState.copy(phase = DiscoverPhase.Content, items = previewItems),
@@ -314,21 +290,9 @@ internal fun DiscoverScreenContentDarkPreview() {
 }
 
 @Preview(name = "DiscoverScreen - Loading Light")
-@Composable
-internal fun DiscoverScreenLoadingLightPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Loading),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
 @Preview(name = "DiscoverScreen - Loading Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DiscoverScreenLoadingDarkPreview() {
+internal fun DiscoverScreenLoadingPreview() {
     NexusTheme {
         DiscoverScreenContent(
             uiState = previewBaseState.copy(phase = DiscoverPhase.Loading),
@@ -340,21 +304,9 @@ internal fun DiscoverScreenLoadingDarkPreview() {
 }
 
 @Preview(name = "DiscoverScreen - Error Light")
-@Composable
-internal fun DiscoverScreenErrorLightPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Error(AppError.Network)),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
 @Preview(name = "DiscoverScreen - Error Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DiscoverScreenErrorDarkPreview() {
+internal fun DiscoverScreenErrorPreview() {
     NexusTheme {
         DiscoverScreenContent(
             uiState = previewBaseState.copy(phase = DiscoverPhase.Error(AppError.Network)),
@@ -366,8 +318,9 @@ internal fun DiscoverScreenErrorDarkPreview() {
 }
 
 @Preview(name = "DiscoverScreen - Empty Light")
+@Preview(name = "DiscoverScreen - Empty Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DiscoverScreenEmptyLightPreview() {
+internal fun DiscoverScreenEmptyPreview() {
     NexusTheme {
         DiscoverScreenContent(
             uiState = previewBaseState.copy(phase = DiscoverPhase.Empty),
@@ -378,12 +331,32 @@ internal fun DiscoverScreenEmptyLightPreview() {
     }
 }
 
-@Preview(name = "DiscoverScreen - Empty Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "DiscoverScreen - 3 Controls Light")
 @Composable
-internal fun DiscoverScreenEmptyDarkPreview() {
+internal fun DiscoverScreenThreeControlsPreview() {
     NexusTheme {
         DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Empty),
+            uiState = previewBaseState.copy(phase = DiscoverPhase.Content, items = previewItems),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "DiscoverScreen - Text Only Controls Light")
+@Composable
+internal fun DiscoverScreenTextOnlyControlsPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                previewBaseState.copy(
+                    types = listOf("movie"),
+                    catalogs = listOf(previewCatalogs.first()),
+                    genreUi = null,
+                    phase = DiscoverPhase.Content,
+                    items = previewItems,
+                ),
             onEvent = {},
             onItemClick = { _, _ -> },
             onNavigateToAddons = {},

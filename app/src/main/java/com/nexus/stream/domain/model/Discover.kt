@@ -35,3 +35,16 @@ sealed interface TypeDisplay {
         val label: String,
     ) : TypeDisplay
 }
+
+enum class FilterControl {
+    Hidden,
+    Text,
+    Dropdown,
+}
+
+fun filterControlOf(entryCount: Int): FilterControl =
+    when {
+        entryCount <= 0 -> FilterControl.Hidden
+        entryCount == 1 -> FilterControl.Text
+        else -> FilterControl.Dropdown
+    }

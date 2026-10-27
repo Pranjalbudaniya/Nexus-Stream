@@ -8,12 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -21,11 +22,12 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -34,17 +36,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.DiscoverCatalog
+import com.nexus.stream.domain.model.FilterControl
 import com.nexus.stream.domain.model.GenreKind
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.model.TypeDisplay
+import com.nexus.stream.domain.model.filterControlOf
 import com.nexus.stream.domain.usecase.typeDisplay
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
@@ -57,57 +59,26 @@ import com.nexus.stream.presentation.theme.NexusTheme
 const val DISCOVER_PREFETCH_DISTANCE = 8
 const val DISCOVER_SKELETON_COUNT = 12
 
-private val CARD_POSTER_WIDTH = 120.dp
-private val CARD_POSTER_HEIGHT = 180.dp
-private val CARD_LANDSCAPE_WIDTH = 200.dp
-private val CARD_LANDSCAPE_HEIGHT = 112.dp
+private val DISCOVER_CHIP_MIN_HEIGHT = 36.dp
+private val DISCOVER_CHIP_TOUCH_TARGET = 40.dp
+private val DISCOVER_CHIP_MAX_WIDTH = 200.dp
+private val DISCOVER_GRID_MIN_POSTER_DP = 100.dp
+private val DISCOVER_GRID_MIN_LANDSCAPE_DP = 150.dp
 
 @Composable
-fun TypeChipsRow(
+private fun discoverTypeText(type: String): String =
+    when (val display = typeDisplay(type)) {
+        is TypeDisplay.Movie -> stringResource(R.string.discover_type_movie)
+        is TypeDisplay.Series -> stringResource(R.string.discover_type_series)
+        is TypeDisplay.Custom -> display.label
+    }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FiltersRow(
     types: List<String>,
     selectedType: String?,
     onSelectType: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val scrollState = rememberScrollState()
-    val rowDescription = stringResource(R.string.discover_cd_type_row)
-
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .semantics { contentDescription = rowDescription }
-                .padding(horizontal = NexusTheme.spacing.md, vertical = NexusTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        types.forEach { type ->
-            val isSelected = type.equals(selectedType, ignoreCase = true)
-            val label =
-                when (val display = typeDisplay(type)) {
-                    is TypeDisplay.Movie -> stringResource(R.string.discover_type_movie)
-                    is TypeDisplay.Series -> stringResource(R.string.discover_type_series)
-                    is TypeDisplay.Custom -> display.label
-                }
-
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelectType(type) },
-                label = { Text(label) },
-                shape = NexusTheme.shapes.chip,
-                colors =
-                    FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-fun FiltersRow(
     catalogs: List<DiscoverCatalog>,
     selectedCatalogKey: String?,
     onSelectCatalog: (String) -> Unit,
@@ -115,21 +86,105 @@ fun FiltersRow(
     onSelectGenre: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = NexusTheme.spacing.md, vertical = NexusTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
+    val typeControl = filterControlOf(types.size)
+    val catalogControl = filterControlOf(catalogs.size)
+    val genreEntryCount =
+        if (genreUi == null) {
+            0
+        } else if (genreUi.isRequired) {
+            genreUi.options.size
+        } else {
+            genreUi.options.size + 1
+        }
+    val genreControl = filterControlOf(genreEntryCount)
+
+    if (typeControl == FilterControl.Hidden &&
+        catalogControl == FilterControl.Hidden &&
+        genreControl == FilterControl.Hidden
     ) {
-        if (catalogs.size == 1) {
+        return
+    }
+
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides DISCOVER_CHIP_TOUCH_TARGET) {
+        Row(
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = NexusTheme.spacing.md, vertical = NexusTheme.spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TypeFilterControl(typeControl, types, selectedType, onSelectType)
+            CatalogFilterControl(catalogControl, catalogs, selectedCatalogKey, onSelectCatalog)
+            GenreFilterControl(genreControl, genreUi, onSelectGenre)
+        }
+    }
+}
+
+@Composable
+private fun TypeFilterControl(
+    control: FilterControl,
+    types: List<String>,
+    selectedType: String?,
+    onSelectType: (String) -> Unit,
+) {
+    when (control) {
+        FilterControl.Hidden -> {}
+
+        FilterControl.Text -> {
+            Text(
+                text = discoverTypeText(types.first()),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        FilterControl.Dropdown -> {
+            val currentType = types.find { it.equals(selectedType, ignoreCase = true) } ?: types.first()
+            val options =
+                types.map { type ->
+                    DropdownOption(
+                        value = type,
+                        label = discoverTypeText(type),
+                        selected = type.equals(selectedType, ignoreCase = true),
+                    )
+                }
+            FilterDropdownChip(
+                selectedLabel = discoverTypeText(currentType),
+                isNonDefault = false,
+                options = options,
+                onSelect = { type ->
+                    if (type != null && !type.equals(selectedType, ignoreCase = true)) {
+                        onSelectType(type)
+                    }
+                },
+                modifier = Modifier.widthIn(max = DISCOVER_CHIP_MAX_WIDTH),
+                minHeight = DISCOVER_CHIP_MIN_HEIGHT,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatalogFilterControl(
+    control: FilterControl,
+    catalogs: List<DiscoverCatalog>,
+    selectedCatalogKey: String?,
+    onSelectCatalog: (String) -> Unit,
+) {
+    when (control) {
+        FilterControl.Hidden -> {}
+
+        FilterControl.Text -> {
             Text(
                 text = catalogs.first().title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else if (catalogs.size >= 2) {
+        }
+
+        FilterControl.Dropdown -> {
             val currentCatalog = catalogs.find { it.key == selectedCatalogKey } ?: catalogs.first()
             val options =
                 catalogs.map { catalog ->
@@ -139,16 +194,49 @@ fun FiltersRow(
                         selected = catalog.key == selectedCatalogKey,
                     )
                 }
-
             FilterDropdownChip(
                 selectedLabel = currentCatalog.title,
-                isNonDefault = selectedCatalogKey != catalogs.firstOrNull()?.key,
+                isNonDefault = false,
                 options = options,
-                onSelect = { key -> if (key != null) onSelectCatalog(key) },
+                onSelect = { key ->
+                    if (key != null && key != selectedCatalogKey) {
+                        onSelectCatalog(key)
+                    }
+                },
+                modifier = Modifier.widthIn(max = DISCOVER_CHIP_MAX_WIDTH),
+                minHeight = DISCOVER_CHIP_MIN_HEIGHT,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenreFilterControl(
+    control: FilterControl,
+    genreUi: DiscoverGenreUi?,
+    onSelectGenre: (String?) -> Unit,
+) {
+    if (genreUi == null) return
+    when (control) {
+        FilterControl.Hidden -> {}
+
+        FilterControl.Text -> {
+            val label =
+                if (genreUi.isRequired) {
+                    genreUi.options.first()
+                } else if (genreUi.kind == GenreKind.YEAR) {
+                    stringResource(R.string.discover_year_all)
+                } else {
+                    stringResource(R.string.discover_genre_all)
+                }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        if (genreUi != null) {
+        FilterControl.Dropdown -> {
             val isYear = genreUi.kind == GenreKind.YEAR
             val allLabel =
                 if (isYear) {
@@ -157,10 +245,10 @@ fun FiltersRow(
                     stringResource(R.string.discover_genre_all)
                 }
 
-            val options =
+            val options: List<DropdownOption<String?>> =
                 if (genreUi.isRequired) {
                     genreUi.options.map { option ->
-                        DropdownOption(
+                        DropdownOption<String?>(
                             value = option,
                             label = option,
                             selected = option == genreUi.selectedGenre,
@@ -168,14 +256,14 @@ fun FiltersRow(
                     }
                 } else {
                     listOf(
-                        DropdownOption<String>(
+                        DropdownOption<String?>(
                             value = null,
                             label = allLabel,
                             selected = genreUi.selectedGenre == null,
                         ),
                     ) +
                         genreUi.options.map { option ->
-                            DropdownOption(
+                            DropdownOption<String?>(
                                 value = option,
                                 label = option,
                                 selected = option == genreUi.selectedGenre,
@@ -184,18 +272,15 @@ fun FiltersRow(
                 }
 
             val selectedLabel = genreUi.selectedGenre ?: allLabel
-            val isNonDefault =
-                if (genreUi.isRequired) {
-                    genreUi.selectedGenre != genreUi.options.firstOrNull()
-                } else {
-                    genreUi.selectedGenre != null
-                }
+            val isNonDefault = genreUi.selectedGenre != null
 
             FilterDropdownChip(
                 selectedLabel = selectedLabel,
                 isNonDefault = isNonDefault,
                 options = options,
                 onSelect = onSelectGenre,
+                modifier = Modifier.widthIn(max = DISCOVER_CHIP_MAX_WIDTH),
+                minHeight = DISCOVER_CHIP_MIN_HEIGHT,
             )
         }
     }
@@ -215,9 +300,9 @@ fun DiscoverGrid(
 ) {
     val minSize =
         if (gridShape == PosterShape.LANDSCAPE) {
-            CARD_LANDSCAPE_WIDTH
+            DISCOVER_GRID_MIN_LANDSCAPE_DP
         } else {
-            CARD_POSTER_WIDTH
+            DISCOVER_GRID_MIN_POSTER_DP
         }
 
     val lastVisibleItemIndex by remember {
@@ -245,22 +330,18 @@ fun DiscoverGrid(
                 bottom = NexusTheme.spacing.lg,
             ),
         horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
     ) {
         items(
             items = items,
             key = { it.id },
         ) { item ->
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                PosterCard(
-                    item = item,
-                    onClick = { onItemClick(item.type, item.id) },
-                    mark = posterMarks[item.id],
-                )
-            }
+            PosterCard(
+                item = item,
+                onClick = { onItemClick(item.type, item.id) },
+                mark = posterMarks[item.id],
+                fillWidth = true,
+            )
         }
 
         if (footer !is DiscoverFooter.None) {
@@ -276,15 +357,22 @@ fun SkeletonGrid(
     gridShape: PosterShape,
     modifier: Modifier = Modifier,
 ) {
-    val (width, height) =
+    val minSize =
         if (gridShape == PosterShape.LANDSCAPE) {
-            CARD_LANDSCAPE_WIDTH to CARD_LANDSCAPE_HEIGHT
+            DISCOVER_GRID_MIN_LANDSCAPE_DP
         } else {
-            CARD_POSTER_WIDTH to CARD_POSTER_HEIGHT
+            DISCOVER_GRID_MIN_POSTER_DP
+        }
+
+    val aspectRatio =
+        when (gridShape) {
+            PosterShape.POSTER -> 120f / 180f
+            PosterShape.SQUARE -> 1f
+            PosterShape.LANDSCAPE -> 200f / 112f
         }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = width),
+        columns = GridCells.Adaptive(minSize = minSize),
         modifier = modifier.fillMaxSize(),
         userScrollEnabled = false,
         contentPadding =
@@ -294,22 +382,17 @@ fun SkeletonGrid(
                 bottom = NexusTheme.spacing.lg,
             ),
         horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.md),
     ) {
         items(DISCOVER_SKELETON_COUNT) {
             Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .width(width)
-                            .height(height)
-                            .clip(NexusTheme.shapes.poster)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                )
-            }
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(aspectRatio)
+                        .clip(NexusTheme.shapes.poster)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
         }
     }
 }

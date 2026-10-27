@@ -168,7 +168,6 @@
     <!-- Placeholders & Screens -->
     <string name="home_title">Nexus Stream</string>
     <string name="home_placeholder">Home</string>
-    <string name="discover_title">Discover</string>
     <string name="library_title">Library</string>
     <string name="library_placeholder">Library</string>
     <string name="downloads_title">Downloads</string>
@@ -187,9 +186,6 @@
     <string name="discover_open_addons">Open addons</string>
     <string name="discover_more_failed">Couldn\'t load more.</string>
     <string name="discover_refresh_failed">Couldn\'t refresh. Showing what you had.</string>
-    <string name="discover_cd_type_row">Content types</string>
-    <string name="discover_cd_catalog_chip">Select catalog</string>
-    <string name="discover_cd_genre_chip">Select genre</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
