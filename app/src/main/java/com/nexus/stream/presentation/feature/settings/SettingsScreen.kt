@@ -143,6 +143,36 @@ internal fun SettingsContent(
                 seekStepSeconds = uiState.seekStepSeconds,
                 onClick = { showSkipLengthDialog = true },
             )
+            NexusCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(spacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f).padding(end = spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(spacing.xxs),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_player_auto_play_next),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_player_auto_play_next_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = uiState.autoPlayNext,
+                        onCheckedChange = { onEvent(SettingsEvent.SetAutoPlayNext(it)) },
+                    )
+                }
+            }
             SubtitleSettingsSection(
                 uiState = uiState,
                 onEvent = onEvent,

@@ -25,6 +25,7 @@ data class SettingsUiState(
     val preferredQuality: Int? = null,
     val hideCam: Boolean = false,
     val seekStepSeconds: Int = 10,
+    val autoPlayNext: Boolean = true,
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
@@ -32,6 +33,10 @@ data class SettingsUiState(
 
 sealed interface SettingsEvent {
     data class SetFamilyMode(
+        val enabled: Boolean,
+    ) : SettingsEvent
+
+    data class SetAutoPlayNext(
         val enabled: Boolean,
     ) : SettingsEvent
 
@@ -90,6 +95,14 @@ private data class PlayerSettings(
     val preferredQuality: Int?,
     val hideCam: Boolean,
     val seekStepSeconds: Int,
+    val autoPlayNext: Boolean,
+)
+
+private data class GeneralPlayerPrefs(
+    val quickPlay: Boolean,
+    val preferredLanguage: String?,
+    val preferredQuality: Int?,
+    val hideCam: Boolean,
 )
 
 private data class SubtitlePrefs(
@@ -106,15 +119,30 @@ class SettingsViewModel
         private val playerPrefsRepository: PlayerPrefsRepository,
         addonRepository: AddonRepository,
     ) : ViewModel() {
-        private val playerSettingsFlow =
+        private val generalPlayerFlow =
             combine(
                 playerPrefsRepository.quickPlay,
                 playerPrefsRepository.preferredLanguage,
                 playerPrefsRepository.preferredQuality,
                 playerPrefsRepository.hideCam,
+            ) { quickPlay, lang, quality, hideCam ->
+                GeneralPlayerPrefs(quickPlay, lang, quality, hideCam)
+            }
+
+        private val playerSettingsFlow =
+            combine(
+                generalPlayerFlow,
                 playerPrefsRepository.seekStepSeconds,
-            ) { quickPlay, lang, quality, hideCam, seekStepSeconds ->
-                PlayerSettings(quickPlay, lang, quality, hideCam, seekStepSeconds)
+                playerPrefsRepository.autoPlayNext,
+            ) { general, seekStepSeconds, autoPlayNext ->
+                PlayerSettings(
+                    quickPlay = general.quickPlay,
+                    preferredLanguage = general.preferredLanguage,
+                    preferredQuality = general.preferredQuality,
+                    hideCam = general.hideCam,
+                    seekStepSeconds = seekStepSeconds,
+                    autoPlayNext = autoPlayNext,
+                )
             }
 
         private val subtitlePrefsFlow =
@@ -142,6 +170,7 @@ class SettingsViewModel
                     preferredQuality = player.preferredQuality,
                     hideCam = player.hideCam,
                     seekStepSeconds = player.seekStepSeconds,
+                    autoPlayNext = player.autoPlayNext,
                     preferredAudioLanguage = subPrefs.preferredAudioLanguage,
                     preferredSubtitleLanguage = subPrefs.preferredSubtitleLanguage,
                     subtitleStyle = subPrefs.subtitleStyle,
@@ -187,6 +216,11 @@ class SettingsViewModel
 
                 is SettingsEvent.SetSeekStepSeconds -> {
                     viewModelScope.launch { playerPrefsRepository.setSeekStepSeconds(event.seconds) }
+                    true
+                }
+
+                is SettingsEvent.SetAutoPlayNext -> {
+                    viewModelScope.launch { playerPrefsRepository.setAutoPlayNext(event.enabled) }
                     true
                 }
 

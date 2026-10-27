@@ -276,7 +276,7 @@ class NextEpisodeControllerTest {
     @Test
     fun NV8_searching_tap_thenNotFound_chooseSource() =
         runTest {
-            var answer: SameSourceResult = SameSourceResult.NotFound(SameSourceReason.TIMEOUT)
+            val answer: SameSourceResult = SameSourceResult.NotFound(SameSourceReason.TIMEOUT)
             coEvery { sameSource.find(any(), any()) } coAnswers {
                 kotlinx.coroutines.delay(100L)
                 answer

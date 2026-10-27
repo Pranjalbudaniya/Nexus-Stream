@@ -49,6 +49,7 @@ class SettingsViewModelTest {
             com.nexus.stream.domain.model
                 .SubtitleStyle(),
         )
+    private val autoPlayNextFlow = MutableStateFlow(true)
     private val addonsFlow = MutableStateFlow<List<Addon>>(emptyList())
 
     private val adultAddon =
@@ -121,6 +122,7 @@ class SettingsViewModelTest {
         every { playerPrefsRepository.preferredAudioLanguage } returns preferredAudioLanguageFlow
         every { playerPrefsRepository.preferredSubtitleLanguage } returns preferredSubtitleLanguageFlow
         every { playerPrefsRepository.subtitleStyle } returns subtitleStyleFlow
+        every { playerPrefsRepository.autoPlayNext } returns autoPlayNextFlow
         every { addonRepository.observeAll() } returns addonsFlow
     }
 
@@ -326,5 +328,42 @@ class SettingsViewModelTest {
             assertEquals(SubtitleBackground.NONE, viewModel.uiState.value.subtitleStyle.background)
             assertEquals(SubtitleEdge.OUTLINE, viewModel.uiState.value.subtitleStyle.edge)
             assertEquals(false, viewModel.uiState.value.subtitleStyle.bold)
+        }
+
+    @Test
+    fun AP3_settingsViewModel_toggleCallsTheRepository() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.autoPlayNext)
+
+            viewModel.onEvent(SettingsEvent.SetAutoPlayNext(false))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { playerPrefsRepository.setAutoPlayNext(false) }
+
+            autoPlayNextFlow.value = false
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.autoPlayNext)
+        }
+
+    @Test
+    fun AP4_settingsExistingRows_unchanged() =
+        runTest {
+            val viewModel = SettingsViewModel(contentPrefsRepository, playerPrefsRepository, addonRepository)
+            advanceUntilIdle()
+
+            viewModel.onEvent(SettingsEvent.SetQuickPlay(true))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { playerPrefsRepository.setQuickPlay(true) }
+
+            viewModel.onEvent(SettingsEvent.SetHideCam(true))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { playerPrefsRepository.setHideCam(true) }
+
+            viewModel.onEvent(SettingsEvent.SetSeekStepSeconds(30))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { playerPrefsRepository.setSeekStepSeconds(30) }
         }
 }

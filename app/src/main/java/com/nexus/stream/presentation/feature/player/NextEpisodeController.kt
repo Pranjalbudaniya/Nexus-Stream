@@ -63,7 +63,6 @@ open class NextEpisodeController(
     private val startPlayback: StartPlayback,
     private val autoPlayNext: Flow<Boolean>,
     private val scope: CoroutineScope,
-    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow(NextEpisodeState())
     open val state: StateFlow<NextEpisodeState> = _state.asStateFlow()

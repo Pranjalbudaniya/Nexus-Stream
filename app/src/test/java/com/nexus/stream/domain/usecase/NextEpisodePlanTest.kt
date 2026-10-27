@@ -8,32 +8,29 @@ import org.junit.Test
 
 class NextEpisodePlanTest {
     private fun input(
-        hasNext: Boolean = true,
         durationMs: Long = 600_000L,
         positionMs: Long = 500_000L,
-        ended: Boolean = false,
-        dismissed: Boolean = false,
         prefetch: PrefetchState = PrefetchState.FOUND,
     ) = NextPlanInput(
-        hasNext = hasNext,
+        hasNext = true,
         durationMs = durationMs,
         positionMs = positionMs,
-        ended = ended,
-        dismissed = dismissed,
+        ended = false,
+        dismissed = false,
         prefetch = prefetch,
     )
 
     @Test
     fun NP1_noNextEpisode_isNone() {
-        val i = input(hasNext = false, positionMs = 590_000L)
+        val i = input(positionMs = 590_000L).copy(hasNext = false)
         assertEquals(NextUi.None, nextUi(i))
     }
 
     @Test
     fun NP2_durationBelowFiveMinutes_isNone_evenAtTheEnd() {
         val duration = 299_999L
-        val i1 = input(durationMs = duration, positionMs = 280_000L, ended = false)
-        val i2 = input(durationMs = duration, positionMs = 299_999L, ended = true)
+        val i1 = input(durationMs = duration, positionMs = 280_000L)
+        val i2 = input(durationMs = duration, positionMs = 299_999L).copy(ended = true)
         assertEquals(NextUi.None, nextUi(i1))
         assertEquals(NextUi.None, nextUi(i2))
     }
@@ -90,7 +87,8 @@ class NextEpisodePlanTest {
         val duration = 600_000L
         val position = duration - 20_000L
         val dismissedInput =
-            input(durationMs = duration, positionMs = position, dismissed = true, prefetch = PrefetchState.FOUND)
+            input(durationMs = duration, positionMs = position, prefetch = PrefetchState.FOUND)
+                .copy(dismissed = true)
 
         assertEquals(NextUi.None, nextUi(dismissedInput))
     }
@@ -106,7 +104,8 @@ class NextEpisodePlanTest {
     fun NP8_ended_showsEvenWithZeroRemaining() {
         val duration = 600_000L
         val endedInput =
-            input(durationMs = duration, positionMs = duration, ended = true, prefetch = PrefetchState.FOUND)
+            input(durationMs = duration, positionMs = duration, prefetch = PrefetchState.FOUND)
+                .copy(ended = true)
 
         assertEquals(NextUi.Ready, nextUi(endedInput))
     }

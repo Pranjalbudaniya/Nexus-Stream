@@ -3,6 +3,7 @@ package com.nexus.stream.presentation.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,7 +26,9 @@ fun NexusNavHost(
 ) {
     LaunchedEffect(playbackSessionHolder) {
         playbackSessionHolder?.openRequests?.collect {
-            navController.navigate(Player)
+            if (navController.currentDestination?.hasRoute<Player>() != true) {
+                navController.navigate(Player)
+            }
         }
     }
 
@@ -75,6 +78,12 @@ fun NexusNavHost(
         composable<Player> {
             PlayerScreen(
                 onNavigateUp = { navController.navigateUp() },
+                onSwitchToNext = {
+                    navController.navigate(Player) {
+                        popUpTo<Player> { inclusive = true }
+                    }
+                },
+                playbackSessionHolder = playbackSessionHolder,
             )
         }
     }

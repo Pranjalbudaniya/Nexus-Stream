@@ -3046,7 +3046,7 @@ class PlayerViewModelTest {
             every { fakeNextCtrl.state } returns MutableStateFlow(NextEpisodeState())
             every { fakeNextCtrl.effects } returns emptyFlow<NextEpisodeEffect>()
 
-            val vm = createViewModel(nextEpisodeController = fakeNextCtrl)
+            createViewModel(nextEpisodeController = fakeNextCtrl)
             advanceUntilIdle()
             val ctrl = fakeFactory.createdControllers.first()
 

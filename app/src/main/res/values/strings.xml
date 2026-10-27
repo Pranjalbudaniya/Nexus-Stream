@@ -555,5 +555,14 @@
     <string name="settings_subtitle_color_cyan">Cyan</string>
     <string name="settings_subtitle_color_green">Green</string>
     <string name="settings_subtitle_color_orange">Orange</string>
+
+    <!-- Next episode P10d.2 strings -->
+    <string name="player_next_episode">Next episode</string>
+    <string name="player_next_episode_in">Next episode in %1$d</string>
+    <string name="player_next_episode_cancel">Cancel</string>
+    <string name="player_next_choose_source">Choose a source</string>
+    <string name="player_next_a11y">Next episode, season %1$d episode %2$d</string>
+    <string name="settings_player_auto_play_next">Play next episode automatically</string>
+    <string name="settings_player_auto_play_next_desc">Starts the next episode a few seconds after one ends</string>
 </resources>
 
