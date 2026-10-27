@@ -19,6 +19,7 @@ import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.MAX_PAGES
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -659,6 +660,32 @@ class DiscoverViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { loader.load(any(), any()) }
+        }
+
+    @Test
+    fun DV23_familyHidesEveryPage_stopsAtMaxPages_showsEmpty() =
+        runTest(testDispatcher) {
+            familyModeFlow.value = true
+            allAddonsFlow.value = listOf(standardAddon)
+            activeAddonsFlow.value = listOf(standardAddon)
+
+            var callCount = 0
+            coEvery { loader.load(any(), any()) } coAnswers {
+                callCount++
+                Outcome.Success(listOf(createMeta("adult_$callCount", name = "Porn Video $callCount")))
+            }
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            coVerify(exactly = MAX_PAGES) { loader.load(any(), any()) }
+            assertEquals(DiscoverPhase.Empty, vm.uiState.value.phase)
+            assertEquals(emptyList<MetaPreview>(), vm.uiState.value.items)
+
+            vm.onEvent(DiscoverEvent.LoadMore)
+            advanceUntilIdle()
+
+            coVerify(exactly = MAX_PAGES) { loader.load(any(), any()) }
         }
 
     private fun createAddon(
