@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -79,10 +80,19 @@ fun NexusApp(
                                         }
                                     },
                                     icon = {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = stringResource(destination.labelResId),
-                                        )
+                                        val vector = destination.icon
+                                        val resId = destination.iconResId
+                                        if (vector != null) {
+                                            Icon(
+                                                imageVector = vector,
+                                                contentDescription = stringResource(destination.labelResId),
+                                            )
+                                        } else if (resId != null) {
+                                            Icon(
+                                                painter = painterResource(resId),
+                                                contentDescription = stringResource(destination.labelResId),
+                                            )
+                                        }
                                     },
                                     label = {
                                         Text(

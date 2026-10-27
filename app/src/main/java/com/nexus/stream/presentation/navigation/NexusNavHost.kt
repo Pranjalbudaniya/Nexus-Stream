@@ -11,11 +11,11 @@ import androidx.navigation.toRoute
 import com.nexus.stream.presentation.feature.addons.AddonManagerScreen
 import com.nexus.stream.presentation.feature.detail.DetailScreen
 import com.nexus.stream.presentation.feature.discover.DiscoverScreen
+import com.nexus.stream.presentation.feature.downloads.DownloadsScreen
 import com.nexus.stream.presentation.feature.home.HomeScreen
 import com.nexus.stream.presentation.feature.library.LibraryScreen
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import com.nexus.stream.presentation.feature.player.PlayerScreen
-import com.nexus.stream.presentation.feature.search.SearchScreen
 import com.nexus.stream.presentation.feature.settings.SettingsScreen
 
 @Composable
@@ -49,8 +49,8 @@ fun NexusNavHost(
         composable<Discover> {
             DiscoverScreen()
         }
-        composable<Search> {
-            SearchScreen()
+        composable<Downloads> {
+            DownloadsScreen()
         }
         composable<Library> {
             LibraryScreen()

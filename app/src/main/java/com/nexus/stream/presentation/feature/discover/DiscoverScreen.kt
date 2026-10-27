@@ -41,7 +41,7 @@ fun DiscoverScreen(modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = stringResource(R.string.discover_placeholder),
+                text = stringResource(R.string.discover_title),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
