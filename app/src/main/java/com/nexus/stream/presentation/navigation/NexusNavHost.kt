@@ -47,7 +47,12 @@ fun NexusNavHost(
             )
         }
         composable<Discover> {
-            DiscoverScreen()
+            DiscoverScreen(
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
+                onNavigateToAddons = { navController.navigate(Addons()) },
+            )
         }
         composable<Downloads> {
             DownloadsScreen()
