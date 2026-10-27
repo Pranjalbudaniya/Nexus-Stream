@@ -187,6 +187,21 @@
     <string name="discover_more_failed">Couldn\'t load more.</string>
     <string name="discover_refresh_failed">Couldn\'t refresh. Showing what you had.</string>
 
+    <!-- Discover Search -->
+    <string name="search_hint">Search titles</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_recent_title">Recent searches</string>
+    <string name="search_recent_clear_all">Clear all</string>
+    <string name="search_recent_remove">Remove %1$s from recent searches</string>
+    <string name="search_too_short">Type at least 2 characters.</string>
+    <string name="search_no_results_title">No results for “%1$s”</string>
+    <string name="search_no_results_body">Check the spelling or try another title.</string>
+    <string name="search_unsupported">None of your addons supports search</string>
+    <plurals name="search_failed_some">
+        <item quantity="one">1 addon didn\'t respond.</item>
+        <item quantity="other">%d addons didn\'t respond.</item>
+    </plurals>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_gear_description">Settings</string>

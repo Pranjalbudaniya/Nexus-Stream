@@ -66,7 +66,7 @@ private val DISCOVER_GRID_MIN_POSTER_DP = 100.dp
 private val DISCOVER_GRID_MIN_LANDSCAPE_DP = 150.dp
 
 @Composable
-private fun discoverTypeText(type: String): String =
+internal fun discoverTypeText(type: String): String =
     when (val display = typeDisplay(type)) {
         is TypeDisplay.Movie -> stringResource(R.string.discover_type_movie)
         is TypeDisplay.Series -> stringResource(R.string.discover_type_series)

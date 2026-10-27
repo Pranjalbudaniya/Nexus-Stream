@@ -2,6 +2,7 @@ package com.nexus.stream.presentation.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
@@ -17,12 +18,14 @@ import com.nexus.stream.presentation.feature.library.LibraryScreen
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import com.nexus.stream.presentation.feature.player.PlayerScreen
 import com.nexus.stream.presentation.feature.settings.SettingsScreen
+import kotlinx.coroutines.flow.filter
 
 @Composable
 fun NexusNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     playbackSessionHolder: PlaybackSessionHolder? = null,
+    tabReselects: TabReselects = remember { TabReselects() },
 ) {
     LaunchedEffect(playbackSessionHolder) {
         playbackSessionHolder?.openRequests?.collect {
@@ -31,6 +34,11 @@ fun NexusNavHost(
             }
         }
     }
+
+    val discoverReselects =
+        remember(tabReselects) {
+            tabReselects.events.filter { it == TopLevelDestination.DISCOVER }
+        }
 
     NavHost(
         navController = navController,
@@ -52,6 +60,7 @@ fun NexusNavHost(
                     navController.navigate(Detail(type = type, id = id))
                 },
                 onNavigateToAddons = { navController.navigate(Addons()) },
+                reselectEvents = discoverReselects,
             )
         }
         composable<Downloads> {

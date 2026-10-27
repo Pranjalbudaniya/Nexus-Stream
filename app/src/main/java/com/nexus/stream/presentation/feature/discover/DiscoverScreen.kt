@@ -1,26 +1,40 @@
 package com.nexus.stream.presentation.feature.discover
 
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.stream.R
@@ -30,9 +44,14 @@ import com.nexus.stream.domain.model.GenreKind
 import com.nexus.stream.domain.model.GenreSpec
 import com.nexus.stream.domain.model.MetaPreview
 import com.nexus.stream.domain.model.PosterShape
+import com.nexus.stream.domain.usecase.DiscoverBodyMode
+import com.nexus.stream.domain.usecase.discoverBodyMode
 import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.common.toUserMessage
+import com.nexus.stream.presentation.navigation.TopLevelDestination
 import com.nexus.stream.presentation.theme.NexusTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
 fun DiscoverScreen(
@@ -40,10 +59,27 @@ fun DiscoverScreen(
     onNavigateToAddons: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel(),
+    searchViewModel: SearchViewModel = hiltViewModel(),
+    reselectEvents: Flow<TopLevelDestination> = emptyFlow(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val searchUiState by searchViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val refreshFailedMessage = stringResource(R.string.discover_refresh_failed)
+
+    var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue())
+    }
+    var isFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(Unit) {
+        if (textFieldValue.text.isNotEmpty()) {
+            searchViewModel.onEvent(SearchEvent.QueryChanged(textFieldValue.text))
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -55,11 +91,48 @@ fun DiscoverScreen(
         }
     }
 
+    LaunchedEffect(reselectEvents) {
+        reselectEvents.collect {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+            textFieldValue =
+                textFieldValue.copy(
+                    selection = TextRange(textFieldValue.text.length),
+                )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus()
+        }
+    }
+
+    val backEnabled = isFocused || textFieldValue.text.isNotEmpty()
+    BackHandler(enabled = backEnabled) {
+        if (isFocused) {
+            focusManager.clearFocus()
+        } else if (textFieldValue.text.isNotEmpty()) {
+            textFieldValue = TextFieldValue("")
+            searchViewModel.onEvent(SearchEvent.ClearQuery)
+        }
+    }
+
     DiscoverScreenContent(
         uiState = uiState,
         onEvent = viewModel::onEvent,
         onItemClick = onItemClick,
         onNavigateToAddons = onNavigateToAddons,
+        searchUiState = searchUiState,
+        onSearchEvent = searchViewModel::onEvent,
+        textFieldValue = textFieldValue,
+        onValueChange = { newValue ->
+            textFieldValue = newValue
+            searchViewModel.onEvent(SearchEvent.QueryChanged(newValue.text))
+        },
+        isFocused = isFocused,
+        onFocusChanged = { isFocused = it },
+        focusRequester = focusRequester,
         snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
@@ -72,62 +145,177 @@ fun DiscoverScreenContent(
     onItemClick: (type: String, id: String) -> Unit,
     onNavigateToAddons: () -> Unit,
     modifier: Modifier = Modifier,
+    searchUiState: SearchUiState = SearchUiState(),
+    onSearchEvent: (SearchEvent) -> Unit = {},
+    textFieldValue: TextFieldValue = TextFieldValue(),
+    onValueChange: (TextFieldValue) -> Unit = {},
+    isFocused: Boolean = false,
+    onFocusChanged: (Boolean) -> Unit = {},
+    focusRequester: FocusRequester = remember { FocusRequester() },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    val bodyMode =
+        discoverBodyMode(
+            rawQuery = textFieldValue.text,
+            isFocused = isFocused,
+            hasHistory = searchUiState.history.isNotEmpty(),
+        )
+
+    val gridState =
+        remember(uiState.selectedCatalogKey, uiState.genreUi?.selectedGenre) {
+            LazyGridState()
+        }
+    val resultsListState =
+        remember(searchUiState.normalizedQuery) {
+            LazyListState()
+        }
+    val recentsListState = rememberLazyListState()
+
+    val isResultsScrollInProgress by remember { derivedStateOf { resultsListState.isScrollInProgress } }
+    val isRecentsScrollInProgress by remember { derivedStateOf { recentsListState.isScrollInProgress } }
+    val isGridScrollInProgress by remember { derivedStateOf { gridState.isScrollInProgress } }
+
+    LaunchedEffect(isResultsScrollInProgress, isRecentsScrollInProgress, isGridScrollInProgress) {
+        if (isResultsScrollInProgress || isRecentsScrollInProgress || isGridScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        NexusRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { onEvent(DiscoverEvent.Refresh) },
+        Column(
             modifier =
                 Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .padding(top = statusBarTop + NexusTheme.spacing.sm),
+                    .padding(top = statusBarTop)
+                    .imePadding(),
         ) {
-            when (uiState.phase) {
-                is DiscoverPhase.NoAddons -> {
-                    DiscoverMessage(
-                        title = stringResource(R.string.discover_no_addons),
-                        buttonText = stringResource(R.string.discover_open_addons),
-                        onButtonClick = onNavigateToAddons,
-                    )
-                }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = NexusTheme.spacing.md,
+                            vertical = NexusTheme.spacing.sm,
+                        ),
+            ) {
+                SearchField(
+                    value = textFieldValue,
+                    onValueChange = onValueChange,
+                    onSearch = {
+                        onSearchEvent(SearchEvent.Submit)
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    },
+                    onClear = {
+                        onValueChange(TextFieldValue(""))
+                        onSearchEvent(SearchEvent.ClearQuery)
+                    },
+                    onFocusChanged = onFocusChanged,
+                    focusRequester = focusRequester,
+                )
+            }
 
-                is DiscoverPhase.NoCatalogs -> {
-                    DiscoverMessage(
-                        title = stringResource(R.string.discover_no_catalogs),
-                        buttonText = stringResource(R.string.discover_open_addons),
-                        onButtonClick = onNavigateToAddons,
-                    )
-                }
-
-                else -> {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        FiltersRow(
-                            types = uiState.types,
-                            selectedType = uiState.selectedType,
-                            onSelectType = { onEvent(DiscoverEvent.SelectType(it)) },
-                            catalogs = uiState.catalogs,
-                            selectedCatalogKey = uiState.selectedCatalogKey,
-                            onSelectCatalog = { onEvent(DiscoverEvent.SelectCatalog(it)) },
-                            genreUi = uiState.genreUi,
-                            onSelectGenre = { onEvent(DiscoverEvent.SelectGenre(it)) },
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+            ) {
+                when (bodyMode) {
+                    DiscoverBodyMode.Search -> {
+                        SearchBody(
+                            uiState = searchUiState,
+                            onItemClick = { type, id ->
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onSearchEvent(SearchEvent.ResultOpened(type, id))
+                                onItemClick(type, id)
+                            },
+                            onNavigateToAddons = onNavigateToAddons,
+                            onRetry = { onSearchEvent(SearchEvent.Retry) },
+                            listState = resultsListState,
                         )
+                    }
 
-                        DiscoverPhaseBody(
-                            uiState = uiState,
-                            onEvent = onEvent,
-                            onItemClick = onItemClick,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
+                    DiscoverBodyMode.Recents -> {
+                        RecentSearchesList(
+                            history = searchUiState.history,
+                            onSelect = { query ->
+                                val newValue =
+                                    TextFieldValue(
+                                        text = query,
+                                        selection = TextRange(query.length),
+                                    )
+                                onValueChange(newValue)
+                                onSearchEvent(SearchEvent.UseRecent(query))
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
+                            onRemove = { onSearchEvent(SearchEvent.RemoveRecent(it)) },
+                            onClearAll = { onSearchEvent(SearchEvent.ClearHistory) },
+                            listState = recentsListState,
                         )
+                    }
+
+                    DiscoverBodyMode.Browse -> {
+                        NexusRefreshBox(
+                            isRefreshing = uiState.isRefreshing,
+                            onRefresh = { onEvent(DiscoverEvent.Refresh) },
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            when (uiState.phase) {
+                                is DiscoverPhase.NoAddons -> {
+                                    DiscoverMessage(
+                                        title = stringResource(R.string.discover_no_addons),
+                                        buttonText = stringResource(R.string.discover_open_addons),
+                                        onButtonClick = onNavigateToAddons,
+                                    )
+                                }
+
+                                is DiscoverPhase.NoCatalogs -> {
+                                    DiscoverMessage(
+                                        title = stringResource(R.string.discover_no_catalogs),
+                                        buttonText = stringResource(R.string.discover_open_addons),
+                                        onButtonClick = onNavigateToAddons,
+                                    )
+                                }
+
+                                else -> {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        FiltersRow(
+                                            types = uiState.types,
+                                            selectedType = uiState.selectedType,
+                                            onSelectType = { onEvent(DiscoverEvent.SelectType(it)) },
+                                            catalogs = uiState.catalogs,
+                                            selectedCatalogKey = uiState.selectedCatalogKey,
+                                            onSelectCatalog = { onEvent(DiscoverEvent.SelectCatalog(it)) },
+                                            genreUi = uiState.genreUi,
+                                            onSelectGenre = { onEvent(DiscoverEvent.SelectGenre(it)) },
+                                        )
+
+                                        DiscoverPhaseBody(
+                                            uiState = uiState,
+                                            onEvent = onEvent,
+                                            onItemClick = onItemClick,
+                                            gridState = gridState,
+                                            modifier =
+                                                Modifier
+                                                    .weight(1f)
+                                                    .fillMaxWidth(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -140,6 +328,7 @@ private fun DiscoverPhaseBody(
     uiState: DiscoverUiState,
     onEvent: (DiscoverEvent) -> Unit,
     onItemClick: (type: String, id: String) -> Unit,
+    gridState: LazyGridState,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -158,22 +347,10 @@ private fun DiscoverPhaseBody(
             is DiscoverPhase.Error -> {
                 val userMsg = uiState.phase.error.toUserMessage()
                 val errorText =
-                    when (userMsg.formatArgs.size) {
-                        0 -> {
-                            stringResource(userMsg.resId)
-                        }
-
-                        1 -> {
-                            stringResource(userMsg.resId, userMsg.formatArgs[0])
-                        }
-
-                        else -> {
-                            stringResource(
-                                userMsg.resId,
-                                userMsg.formatArgs[0],
-                                userMsg.formatArgs[1],
-                            )
-                        }
+                    if (userMsg.formatArgs.isEmpty()) {
+                        stringResource(userMsg.resId)
+                    } else {
+                        stringResource(userMsg.resId, userMsg.formatArgs[0])
                     }
                 DiscoverMessage(
                     title = errorText,
@@ -184,11 +361,6 @@ private fun DiscoverPhaseBody(
             }
 
             is DiscoverPhase.Content -> {
-                val gridState =
-                    remember(uiState.selectedCatalogKey, uiState.genreUi?.selectedGenre) {
-                        LazyGridState()
-                    }
-
                 DiscoverGrid(
                     items = uiState.items,
                     gridShape = uiState.gridShape,
@@ -219,15 +391,6 @@ private val previewCatalogs =
             genre = GenreSpec(options = listOf("Action", "Comedy", "Drama"), required = false),
             supportsSkip = true,
         ),
-        DiscoverCatalog(
-            key = "cinemeta|movie|featured",
-            type = "movie",
-            catalogId = "featured",
-            transportUrl = "https://v3-cinemeta.strem.io",
-            title = "Featured",
-            genre = null,
-            supportsSkip = true,
-        ),
     )
 
 private val previewItems =
@@ -240,122 +403,124 @@ private val previewItems =
             posterShape = PosterShape.POSTER,
             background = null,
             logo = null,
-            description = null,
+            description = "Two imprisoned men bond over a number of years...",
             releaseInfo = "1994",
             imdbRating = "9.3",
             genres = listOf("Drama"),
         ),
-        MetaPreview(
-            id = "tt0068646",
-            type = "movie",
-            name = "The Godfather",
-            poster = null,
-            posterShape = PosterShape.POSTER,
-            background = null,
-            logo = null,
-            description = null,
-            releaseInfo = "1972",
-            imdbRating = "9.2",
-            genres = listOf("Crime", "Drama"),
-        ),
     )
 
-private val previewBaseState =
-    DiscoverUiState(
-        types = listOf("movie", "series"),
-        selectedType = "movie",
-        catalogs = previewCatalogs,
-        selectedCatalogKey = previewCatalogs[0].key,
-        genreUi =
-            DiscoverGenreUi(
-                options = listOf("Action", "Comedy", "Drama"),
-                selectedGenre = null,
-                isRequired = false,
-                kind = GenreKind.GENRE,
-            ),
-    )
-
-@Preview(name = "DiscoverScreen - Content Light")
-@Preview(name = "DiscoverScreen - Content Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Content - Light")
+@Preview(name = "Content - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DiscoverScreenContentPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Content, items = previewItems),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
-@Preview(name = "DiscoverScreen - Loading Light")
-@Preview(name = "DiscoverScreen - Loading Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-internal fun DiscoverScreenLoadingPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Loading),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
-@Preview(name = "DiscoverScreen - Error Light")
-@Preview(name = "DiscoverScreen - Error Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-internal fun DiscoverScreenErrorPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Error(AppError.Network)),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
-@Preview(name = "DiscoverScreen - Empty Light")
-@Preview(name = "DiscoverScreen - Empty Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-internal fun DiscoverScreenEmptyPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Empty),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
-@Preview(name = "DiscoverScreen - 3 Controls Light")
-@Composable
-internal fun DiscoverScreenThreeControlsPreview() {
-    NexusTheme {
-        DiscoverScreenContent(
-            uiState = previewBaseState.copy(phase = DiscoverPhase.Content, items = previewItems),
-            onEvent = {},
-            onItemClick = { _, _ -> },
-            onNavigateToAddons = {},
-        )
-    }
-}
-
-@Preview(name = "DiscoverScreen - Text Only Controls Light")
-@Composable
-internal fun DiscoverScreenTextOnlyControlsPreview() {
+internal fun DiscoverContentPreview() {
     NexusTheme {
         DiscoverScreenContent(
             uiState =
-                previewBaseState.copy(
-                    types = listOf("movie"),
-                    catalogs = listOf(previewCatalogs.first()),
-                    genreUi = null,
+                DiscoverUiState(
+                    types = listOf("movie", "series"),
+                    selectedType = "movie",
+                    catalogs = previewCatalogs,
+                    selectedCatalogKey = "cinemeta|movie|top",
                     phase = DiscoverPhase.Content,
                     items = previewItems,
+                ),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "Loading - Light")
+@Preview(name = "Loading - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DiscoverLoadingPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                DiscoverUiState(
+                    types = listOf("movie"),
+                    selectedType = "movie",
+                    catalogs = previewCatalogs,
+                    selectedCatalogKey = "cinemeta|movie|top",
+                    phase = DiscoverPhase.Loading,
+                ),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "Empty - Light")
+@Preview(name = "Empty - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DiscoverEmptyPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                DiscoverUiState(
+                    types = listOf("movie"),
+                    selectedType = "movie",
+                    catalogs = previewCatalogs,
+                    selectedCatalogKey = "cinemeta|movie|top",
+                    phase = DiscoverPhase.Empty,
+                ),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "Error - Light")
+@Preview(name = "Error - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DiscoverErrorPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                DiscoverUiState(
+                    types = listOf("movie"),
+                    selectedType = "movie",
+                    catalogs = previewCatalogs,
+                    selectedCatalogKey = "cinemeta|movie|top",
+                    phase = DiscoverPhase.Error(AppError.Network),
+                ),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "No Addons - Light")
+@Preview(name = "No Addons - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DiscoverNoAddonsPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                DiscoverUiState(
+                    phase = DiscoverPhase.NoAddons,
+                ),
+            onEvent = {},
+            onItemClick = { _, _ -> },
+            onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "No Catalogs - Light")
+@Preview(name = "No Catalogs - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DiscoverNoCatalogsPreview() {
+    NexusTheme {
+        DiscoverScreenContent(
+            uiState =
+                DiscoverUiState(
+                    phase = DiscoverPhase.NoCatalogs,
                 ),
             onEvent = {},
             onItemClick = { _, _ -> },
