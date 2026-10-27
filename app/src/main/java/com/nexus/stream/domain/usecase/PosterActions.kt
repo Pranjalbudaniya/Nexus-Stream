@@ -28,14 +28,18 @@ sealed interface PosterAction {
     ) : PosterAction
 
     data object RemoveFromContinue : PosterAction
+
+    data object RemoveFromHistory : PosterAction
 }
 
+@Suppress("LongParameterList")
 fun posterActions(
     type: String,
     trailer: TrailerState,
     status: ListStatus?,
     fromContinue: Boolean,
     resume: PosterAction.Resume? = null,
+    fromHistory: Boolean = false,
 ): List<PosterAction> {
     val actions = mutableListOf<PosterAction>()
     if (resume != null) {
@@ -48,6 +52,9 @@ fun posterActions(
     actions.add(PosterAction.Watchlist(status))
     if (fromContinue) {
         actions.add(PosterAction.RemoveFromContinue)
+    }
+    if (fromHistory) {
+        actions.add(PosterAction.RemoveFromHistory)
     }
     return actions
 }

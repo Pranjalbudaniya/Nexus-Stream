@@ -327,6 +327,7 @@
     <string name="poster_action_trailer_none">No trailer available</string>
     <string name="poster_action_add_watchlist">Add to watchlist</string>
     <string name="poster_action_remove_continue">Remove from Continue watching</string>
+    <string name="poster_action_remove_history">Remove from history</string>
     <string name="open_actions">Open actions</string>
     <string name="poster_mark_watched">Watched</string>
     <string name="poster_mark_watching">Watching</string>

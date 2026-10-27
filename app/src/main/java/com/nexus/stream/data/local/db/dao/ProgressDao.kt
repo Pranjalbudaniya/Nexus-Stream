@@ -8,6 +8,7 @@ import com.nexus.stream.domain.model.ContinueRow
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions")
 interface ProgressDao {
     @Query(
         """
@@ -69,4 +70,33 @@ interface ProgressDao {
 
     @Query("SELECT metaId FROM watch_progress WHERE watched = 1 AND type = 'movie'")
     fun observeWatchedMovieIds(): Flow<List<String>>
+
+    @Query(
+        """
+        SELECT 
+            p.metaId AS metaId,
+            p.type AS type,
+            l.name AS name,
+            l.poster AS poster,
+            p.videoId AS videoId,
+            p.season AS season,
+            p.episode AS episode,
+            p.positionMs AS positionMs,
+            p.durationMs AS durationMs,
+            p.watched AS watched,
+            p.updatedAt AS updatedAt,
+            coalesce(l.inWatchlist, 0) AS inWatchlist,
+            l.listStatus AS listStatus
+        FROM watch_progress p
+        JOIN (SELECT metaId AS mid, MAX(updatedAt) AS maxAt FROM watch_progress GROUP BY metaId) m
+             ON p.metaId = m.mid AND p.updatedAt = m.maxAt
+        LEFT JOIN library_items l ON l.metaId = p.metaId
+        ORDER BY p.updatedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeHistoryRows(limit: Int): Flow<List<ContinueRow>>
+
+    @Query("DELETE FROM watch_progress")
+    suspend fun deleteAll()
 }

@@ -79,6 +79,7 @@ interface PosterActionsController {
     fun show(
         item: MetaPreview,
         fromContinue: Boolean = false,
+        onRemoveFromHistory: (() -> Unit)? = null,
     )
 }
 
@@ -88,6 +89,7 @@ val LocalPosterActions =
             override fun show(
                 item: MetaPreview,
                 fromContinue: Boolean,
+                onRemoveFromHistory: (() -> Unit)?,
             ) = Unit
         }
     }
@@ -98,6 +100,7 @@ data class PosterSheetState(
     val trailerState: TrailerState = TrailerState.CHECKING,
     val trailerUrl: String? = null,
     val resumeAction: PosterAction.Resume? = null,
+    val onRemoveFromHistory: (() -> Unit)? = null,
 )
 
 @HiltViewModel
@@ -124,13 +127,15 @@ class PosterActionsViewModel
 
         fun show(
             item: MetaPreview,
-            fromContinue: Boolean,
+            fromContinue: Boolean = false,
+            onRemoveFromHistory: (() -> Unit)? = null,
         ) {
             _sheetState.value =
                 PosterSheetState(
                     item = item,
                     fromContinue = fromContinue,
                     trailerState = TrailerState.CHECKING,
+                    onRemoveFromHistory = onRemoveFromHistory,
                 )
             viewModelScope.launch {
                 val resumeAction = resolveResumeAction(item, fromContinue)
@@ -254,8 +259,9 @@ fun PosterActionsHost(
                 override fun show(
                     item: MetaPreview,
                     fromContinue: Boolean,
+                    onRemoveFromHistory: (() -> Unit)?,
                 ) {
-                    viewModel.show(item, fromContinue)
+                    viewModel.show(item, fromContinue, onRemoveFromHistory)
                 }
             }
         }
@@ -273,6 +279,7 @@ fun PosterActionsHost(
                     status = status,
                     fromContinue = state.fromContinue,
                     resume = state.resumeAction,
+                    fromHistory = state.onRemoveFromHistory != null,
                 )
 
             PosterActionsSheet(
@@ -305,6 +312,10 @@ fun PosterActionsHost(
                 onRemoveFromContinue = {
                     viewModel.removeFromContinue(item.id)
                     viewModel.dismiss()
+                },
+                onRemoveFromHistory = {
+                    viewModel.dismiss()
+                    state.onRemoveFromHistory?.invoke()
                 },
                 onLaunchTrailer = { url ->
                     try {
@@ -347,6 +358,7 @@ private fun PosterActionsSheet(
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
     onRemoveFromContinue: () -> Unit,
+    onRemoveFromHistory: (() -> Unit)? = null,
     onLaunchTrailer: (String) -> Unit,
 ) {
     ModalBottomSheet(
@@ -371,6 +383,7 @@ private fun PosterActionsSheet(
                 onAddWatchlist = onAddWatchlist,
                 onOpenStatusDialog = onOpenStatusDialog,
                 onRemoveFromContinue = onRemoveFromContinue,
+                onRemoveFromHistory = onRemoveFromHistory,
                 onLaunchTrailer = onLaunchTrailer,
             )
         }
@@ -439,6 +452,7 @@ private fun PosterActionsList(
     onAddWatchlist: () -> Unit,
     onOpenStatusDialog: () -> Unit,
     onRemoveFromContinue: () -> Unit,
+    onRemoveFromHistory: (() -> Unit)? = null,
     onLaunchTrailer: (String) -> Unit,
 ) {
     actions.forEach { action ->
@@ -519,6 +533,21 @@ private fun PosterActionsList(
                     label = stringResource(R.string.poster_action_remove_continue),
                     labelColor = MaterialTheme.colorScheme.error,
                     onClick = onRemoveFromContinue,
+                )
+            }
+
+            is PosterAction.RemoveFromHistory -> {
+                PosterActionRow(
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    label = stringResource(R.string.poster_action_remove_history),
+                    labelColor = MaterialTheme.colorScheme.error,
+                    onClick = { onRemoveFromHistory?.invoke() },
                 )
             }
         }

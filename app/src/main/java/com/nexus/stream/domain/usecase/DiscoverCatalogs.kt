@@ -109,8 +109,10 @@ private fun extractDiscoverCandidate(
     )
 }
 
-fun discoverTypes(catalogs: List<DiscoverCatalog>): List<String> {
-    val rawTypes = catalogs.map { it.type.trim() }.filter { it.isNotBlank() }.distinct()
+fun discoverTypes(catalogs: List<DiscoverCatalog>): List<String> = orderTypes(catalogs.map { it.type })
+
+fun orderTypes(types: List<String>): List<String> {
+    val rawTypes = types.map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val hasMovie = rawTypes.any { it.equals("movie", ignoreCase = true) }
     val hasSeries = rawTypes.any { it.equals("series", ignoreCase = true) }
     val others =
