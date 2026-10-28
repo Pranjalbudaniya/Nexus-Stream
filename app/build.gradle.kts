@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -27,9 +29,37 @@ android {
         }
     }
 
+    val keystoreProps = rootProject.file("keystore.properties") // never committed
+    signingConfigs {
+        create("release") {
+            if (keystoreProps.exists()) {
+                val properties =
+                    Properties().apply {
+                        keystoreProps.inputStream().use { load(it) }
+                    }
+                storeFile = rootProject.file(properties.getProperty("storeFile"))
+                storePassword = properties.getProperty("storePassword")
+                keyAlias = properties.getProperty("keyAlias")
+                keyPassword = properties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+        }
+        release {
+            isMinifyEnabled = false
+            // While no release key is configured the release APK uses the debug keystore
+            // of the building machine; every release must be built with the same key or
+            // installed copies cannot be updated.
+            signingConfig =
+                if (keystoreProps.exists()) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 
