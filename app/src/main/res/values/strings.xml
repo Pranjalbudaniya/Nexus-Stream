@@ -264,8 +264,85 @@
     <string name="settings_title">Settings</string>
     <string name="settings_gear_description">Settings</string>
     <string name="settings_addons_title">Addons</string>
-    <string name="settings_appearance_title">Appearance</string>
-    <string name="settings_appearance_coming_soon">Coming soon. In debug builds use Nexus Dev > Theme gallery.</string>
+    <!-- Settings section cards -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_content">Addons and content</string>
+    <string name="settings_section_player">Player</string>
+    <string name="settings_section_subtitles">Subtitles and audio</string>
+    <string name="settings_section_torrent">Torrent</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_section_expand">Expand %1$s</string>
+    <string name="settings_section_collapse">Collapse %1$s</string>
+    <string name="settings_state_expanded">Expanded</string>
+    <string name="settings_state_collapsed">Collapsed</string>
+    <string name="settings_manage_addons">Manage addons</string>
+
+    <!-- Appearance sub-screen -->
+    <string name="settings_appearance_theme_mode">Theme</string>
+    <string name="settings_appearance_mode_system">System</string>
+    <string name="settings_appearance_mode_light">Light</string>
+    <string name="settings_appearance_mode_dark">Dark</string>
+    <string name="settings_appearance_dynamic">Dynamic color</string>
+    <string name="settings_appearance_dynamic_desc">Uses your wallpaper colors.</string>
+    <string name="settings_appearance_amoled">AMOLED black</string>
+    <string name="settings_appearance_amoled_desc">Pure black background in dark theme.</string>
+    <string name="settings_appearance_amoled_light_note">Applies in dark theme.</string>
+    <string name="settings_appearance_accent">Accent color</string>
+    <string name="settings_appearance_contrast">Contrast</string>
+    <string name="settings_appearance_contrast_disabled_desc">Not available with dynamic color.</string>
+    <string name="settings_appearance_contrast_standard">Standard</string>
+    <string name="settings_appearance_contrast_medium">Medium</string>
+    <string name="settings_appearance_contrast_high">High</string>
+    <string name="settings_appearance_font">Font</string>
+    <string name="settings_appearance_ui_size">UI size</string>
+    <string name="settings_appearance_text_size">Text size</string>
+    <string name="settings_appearance_size_small">Small</string>
+    <string name="settings_appearance_size_normal">Normal</string>
+    <string name="settings_appearance_size_large">Large</string>
+    <string name="settings_appearance_size_larger">Larger</string>
+    <string name="settings_appearance_size_largest">Largest</string>
+    <string name="settings_appearance_roundness">Roundness</string>
+    <string name="settings_appearance_roundness_sharp">Sharp</string>
+    <string name="settings_appearance_roundness_soft">Soft</string>
+    <string name="settings_appearance_roundness_normal">Normal</string>
+    <string name="settings_appearance_roundness_round">Round</string>
+    <string name="settings_appearance_roundness_extra_round">Extra round</string>
+    <string name="settings_appearance_card_style">Card style</string>
+    <string name="settings_appearance_card_style_filled">Filled</string>
+    <string name="settings_appearance_card_style_outlined">Outlined</string>
+    <string name="settings_appearance_card_style_elevated">Elevated</string>
+    <string name="settings_appearance_reset_btn">Reset appearance</string>
+    <string name="settings_appearance_reset_confirm_title">Reset appearance?</string>
+    <string name="settings_appearance_reset_confirm_message">This restores default theme, font, density, and shapes.</string>
+    <string name="settings_appearance_reset_confirm_action">Reset</string>
+
+    <!-- Torrent sub-screen -->
+    <string name="settings_torrent_wifi_only">Wi-Fi only</string>
+    <string name="settings_torrent_wifi_only_desc">Torrent streams use Wi-Fi only.</string>
+    <string name="settings_torrent_cache_limit">Cache limit</string>
+    <string name="settings_torrent_cache_limit_gb">%1$d GB</string>
+    <string name="settings_torrent_clear_on_exit">Clear cache on exit</string>
+    <string name="settings_torrent_clear_on_exit_desc">Delete downloaded torrent data when you stop watching.</string>
+    <string name="settings_torrent_cache_usage">Cache usage</string>
+    <string name="settings_torrent_cache_usage_using">Using %1$s</string>
+    <string name="settings_torrent_cache_loading">Calculating…</string>
+    <string name="settings_torrent_cache_unknown">Unknown</string>
+    <string name="settings_torrent_clear_cache_now">Clear cache now</string>
+    <string name="settings_torrent_clear_confirm_title">Clear torrent cache?</string>
+    <string name="settings_torrent_clear_confirm_message">Delete %1$s of torrent data?</string>
+    <string name="settings_torrent_clear_confirm_action">Clear</string>
+    <string name="settings_torrent_cache_cleared_toast">Cache cleared</string>
+    <string name="settings_torrent_cache_clear_failed_toast">Couldn\'t clear the cache</string>
+
+    <!-- About sub-screen -->
+    <string name="settings_about_version">Version</string>
+    <string name="settings_about_github">Source code on GitHub</string>
+    <string name="settings_about_issues">Report an issue</string>
+    <string name="settings_about_licenses">Open-source licenses</string>
+    <string name="settings_about_disclaimer">Disclaimer</string>
+    <string name="settings_about_disclaimer_text">Nexus Stream is a media player. It does not host, provide or recommend any content. Everything you watch comes from addons you install yourself, and you are responsible for following the laws that apply to you.</string>
+    <string name="settings_about_no_app">No app can open this link.</string>
+    <string name="settings_about_close">Close</string>
 
     <!-- Home screen states -->
     <string name="home_no_addons">Add your first addon to start discovering content.</string>

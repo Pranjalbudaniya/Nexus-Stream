@@ -2,6 +2,7 @@ package com.nexus.stream.presentation.feature.settings
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,7 +44,6 @@ import com.nexus.stream.domain.model.SubtitleSize
 import com.nexus.stream.domain.model.SubtitleStyle
 import com.nexus.stream.domain.usecase.PREFERRED_LANGUAGE_OPTIONS
 import com.nexus.stream.domain.usecase.SUBTITLES_OFF
-import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
@@ -129,13 +128,13 @@ fun SubtitleSettingsSection(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
         val audioSubtitle =
             uiState.preferredAudioLanguage?.let { code ->
                 PREFERRED_LANGUAGE_OPTIONS.firstOrNull { it.code == code }?.name ?: code
             } ?: stringResource(R.string.settings_language_dont_change)
-        SettingClickableCard(
+        SettingsRow(
             title = stringResource(R.string.settings_audio_language_title),
             subtitle = audioSubtitle,
             onClick = { activeDialog = SubtitleDialogType.AUDIO_LANG },
@@ -147,7 +146,7 @@ fun SubtitleSettingsSection(
                 SUBTITLES_OFF -> stringResource(R.string.settings_subtitle_language_off)
                 else -> PREFERRED_LANGUAGE_OPTIONS.firstOrNull { it.code == code }?.name ?: code
             }
-        SettingClickableCard(
+        SettingsRow(
             title = stringResource(R.string.settings_subtitle_language_title),
             subtitle = subSubtitle,
             onClick = { activeDialog = SubtitleDialogType.SUB_LANG },
@@ -161,88 +160,71 @@ fun SubtitleSettingsSection(
         )
 
         val sizeLabelRes = SIZE_LABELS.getValue(uiState.subtitleStyle.size)
-        SettingClickableCard(
+        SettingsRow(
             title = stringResource(R.string.settings_subtitle_size_title),
             subtitle = stringResource(sizeLabelRes),
             onClick = { activeDialog = SubtitleDialogType.SIZE },
         )
 
-        NexusCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { activeDialog = SubtitleDialogType.COLOR },
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { activeDialog = SubtitleDialogType.COLOR },
+                    ).padding(vertical = spacing.xs),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(NexusTheme.spacing.md),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xxs)) {
-                    Text(
-                        text = stringResource(R.string.settings_subtitle_color_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.xxs)) {
+                Text(
+                    text = stringResource(R.string.settings_subtitle_color_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(COLOR_INDICATOR_SIZE_DP.dp)
+                                .clip(CircleShape)
+                                .background(SubtitlePalette.colorFor(uiState.subtitleStyle.colorId)),
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xs),
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(COLOR_INDICATOR_SIZE_DP.dp)
-                                    .clip(CircleShape)
-                                    .background(SubtitlePalette.colorFor(uiState.subtitleStyle.colorId)),
-                        )
-                        val colorLabelRes =
-                            COLOR_LABELS[uiState.subtitleStyle.colorId.lowercase()]
-                                ?: R.string.settings_subtitle_color_white
-                        Text(
-                            text = stringResource(colorLabelRes),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    val colorLabelRes =
+                        COLOR_LABELS[uiState.subtitleStyle.colorId.lowercase()]
+                            ?: R.string.settings_subtitle_color_white
+                    Text(
+                        text = stringResource(colorLabelRes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
 
         val bgLabelRes = BACKGROUND_LABELS.getValue(uiState.subtitleStyle.background)
-        SettingClickableCard(
+        SettingsRow(
             title = stringResource(R.string.settings_subtitle_background_title),
             subtitle = stringResource(bgLabelRes),
             onClick = { activeDialog = SubtitleDialogType.BACKGROUND },
         )
 
         val edgeLabelRes = EDGE_LABELS.getValue(uiState.subtitleStyle.edge)
-        SettingClickableCard(
+        SettingsRow(
             title = stringResource(R.string.settings_subtitle_edge_title),
             subtitle = stringResource(edgeLabelRes),
             onClick = { activeDialog = SubtitleDialogType.EDGE },
         )
 
-        NexusCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(NexusTheme.spacing.md),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_subtitle_bold_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Switch(
-                    checked = uiState.subtitleStyle.bold,
-                    onCheckedChange = { onEvent(SettingsEvent.SetSubtitleBold(it)) },
-                )
-            }
-        }
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_subtitle_bold_title),
+            checked = uiState.subtitleStyle.bold,
+            onCheckedChange = { onEvent(SettingsEvent.SetSubtitleBold(it)) },
+        )
 
         SubtitlePreviewBox(style = uiState.subtitleStyle)
     }
@@ -254,37 +236,6 @@ fun SubtitleSettingsSection(
             onEvent = onEvent,
             onDismiss = { activeDialog = null },
         )
-    }
-}
-
-@Composable
-private fun SettingClickableCard(
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    NexusCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(NexusTheme.spacing.md),
-            verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.xxs),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 

@@ -1,47 +1,60 @@
 package com.nexus.stream.presentation.feature.settings
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.ThemeSettings
 import com.nexus.stream.domain.usecase.LanguageCodes
-import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
-private const val DISABLED_ALPHA = 0.5f
 private const val RES_4K = 2160
 private const val RES_1080P = 1080
 private const val RES_720P = 720
 private const val RES_SD = 480
+private const val SCROLL_MEASURE_DELAY_MS = 250L
 
 @Composable
 fun SettingsScreen(
@@ -49,14 +62,74 @@ fun SettingsScreen(
     onNavigateToAddons: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
+    appearanceViewModel: AppearanceViewModel = hiltViewModel(),
+    torrentViewModel: TorrentSettingsViewModel = hiltViewModel(),
+    aboutViewModel: AboutViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val appearanceState by appearanceViewModel.uiState.collectAsStateWithLifecycle()
+    val torrentState by torrentViewModel.uiState.collectAsStateWithLifecycle()
+    val aboutState by aboutViewModel.uiState.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(torrentViewModel) {
+        torrentViewModel.effects.collect { effect ->
+            when (effect) {
+                TorrentSettingsEffect.CacheCleared -> {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.settings_torrent_cache_cleared_toast),
+                    )
+                }
+
+                TorrentSettingsEffect.ClearFailed -> {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.settings_torrent_cache_clear_failed_toast),
+                    )
+                }
+            }
+        }
+    }
+
+    val onOpenUrl: (String) -> Unit =
+        remember(context, scope, snackbarHostState) {
+            { url ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    context.startActivity(intent)
+                } catch (_: ActivityNotFoundException) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.settings_about_no_app),
+                        )
+                    }
+                }
+            }
+        }
+
+    LaunchedEffect(aboutViewModel) {
+        aboutViewModel.effects.collect { effect ->
+            when (effect) {
+                is AboutEffect.OpenUrl -> onOpenUrl(effect.url)
+            }
+        }
+    }
 
     SettingsContent(
         uiState = uiState,
+        appearanceState = appearanceState,
+        torrentState = torrentState,
+        aboutState = aboutState,
         onEvent = viewModel::onEvent,
+        onAppearanceEvent = appearanceViewModel::onEvent,
+        onTorrentEvent = torrentViewModel::onEvent,
+        onAboutEvent = aboutViewModel::onEvent,
+        onOpenUrl = onOpenUrl,
         onNavigateUp = onNavigateUp,
         onNavigateToAddons = onNavigateToAddons,
+        snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
 }
@@ -65,12 +138,64 @@ fun SettingsScreen(
 @Composable
 internal fun SettingsContent(
     uiState: SettingsUiState,
+    appearanceState: AppearanceUiState,
+    torrentState: TorrentSettingsUiState,
+    aboutState: AboutUiState,
     onEvent: (SettingsEvent) -> Unit,
+    onAppearanceEvent: (AppearanceEvent) -> Unit,
+    onTorrentEvent: (TorrentSettingsEvent) -> Unit,
+    onAboutEvent: (AboutEvent) -> Unit,
+    onOpenUrl: (String) -> Unit,
     onNavigateUp: () -> Unit,
     onNavigateToAddons: () -> Unit,
     modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val spacing = NexusTheme.spacing
+    val scrollState = rememberScrollState()
+
+    var expandedSections by rememberSaveable(stateSaver = SettingsSectionSaver) {
+        mutableStateOf(initialSettingsSections())
+    }
+    var lastOpenedSection by remember { mutableStateOf<SettingsSection?>(null) }
+
+    var columnCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var cardCoordinates by remember { mutableStateOf(mapOf<SettingsSection, LayoutCoordinates>()) }
+    val bringIntoViewRequesters =
+        remember {
+            SettingsSection.entries.associateWith { BringIntoViewRequester() }
+        }
+
+    LaunchedEffect(lastOpenedSection, expandedSections) {
+        val section = lastOpenedSection ?: return@LaunchedEffect
+        if (section !in expandedSections) return@LaunchedEffect
+        delay(SCROLL_MEASURE_DELAY_MS)
+        val col = columnCoordinates ?: return@LaunchedEffect
+        val card = cardCoordinates[section] ?: return@LaunchedEffect
+        if (!col.isAttached || !card.isAttached) return@LaunchedEffect
+
+        val cardTopInCol = col.localPositionOf(card, Offset.Zero).y
+        val cardBottomInCol = cardTopInCol + card.size.height
+        val currentScroll = scrollState.value
+        val viewportHeight = scrollState.viewportSize.toFloat()
+
+        val cardBottomInViewport = cardBottomInCol - currentScroll
+        if (cardBottomInViewport > viewportHeight) {
+            scrollState.animateScrollTo(cardTopInCol.roundToInt())
+        }
+    }
+
+    fun toggleSection(section: SettingsSection) {
+        val willExpand = section !in expandedSections
+        expandedSections = expandedSections.toggle(section)
+        if (willExpand) {
+            lastOpenedSection = section
+            if (section == SettingsSection.TORRENT) {
+                onTorrentEvent(TorrentSettingsEvent.SectionOpened)
+            }
+        }
+    }
+
     var showDisableDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
@@ -78,6 +203,7 @@ internal fun SettingsContent(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -102,105 +228,127 @@ internal fun SettingsContent(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
+                    .onGloballyPositioned { columnCoordinates = it }
                     .padding(horizontal = spacing.md, vertical = spacing.sm),
             verticalArrangement = Arrangement.spacedBy(spacing.sm),
         ) {
-            AddonsNavigationCard(onNavigateToAddons = onNavigateToAddons)
-            FamilyModeCard(
-                uiState = uiState,
-                onToggle = { checked ->
-                    if (checked) {
-                        onEvent(SettingsEvent.SetFamilyMode(true))
-                    } else {
-                        showDisableDialog = true
-                    }
-                },
-            )
-            Text(
-                text = stringResource(R.string.settings_player_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = spacing.xs),
-            )
-            QuickPlayCard(
-                quickPlay = uiState.quickPlay,
-                onToggle = { onEvent(SettingsEvent.SetQuickPlay(it)) },
-            )
-            PreferredLanguageCard(
-                preferredLanguage = uiState.preferredLanguage,
-                onClick = { showLanguageDialog = true },
-            )
-            PreferredQualityCard(
-                preferredQuality = uiState.preferredQuality,
-                onClick = { showQualityDialog = true },
-            )
-            HideCamCard(
-                hideCam = uiState.hideCam,
-                onToggle = { onEvent(SettingsEvent.SetHideCam(it)) },
-            )
-            SkipLengthCard(
-                seekStepSeconds = uiState.seekStepSeconds,
-                onClick = { showSkipLengthDialog = true },
-            )
-            NexusCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f).padding(end = spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_player_auto_play_next),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_player_auto_play_next_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = uiState.autoPlayNext,
-                        onCheckedChange = { onEvent(SettingsEvent.SetAutoPlayNext(it)) },
-                    )
-                }
-            }
-            SubtitleSettingsSection(
-                uiState = uiState,
-                onEvent = onEvent,
-            )
-            NexusCard(
+            // 1. Appearance
+            val isAppearanceExpanded = SettingsSection.APPEARANCE in expandedSections
+            val appearanceRequester = bringIntoViewRequesters.getValue(SettingsSection.APPEARANCE)
+            SettingsSectionCard(
+                section = SettingsSection.APPEARANCE,
+                summary = sectionSummary(isAppearanceExpanded, appearanceSummary(appearanceState.settings)),
+                expanded = isAppearanceExpanded,
+                onToggle = { toggleSection(SettingsSection.APPEARANCE) },
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .alpha(DISABLED_ALPHA),
+                        .bringIntoViewRequester(appearanceRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.APPEARANCE to it)
+                        },
             ) {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_appearance_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_appearance_coming_soon),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                AppearanceSection(
+                    state = appearanceState,
+                    onEvent = onAppearanceEvent,
+                )
+            }
+
+            // 2. Addons and content
+            AddonsAndContentSectionCard(
+                uiState = uiState,
+                isExpanded = SettingsSection.CONTENT in expandedSections,
+                onToggle = { toggleSection(SettingsSection.CONTENT) },
+                onNavigateToAddons = onNavigateToAddons,
+                onSetFamilyMode = { onEvent(SettingsEvent.SetFamilyMode(it)) },
+                onRequestDisableFamily = { showDisableDialog = true },
+                requester = bringIntoViewRequesters.getValue(SettingsSection.CONTENT),
+                onPositioned = { cardCoordinates = cardCoordinates + (SettingsSection.CONTENT to it) },
+            )
+
+            // 3. Player
+            PlayerSectionCard(
+                uiState = uiState,
+                isExpanded = SettingsSection.PLAYER in expandedSections,
+                onToggle = { toggleSection(SettingsSection.PLAYER) },
+                onEvent = onEvent,
+                onOpenLanguageDialog = { showLanguageDialog = true },
+                onOpenQualityDialog = { showQualityDialog = true },
+                onOpenSkipLengthDialog = { showSkipLengthDialog = true },
+                requester = bringIntoViewRequesters.getValue(SettingsSection.PLAYER),
+                onPositioned = { cardCoordinates = cardCoordinates + (SettingsSection.PLAYER to it) },
+            )
+
+            // 4. Subtitles and audio
+            val isSubtitlesExpanded = SettingsSection.SUBTITLES in expandedSections
+            val subtitlesRequester = bringIntoViewRequesters.getValue(SettingsSection.SUBTITLES)
+            SettingsSectionCard(
+                section = SettingsSection.SUBTITLES,
+                summary =
+                    sectionSummary(
+                        isSubtitlesExpanded,
+                        subtitlesSummary(uiState.preferredAudioLanguage, uiState.preferredSubtitleLanguage),
+                    ),
+                expanded = isSubtitlesExpanded,
+                onToggle = { toggleSection(SettingsSection.SUBTITLES) },
+                modifier =
+                    Modifier
+                        .bringIntoViewRequester(subtitlesRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.SUBTITLES to it)
+                        },
+            ) {
+                SubtitleSettingsSection(
+                    uiState = uiState,
+                    onEvent = onEvent,
+                )
+            }
+
+            // 5. Torrent
+            val isTorrentExpanded = SettingsSection.TORRENT in expandedSections
+            val torrentRequester = bringIntoViewRequesters.getValue(SettingsSection.TORRENT)
+            SettingsSectionCard(
+                section = SettingsSection.TORRENT,
+                summary =
+                    sectionSummary(
+                        isTorrentExpanded,
+                        torrentSummary(torrentState.wifiOnly, torrentState.cacheLimitGb),
+                    ),
+                expanded = isTorrentExpanded,
+                onToggle = { toggleSection(SettingsSection.TORRENT) },
+                modifier =
+                    Modifier
+                        .bringIntoViewRequester(torrentRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.TORRENT to it)
+                        },
+            ) {
+                TorrentSection(
+                    state = torrentState,
+                    onEvent = onTorrentEvent,
+                )
+            }
+
+            // 6. About
+            val isAboutExpanded = SettingsSection.ABOUT in expandedSections
+            val aboutRequester = bringIntoViewRequesters.getValue(SettingsSection.ABOUT)
+            SettingsSectionCard(
+                section = SettingsSection.ABOUT,
+                summary = sectionSummary(isAboutExpanded, aboutState.versionSummary),
+                expanded = isAboutExpanded,
+                onToggle = { toggleSection(SettingsSection.ABOUT) },
+                modifier =
+                    Modifier
+                        .bringIntoViewRequester(aboutRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.ABOUT to it)
+                        },
+            ) {
+                AboutSection(
+                    state = aboutState,
+                    onEvent = onAboutEvent,
+                    onOpenUrl = onOpenUrl,
+                )
             }
         }
 
@@ -220,308 +368,237 @@ internal fun SettingsContent(
 }
 
 @Composable
-private fun AddonsNavigationCard(onNavigateToAddons: () -> Unit) {
-    NexusCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onNavigateToAddons,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(NexusTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.settings_addons_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FamilyModeCard(
+private fun AddonsAndContentSectionCard(
     uiState: SettingsUiState,
-    onToggle: (Boolean) -> Unit,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onNavigateToAddons: () -> Unit,
+    onSetFamilyMode: (Boolean) -> Unit,
+    onRequestDisableFamily: () -> Unit,
+    requester: BringIntoViewRequester,
+    onPositioned: (LayoutCoordinates) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_family_mode_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                val subtitle =
-                    if (uiState.familyMode && uiState.hiddenAdultAddonsCount > 0) {
-                        if (uiState.hiddenAdultAddonsCount == 1) {
-                            stringResource(
-                                R.string.settings_family_mode_subtitle_hidden,
-                                uiState.hiddenAdultAddonsCount,
-                            )
-                        } else {
-                            stringResource(
-                                R.string.settings_family_mode_subtitle_hidden_plural,
-                                uiState.hiddenAdultAddonsCount,
-                            )
-                        }
-                    } else {
-                        stringResource(R.string.settings_family_mode_subtitle)
-                    }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = uiState.familyMode, onCheckedChange = onToggle)
-        }
-    }
-}
-
-@Composable
-private fun QuickPlayCard(
-    quickPlay: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_quick_play_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.settings_quick_play_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = quickPlay, onCheckedChange = onToggle)
-        }
-    }
-}
-
-@Composable
-private fun PreferredLanguageCard(
-    preferredLanguage: String?,
-    onClick: () -> Unit,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
+    SettingsSectionCard(
+        section = SettingsSection.CONTENT,
+        summary = sectionSummary(isExpanded, contentSummary(uiState.familyMode)),
+        expanded = isExpanded,
+        onToggle = onToggle,
+        modifier =
+            modifier
+                .bringIntoViewRequester(requester)
+                .onGloballyPositioned(onPositioned),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_player_preferred_language_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+        SettingsRow(
+            title = stringResource(R.string.settings_manage_addons),
+            onClick = onNavigateToAddons,
+            trailing = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val label =
-                    preferredLanguage?.let { LanguageCodes.languageDisplayName(it) }
-                        ?: stringResource(R.string.settings_player_preferred_language_none)
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            },
+        )
+
+        val familySubtitle =
+            if (uiState.familyMode && uiState.hiddenAdultAddonsCount > 0) {
+                if (uiState.hiddenAdultAddonsCount == 1) {
+                    stringResource(
+                        R.string.settings_family_mode_subtitle_hidden,
+                        uiState.hiddenAdultAddonsCount,
+                    )
+                } else {
+                    stringResource(
+                        R.string.settings_family_mode_subtitle_hidden_plural,
+                        uiState.hiddenAdultAddonsCount,
+                    )
+                }
+            } else {
+                stringResource(R.string.settings_family_mode_subtitle)
             }
-        }
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_family_mode_title),
+            subtitle = familySubtitle,
+            checked = uiState.familyMode,
+            onCheckedChange = { checked ->
+                if (checked) {
+                    onSetFamilyMode(true)
+                } else {
+                    onRequestDisableFamily()
+                }
+            },
+        )
     }
 }
 
 @Composable
-private fun PreferredQualityCard(
-    preferredQuality: Int?,
-    onClick: () -> Unit,
+private fun PlayerSectionCard(
+    uiState: SettingsUiState,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onEvent: (SettingsEvent) -> Unit,
+    onOpenLanguageDialog: () -> Unit,
+    onOpenQualityDialog: () -> Unit,
+    onOpenSkipLengthDialog: () -> Unit,
+    requester: BringIntoViewRequester,
+    onPositioned: (LayoutCoordinates) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val spacing = NexusTheme.spacing
-    NexusCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
+    SettingsSectionCard(
+        section = SettingsSection.PLAYER,
+        summary =
+            sectionSummary(
+                isExpanded,
+                playerSummary(uiState.preferredQuality, uiState.seekStepSeconds),
+            ),
+        expanded = isExpanded,
+        onToggle = onToggle,
+        modifier =
+            modifier
+                .bringIntoViewRequester(requester)
+                .onGloballyPositioned(onPositioned),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_player_preferred_quality_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                val label =
-                    when (preferredQuality) {
-                        RES_4K -> stringResource(R.string.settings_player_preferred_quality_4k)
-                        RES_1080P -> stringResource(R.string.settings_player_preferred_quality_1080p)
-                        RES_720P -> stringResource(R.string.settings_player_preferred_quality_720p)
-                        RES_SD -> stringResource(R.string.settings_player_preferred_quality_sd)
-                        else -> stringResource(R.string.settings_player_preferred_quality_auto)
-                    }
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_quick_play_title),
+            subtitle = stringResource(R.string.settings_quick_play_subtitle),
+            checked = uiState.quickPlay,
+            onCheckedChange = { onEvent(SettingsEvent.SetQuickPlay(it)) },
+        )
+
+        val prefLangLabel =
+            uiState.preferredLanguage?.let { LanguageCodes.languageDisplayName(it) }
+                ?: stringResource(R.string.settings_player_preferred_language_none)
+        SettingsValueRow(
+            title = stringResource(R.string.settings_player_preferred_language_title),
+            value = prefLangLabel,
+            onClick = onOpenLanguageDialog,
+        )
+
+        val prefQualityLabel =
+            when (uiState.preferredQuality) {
+                RES_4K -> stringResource(R.string.settings_player_preferred_quality_4k)
+                RES_1080P -> stringResource(R.string.settings_player_preferred_quality_1080p)
+                RES_720P -> stringResource(R.string.settings_player_preferred_quality_720p)
+                RES_SD -> stringResource(R.string.settings_player_preferred_quality_sd)
+                else -> stringResource(R.string.settings_player_preferred_quality_auto)
             }
-        }
+        SettingsValueRow(
+            title = stringResource(R.string.settings_player_preferred_quality_title),
+            value = prefQualityLabel,
+            onClick = onOpenQualityDialog,
+        )
+
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_player_hide_cam_title),
+            subtitle = stringResource(R.string.settings_player_hide_cam_subtitle),
+            checked = uiState.hideCam,
+            onCheckedChange = { onEvent(SettingsEvent.SetHideCam(it)) },
+        )
+
+        SettingsValueRow(
+            title = stringResource(R.string.settings_player_skip_length_title),
+            value =
+                stringResource(
+                    R.string.settings_player_skip_length_seconds,
+                    uiState.seekStepSeconds,
+                ),
+            onClick = onOpenSkipLengthDialog,
+        )
+
+        SettingsSwitchRow(
+            title = stringResource(R.string.settings_player_auto_play_next),
+            subtitle = stringResource(R.string.settings_player_auto_play_next_desc),
+            checked = uiState.autoPlayNext,
+            onCheckedChange = { onEvent(SettingsEvent.SetAutoPlayNext(it)) },
+        )
     }
 }
 
+@Preview(name = "SettingsScreen - Collapsed Light")
 @Composable
-private fun HideCamCard(
-    hideCam: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_player_hide_cam_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.settings_player_hide_cam_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = hideCam, onCheckedChange = onToggle)
-        }
-    }
-}
-
-@Composable
-private fun SkipLengthCard(
-    seekStepSeconds: Int,
-    onClick: () -> Unit,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
-                verticalArrangement = Arrangement.spacedBy(spacing.xxs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_player_skip_length_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.settings_player_skip_length_seconds, seekStepSeconds),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Preview(name = "SettingsScreen - Light")
-@Composable
-internal fun SettingsScreenLightPreview() {
+internal fun SettingsScreenCollapsedLightPreview() {
     NexusTheme {
         SettingsContent(
             uiState =
                 SettingsUiState(
                     familyMode = true,
-                    hiddenAdultAddonsCount = 2,
                     quickPlay = false,
                     preferredLanguage = "en",
                     preferredQuality = 1080,
                     hideCam = false,
                 ),
+            appearanceState = AppearanceUiState(settings = ThemeSettings()),
+            torrentState = TorrentSettingsUiState(),
+            aboutState = AboutUiState(versionSummary = "Version 1.0.0"),
             onEvent = {},
+            onAppearanceEvent = {},
+            onTorrentEvent = {},
+            onAboutEvent = {},
+            onOpenUrl = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
         )
     }
 }
 
-@Preview(name = "SettingsScreen - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "SettingsScreen - Collapsed Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun SettingsScreenDarkPreview() {
+internal fun SettingsScreenCollapsedDarkPreview() {
     NexusTheme {
         SettingsContent(
             uiState =
                 SettingsUiState(
                     familyMode = false,
-                    hiddenAdultAddonsCount = 0,
                     quickPlay = true,
                     preferredLanguage = null,
                     preferredQuality = null,
                     hideCam = true,
                 ),
+            appearanceState = AppearanceUiState(settings = ThemeSettings()),
+            torrentState = TorrentSettingsUiState(),
+            aboutState = AboutUiState(versionSummary = "Version 1.0.0"),
             onEvent = {},
+            onAppearanceEvent = {},
+            onTorrentEvent = {},
+            onAboutEvent = {},
+            onOpenUrl = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
+        )
+    }
+}
+
+@Preview(name = "SettingsScreen - Appearance Expanded")
+@Composable
+internal fun SettingsScreenAppearanceExpandedPreview() {
+    NexusTheme {
+        AppearanceSection(
+            state = AppearanceUiState(settings = ThemeSettings()),
+            onEvent = {},
+        )
+    }
+}
+
+@Preview(name = "SettingsScreen - Torrent Expanded")
+@Composable
+internal fun SettingsScreenTorrentExpandedPreview() {
+    NexusTheme {
+        TorrentSection(
+            state = TorrentSettingsUiState(cacheLimitGb = 5),
+            onEvent = {},
+        )
+    }
+}
+
+@Preview(name = "SettingsScreen - About Expanded")
+@Composable
+internal fun SettingsScreenAboutExpandedPreview() {
+    NexusTheme {
+        AboutSection(
+            state = AboutUiState(versionText = "1.0.0 (10000)", versionSummary = "Version 1.0.0"),
+            onEvent = {},
+            onOpenUrl = {},
         )
     }
 }
