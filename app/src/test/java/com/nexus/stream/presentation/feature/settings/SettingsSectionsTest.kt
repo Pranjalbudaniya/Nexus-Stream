@@ -151,4 +151,16 @@ class SettingsSectionsTest {
         assertNull(sectionSummary(expanded = true, summary = "Some summary"))
         assertEquals("Some summary", sectionSummary(expanded = false, summary = "Some summary"))
     }
+
+    @Test
+    fun SM10_about_summary_withUpdateAvailable() {
+        val summary = aboutSummary(versionName = "1.0.0", versionCode = 10000L, updateAvailable = true)
+        assertEquals("Version 1.0.0 · Update available", summary)
+    }
+
+    @Test
+    fun SM11_about_summary_withoutUpdate_isUnchanged() {
+        val summary = aboutSummary(versionName = "1.0.0", versionCode = 10000L)
+        assertEquals("Version 1.0.0", summary)
+    }
 }

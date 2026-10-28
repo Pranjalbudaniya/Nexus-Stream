@@ -120,12 +120,16 @@ fun torrentSummary(
 fun aboutSummary(
     versionName: String?,
     versionCode: Long,
-): String =
-    if (!versionName.isNullOrBlank()) {
-        "Version $versionName"
-    } else {
-        "$versionCode"
-    }
+    updateAvailable: Boolean = false,
+): String {
+    val base =
+        if (!versionName.isNullOrBlank()) {
+            "Version $versionName"
+        } else {
+            "$versionCode"
+        }
+    return if (updateAvailable) "$base · Update available" else base
+}
 
 fun sectionSummary(
     expanded: Boolean,

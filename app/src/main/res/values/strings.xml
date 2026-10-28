@@ -727,5 +727,60 @@
     <string name="player_next_a11y">Next episode, season %1$d episode %2$d</string>
     <string name="settings_player_auto_play_next">Play next episode automatically</string>
     <string name="settings_player_auto_play_next_desc">Starts the next episode a few seconds after one ends</string>
+
+    <!-- Update strings P13c -->
+    <string name="update_title">Updates</string>
+    <string name="update_not_checked">Not checked yet</string>
+    <string name="update_up_to_date">You\'re up to date. Checked %1$s</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_check_again">Check again</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_size">%1$s</string>
+    <string name="update_download">Download and install</string>
+    <string name="update_view_release">View release</string>
+    <string name="update_whats_new">What\'s new</string>
+    <string name="update_show_more">Show more</string>
+    <string name="update_show_less">Show less</string>
+    <string name="update_metered_title">Download over mobile data?</string>
+    <string name="update_metered_body">This update is about %1$s.</string>
+    <string name="update_downloading">Downloading %1$s · %2$d%%</string>
+    <string name="update_downloading_indeterminate">Downloading %1$s</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_verifying">Checking the file…</string>
+    <string name="update_permission_title">Allow installing updates</string>
+    <string name="update_permission_body">Android needs your permission before Nexus Stream can install an update. You will be taken to a settings page; allow it and come back.</string>
+    <string name="update_open_settings">Open settings</string>
+    <string name="update_not_now">Not now</string>
+    <string name="update_allow_install">Allow and install</string>
+    <string name="update_installing">Installing… Confirm in the Android dialog.</string>
+    <string name="update_awaiting">Almost done. Tap Continue to finish installing.</string>
+    <string name="update_continue">Continue</string>
+    <string name="update_try_again">Try again</string>
+    <string name="update_unsupported">Updates from GitHub aren\'t available for this build.</string>
+    <string name="update_auto_title">Check for updates when the app starts</string>
+    <string name="update_auto_caption">Checks GitHub at most once a day. Nothing else is sent.</string>
+    <string name="update_updated">Updated to %1$s</string>
+    <string name="settings_summary_about_update">Update available</string>
+
+    <!-- Update failures P13c -->
+    <string name="update_failure_network">Couldn\'t reach GitHub. Check your connection and try again.</string>
+    <string name="update_failure_timeout">GitHub took too long to answer. Try again.</string>
+    <string name="update_failure_rate_limited">GitHub is limiting requests right now. Try again later.</string>
+    <string name="update_failure_no_release">No releases have been published yet.</string>
+    <string name="update_failure_no_apk">The latest release has no app file for this device.</string>
+    <string name="update_failure_bad_response">GitHub sent an answer the app couldn\'t read.</string>
+    <string name="update_failure_insufficient_storage">Not enough free space. About %1$s is needed.</string>
+    <string name="update_failure_download_failed">The download didn\'t finish. Try again.</string>
+    <string name="update_failure_corrupt">The downloaded file is damaged. Try again.</string>
+    <string name="update_failure_invalid_apk">The downloaded file isn\'t a valid app.</string>
+    <string name="update_failure_package_mismatch">This file belongs to a different app.</string>
+    <string name="update_failure_not_newer">This release isn\'t newer than the version you have.</string>
+    <string name="update_failure_signature_mismatch">This update was signed differently from the installed app, so Android can\'t install it over it. You can install it manually from the release page.</string>
+    <string name="update_failure_install_blocked">Android blocked the installation.</string>
+    <string name="update_failure_install_incompatible">This update isn\'t compatible with this device.</string>
+    <string name="update_failure_install_conflict">Android refused the update because it conflicts with the installed app.</string>
+    <string name="update_failure_install_storage">Not enough space to install the update.</string>
+    <string name="update_failure_install_failed">The installation failed.</string>
 </resources>
 
