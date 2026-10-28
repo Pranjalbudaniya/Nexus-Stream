@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +25,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.ThemeSettings
@@ -65,15 +70,31 @@ fun SettingsScreen(
     appearanceViewModel: AppearanceViewModel = hiltViewModel(),
     torrentViewModel: TorrentSettingsViewModel = hiltViewModel(),
     aboutViewModel: AboutViewModel = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val appearanceState by appearanceViewModel.uiState.collectAsStateWithLifecycle()
     val torrentState by torrentViewModel.uiState.collectAsStateWithLifecycle()
     val aboutState by aboutViewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    updateViewModel.onEvent(UpdateEvent.Resumed)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(torrentViewModel) {
         torrentViewModel.effects.collect { effect ->
@@ -117,15 +138,53 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(updateViewModel) {
+        updateViewModel.effects.collect { effect ->
+            when (effect) {
+                is UpdateUiEffect.OpenInstallPermissionSettings -> {
+                    try {
+                        val intent =
+                            Intent(
+                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:${effect.packageName}"),
+                            )
+                        context.startActivity(intent)
+                    } catch (_: ActivityNotFoundException) {
+                        try {
+                            val fallback = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                            context.startActivity(fallback)
+                        } catch (_: ActivityNotFoundException) {
+                            snackbarHostState.showSnackbar(
+                                context.getString(R.string.settings_about_no_app),
+                            )
+                        }
+                    }
+                }
+
+                is UpdateUiEffect.OpenUrl -> {
+                    onOpenUrl(effect.url)
+                }
+
+                is UpdateUiEffect.ShowUpdated -> {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.update_updated, effect.versionName),
+                    )
+                }
+            }
+        }
+    }
+
     SettingsContent(
         uiState = uiState,
         appearanceState = appearanceState,
         torrentState = torrentState,
         aboutState = aboutState,
+        updateState = updateState,
         onEvent = viewModel::onEvent,
         onAppearanceEvent = appearanceViewModel::onEvent,
         onTorrentEvent = torrentViewModel::onEvent,
         onAboutEvent = aboutViewModel::onEvent,
+        onUpdateEvent = updateViewModel::onEvent,
         onOpenUrl = onOpenUrl,
         onNavigateUp = onNavigateUp,
         onNavigateToAddons = onNavigateToAddons,
@@ -141,10 +200,12 @@ internal fun SettingsContent(
     appearanceState: AppearanceUiState,
     torrentState: TorrentSettingsUiState,
     aboutState: AboutUiState,
+    updateState: UpdateUi,
     onEvent: (SettingsEvent) -> Unit,
     onAppearanceEvent: (AppearanceEvent) -> Unit,
     onTorrentEvent: (TorrentSettingsEvent) -> Unit,
     onAboutEvent: (AboutEvent) -> Unit,
+    onUpdateEvent: (UpdateEvent) -> Unit,
     onOpenUrl: (String) -> Unit,
     onNavigateUp: () -> Unit,
     onNavigateToAddons: () -> Unit,
@@ -332,9 +393,16 @@ internal fun SettingsContent(
             // 6. About
             val isAboutExpanded = SettingsSection.ABOUT in expandedSections
             val aboutRequester = bringIntoViewRequesters.getValue(SettingsSection.ABOUT)
+            val aboutSummaryText =
+                aboutSummary(
+                    versionName = aboutState.versionName,
+                    versionCode = aboutState.versionCode,
+                    updateAvailable = updateState.summaryFlag,
+                    updateSuffix = stringResource(R.string.settings_summary_about_update),
+                )
             SettingsSectionCard(
                 section = SettingsSection.ABOUT,
-                summary = sectionSummary(isAboutExpanded, aboutState.versionSummary),
+                summary = sectionSummary(isAboutExpanded, aboutSummaryText),
                 expanded = isAboutExpanded,
                 onToggle = { toggleSection(SettingsSection.ABOUT) },
                 modifier =
@@ -346,7 +414,9 @@ internal fun SettingsContent(
             ) {
                 AboutSection(
                     state = aboutState,
+                    updateState = updateState,
                     onEvent = onAboutEvent,
+                    onUpdateEvent = onUpdateEvent,
                     onOpenUrl = onOpenUrl,
                 )
             }
@@ -364,6 +434,19 @@ internal fun SettingsContent(
             onDismissQuality = { showQualityDialog = false },
             onDismissSkipLength = { showSkipLengthDialog = false },
         )
+
+        if (updateState.showMeteredDialog) {
+            ConfirmMeteredDialog(
+                sizeBytes = updateState.meteredSizeBytes,
+                onEvent = onUpdateEvent,
+            )
+        }
+
+        if (updateState.showPermissionDialog) {
+            InstallPermissionDialog(
+                onEvent = onUpdateEvent,
+            )
+        }
     }
 }
 
@@ -531,10 +614,16 @@ internal fun SettingsScreenCollapsedLightPreview() {
             appearanceState = AppearanceUiState(settings = ThemeSettings()),
             torrentState = TorrentSettingsUiState(),
             aboutState = AboutUiState(versionSummary = "Version 1.0.0"),
+            updateState =
+                UpdateUi(
+                    status = StatusText(R.string.update_not_checked),
+                    bigButtons = listOf(UiButton(R.string.update_check, UpdateEvent.CheckNow, isPrimary = true)),
+                ),
             onEvent = {},
             onAppearanceEvent = {},
             onTorrentEvent = {},
             onAboutEvent = {},
+            onUpdateEvent = {},
             onOpenUrl = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
@@ -558,10 +647,16 @@ internal fun SettingsScreenCollapsedDarkPreview() {
             appearanceState = AppearanceUiState(settings = ThemeSettings()),
             torrentState = TorrentSettingsUiState(),
             aboutState = AboutUiState(versionSummary = "Version 1.0.0"),
+            updateState =
+                UpdateUi(
+                    status = StatusText(R.string.update_not_checked),
+                    bigButtons = listOf(UiButton(R.string.update_check, UpdateEvent.CheckNow, isPrimary = true)),
+                ),
             onEvent = {},
             onAppearanceEvent = {},
             onTorrentEvent = {},
             onAboutEvent = {},
+            onUpdateEvent = {},
             onOpenUrl = {},
             onNavigateUp = {},
             onNavigateToAddons = {},
@@ -597,7 +692,13 @@ internal fun SettingsScreenAboutExpandedPreview() {
     NexusTheme {
         AboutSection(
             state = AboutUiState(versionText = "1.0.0 (10000)", versionSummary = "Version 1.0.0"),
+            updateState =
+                UpdateUi(
+                    status = StatusText(R.string.update_not_checked),
+                    bigButtons = listOf(UiButton(R.string.update_check, UpdateEvent.CheckNow, isPrimary = true)),
+                ),
             onEvent = {},
+            onUpdateEvent = {},
             onOpenUrl = {},
         )
     }

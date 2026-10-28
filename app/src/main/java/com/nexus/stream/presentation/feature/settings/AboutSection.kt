@@ -16,7 +16,9 @@ import com.nexus.stream.presentation.theme.NexusTheme
 @Composable
 fun AboutSection(
     state: AboutUiState,
+    updateState: UpdateUi,
     onEvent: (AboutEvent) -> Unit,
+    onUpdateEvent: (UpdateEvent) -> Unit,
     onOpenUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -32,7 +34,13 @@ fun AboutSection(
             value = state.versionText,
         )
 
-        // 2. Source code on GitHub
+        // 2. Updates
+        UpdateSection(
+            state = updateState,
+            onEvent = onUpdateEvent,
+        )
+
+        // 3. Source code on GitHub
         SettingsRow(
             title = stringResource(R.string.settings_about_github),
             onClick = { onEvent(AboutEvent.OpenGithub) },
@@ -84,7 +92,13 @@ internal fun AboutSectionExpandedPreview() {
     NexusTheme {
         AboutSection(
             state = AboutUiState(versionText = "1.0.0 (10000)"),
+            updateState =
+                UpdateUi(
+                    status = StatusText(R.string.update_not_checked),
+                    bigButtons = listOf(UiButton(R.string.update_check, UpdateEvent.CheckNow, isPrimary = true)),
+                ),
             onEvent = {},
+            onUpdateEvent = {},
             onOpenUrl = {},
         )
     }

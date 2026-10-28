@@ -121,6 +121,7 @@ fun aboutSummary(
     versionName: String?,
     versionCode: Long,
     updateAvailable: Boolean = false,
+    updateSuffix: String = "Update available",
 ): String {
     val base =
         if (!versionName.isNullOrBlank()) {
@@ -128,7 +129,7 @@ fun aboutSummary(
         } else {
             "$versionCode"
         }
-    return if (updateAvailable) "$base · Update available" else base
+    return if (updateAvailable) "$base · $updateSuffix" else base
 }
 
 fun sectionSummary(

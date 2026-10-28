@@ -22,6 +22,8 @@ data class AboutUiState(
     val showLicenses: Boolean = false,
     val showDisclaimer: Boolean = false,
     val versionSummary: String = "",
+    val versionName: String? = null,
+    val versionCode: Long = 0L,
 )
 
 sealed interface AboutEvent {
@@ -55,6 +57,8 @@ class AboutViewModel
                 AboutUiState(
                     versionText = formatAppVersion(appInfoProvider.versionName, appInfoProvider.versionCode),
                     versionSummary = aboutSummary(appInfoProvider.versionName, appInfoProvider.versionCode),
+                    versionName = appInfoProvider.versionName,
+                    versionCode = appInfoProvider.versionCode,
                 ),
             )
         val uiState: StateFlow<AboutUiState> = _uiState.asStateFlow()
