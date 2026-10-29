@@ -68,12 +68,14 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     appearanceViewModel: AppearanceViewModel = hiltViewModel(),
+    homeRowsViewModel: HomeRowsSettingsViewModel = hiltViewModel(),
     torrentViewModel: TorrentSettingsViewModel = hiltViewModel(),
     aboutViewModel: AboutViewModel = hiltViewModel(),
     updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val appearanceState by appearanceViewModel.uiState.collectAsStateWithLifecycle()
+    val homeRowsState by homeRowsViewModel.uiState.collectAsStateWithLifecycle()
     val torrentState by torrentViewModel.uiState.collectAsStateWithLifecycle()
     val aboutState by aboutViewModel.uiState.collectAsStateWithLifecycle()
     val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
@@ -177,11 +179,13 @@ fun SettingsScreen(
     SettingsContent(
         uiState = uiState,
         appearanceState = appearanceState,
+        homeRowsState = homeRowsState,
         torrentState = torrentState,
         aboutState = aboutState,
         updateState = updateState,
         onEvent = viewModel::onEvent,
         onAppearanceEvent = appearanceViewModel::onEvent,
+        onHomeRowsEvent = homeRowsViewModel::onEvent,
         onTorrentEvent = torrentViewModel::onEvent,
         onAboutEvent = aboutViewModel::onEvent,
         onUpdateEvent = updateViewModel::onEvent,
@@ -198,11 +202,13 @@ fun SettingsScreen(
 internal fun SettingsContent(
     uiState: SettingsUiState,
     appearanceState: AppearanceUiState,
+    homeRowsState: HomeRowsUiState = HomeRowsUiState(),
     torrentState: TorrentSettingsUiState,
     aboutState: AboutUiState,
     updateState: UpdateUi,
     onEvent: (SettingsEvent) -> Unit,
     onAppearanceEvent: (AppearanceEvent) -> Unit,
+    onHomeRowsEvent: (HomeRowsEvent) -> Unit = {},
     onTorrentEvent: (TorrentSettingsEvent) -> Unit,
     onAboutEvent: (AboutEvent) -> Unit,
     onUpdateEvent: (UpdateEvent) -> Unit,
@@ -327,7 +333,32 @@ internal fun SettingsContent(
                 onPositioned = { cardCoordinates = cardCoordinates + (SettingsSection.CONTENT to it) },
             )
 
-            // 3. Player
+            // 3. Home rows
+            val isHomeRowsExpanded = SettingsSection.HOME_ROWS in expandedSections
+            val homeRowsRequester = bringIntoViewRequesters.getValue(SettingsSection.HOME_ROWS)
+            SettingsSectionCard(
+                section = SettingsSection.HOME_ROWS,
+                summary =
+                    sectionSummary(
+                        isHomeRowsExpanded,
+                        homeRowsSummary(homeRowsState.totalCount, homeRowsState.hiddenCount),
+                    ),
+                expanded = isHomeRowsExpanded,
+                onToggle = { toggleSection(SettingsSection.HOME_ROWS) },
+                modifier =
+                    Modifier
+                        .bringIntoViewRequester(homeRowsRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.HOME_ROWS to it)
+                        },
+            ) {
+                HomeRowsSection(
+                    state = homeRowsState,
+                    onEvent = onHomeRowsEvent,
+                )
+            }
+
+            // 4. Player
             PlayerSectionCard(
                 uiState = uiState,
                 isExpanded = SettingsSection.PLAYER in expandedSections,
@@ -340,7 +371,7 @@ internal fun SettingsContent(
                 onPositioned = { cardCoordinates = cardCoordinates + (SettingsSection.PLAYER to it) },
             )
 
-            // 4. Subtitles and audio
+            // 5. Subtitles and audio
             val isSubtitlesExpanded = SettingsSection.SUBTITLES in expandedSections
             val subtitlesRequester = bringIntoViewRequesters.getValue(SettingsSection.SUBTITLES)
             SettingsSectionCard(
@@ -365,7 +396,7 @@ internal fun SettingsContent(
                 )
             }
 
-            // 5. Torrent
+            // 6. Torrent
             val isTorrentExpanded = SettingsSection.TORRENT in expandedSections
             val torrentRequester = bringIntoViewRequesters.getValue(SettingsSection.TORRENT)
             SettingsSectionCard(
@@ -390,7 +421,7 @@ internal fun SettingsContent(
                 )
             }
 
-            // 6. About
+            // 7. About
             val isAboutExpanded = SettingsSection.ABOUT in expandedSections
             val aboutRequester = bringIntoViewRequesters.getValue(SettingsSection.ABOUT)
             val aboutSummaryText =

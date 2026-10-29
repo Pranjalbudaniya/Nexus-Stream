@@ -46,6 +46,7 @@ class SettingsSectionsTest {
             listOf(
                 SettingsSection.APPEARANCE,
                 SettingsSection.CONTENT,
+                SettingsSection.HOME_ROWS,
                 SettingsSection.PLAYER,
                 SettingsSection.SUBTITLES,
                 SettingsSection.TORRENT,
@@ -162,5 +163,16 @@ class SettingsSectionsTest {
     fun SM11_about_summary_withoutUpdate_isUnchanged() {
         val summary = aboutSummary(versionName = "1.0.0", versionCode = 10000L)
         assertEquals("Version 1.0.0", summary)
+    }
+
+    @Test
+    fun SM12_homeRows_summary_countsRowsAndHidden() {
+        assertEquals("12 rows · 2 hidden", homeRowsSummary(totalCount = 12, hiddenCount = 2))
+        assertEquals("12 rows", homeRowsSummary(totalCount = 12, hiddenCount = 0))
+    }
+
+    @Test
+    fun SM13_homeRows_summary_noRows() {
+        assertEquals("No rows yet", homeRowsSummary(totalCount = 0, hiddenCount = 0))
     }
 }

@@ -44,6 +44,7 @@ fun sectionTitleRes(section: SettingsSection): Int =
     when (section) {
         SettingsSection.APPEARANCE -> R.string.settings_section_appearance
         SettingsSection.CONTENT -> R.string.settings_section_content
+        SettingsSection.HOME_ROWS -> R.string.settings_section_home_rows_title
         SettingsSection.PLAYER -> R.string.settings_section_player
         SettingsSection.SUBTITLES -> R.string.settings_section_subtitles
         SettingsSection.TORRENT -> R.string.settings_section_torrent

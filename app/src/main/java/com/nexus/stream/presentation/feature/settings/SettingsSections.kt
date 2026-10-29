@@ -12,6 +12,7 @@ import com.nexus.stream.presentation.theme.tokens.BrandAccent
 enum class SettingsSection {
     APPEARANCE,
     CONTENT,
+    HOME_ROWS,
     PLAYER,
     SUBTITLES,
     TORRENT,
@@ -136,3 +137,15 @@ fun sectionSummary(
     expanded: Boolean,
     summary: String,
 ): String? = if (expanded) null else summary
+
+fun homeRowsSummary(
+    totalCount: Int,
+    hiddenCount: Int,
+): String =
+    if (totalCount == 0) {
+        "No rows yet"
+    } else if (hiddenCount > 0) {
+        "$totalCount rows · $hiddenCount hidden"
+    } else {
+        "$totalCount rows"
+    }

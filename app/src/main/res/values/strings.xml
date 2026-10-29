@@ -782,5 +782,20 @@
     <string name="update_failure_install_conflict">Android refused the update because it conflicts with the installed app.</string>
     <string name="update_failure_install_storage">Not enough space to install the update.</string>
     <string name="update_failure_install_failed">The installation failed.</string>
+
+    <!-- P13d Home rows -->
+    <string name="settings_section_home_rows_title">Home rows</string>
+    <string name="settings_section_home_rows_subtitle">Reorder and hide catalog rows on Home</string>
+    <string name="home_rows_empty_message">No rows yet</string>
+    <string name="home_rows_empty_body">Catalog rows from enabled addons will appear here.</string>
+    <string name="home_rows_btn_reset">Reset to default</string>
+    <string name="home_rows_reset_dialog_title">Reset Home rows?</string>
+    <string name="home_rows_reset_dialog_body">This restores the default catalog order and unhides every row.</string>
+    <string name="home_rows_action_move_up">Move row up</string>
+    <string name="home_rows_action_move_down">Move row down</string>
+    <string name="home_rows_action_toggle">Show or hide row</string>
+    <string name="home_all_rows_hidden_title">All Home rows are hidden</string>
+    <string name="home_all_rows_hidden_body">Turn rows back on in Settings, Home rows.</string>
+    <string name="home_all_rows_hidden_button">Open settings</string>
 </resources>
 
