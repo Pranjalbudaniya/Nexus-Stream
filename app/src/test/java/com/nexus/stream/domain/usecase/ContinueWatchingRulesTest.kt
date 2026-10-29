@@ -516,4 +516,66 @@ class ContinueWatchingRulesTest {
         assertEquals(2, result.size)
         assertEquals(setOf("m2", "s1"), result.map { it.metaId }.toSet())
     }
+
+    @Test
+    fun CW1_equalSaveTimes_breakTiesByMetaId() {
+        val rowB = createRow(metaId = "b", updatedAt = 1000L)
+        val rowA = createRow(metaId = "a", updatedAt = 1000L)
+
+        val result1 = ContinueWatchingRules(listOf(rowB, rowA))
+        assertEquals(listOf("a", "b"), result1.map { it.metaId })
+
+        val result2 = ContinueWatchingRules(listOf(rowA, rowB))
+        assertEquals(listOf("a", "b"), result2.map { it.metaId })
+    }
+
+    @Test
+    fun CW2_lastWatchedTitle_isFirst() {
+        val rowA = createRow(metaId = "a", updatedAt = 100L)
+        val rowB = createRow(metaId = "b", updatedAt = 200L)
+
+        val result = ContinueWatchingRules(listOf(rowA, rowB))
+        assertEquals(listOf("b", "a"), result.map { it.metaId })
+    }
+
+    @Test
+    fun CW3_watchingAnOlderTitleAgain_movesItToTheFront() {
+        val rowA1 = createRow(metaId = "a", updatedAt = 100L)
+        val rowB = createRow(metaId = "b", updatedAt = 200L)
+        val result1 = ContinueWatchingRules(listOf(rowA1, rowB))
+        assertEquals(listOf("b", "a"), result1.map { it.metaId })
+
+        val rowA2 = createRow(metaId = "a", updatedAt = 300L)
+        val result2 = ContinueWatchingRules(listOf(rowA2, rowB))
+        assertEquals(listOf("a", "b"), result2.map { it.metaId })
+        assertEquals(1, result2.count { it.metaId == "a" })
+    }
+
+    @Test
+    fun CW4_upNext_sortsByTheLastWatchedTime() {
+        val seriesWatching =
+            createRow(
+                metaId = "series_up_next",
+                type = "series",
+                watched = true,
+                updatedAt = 250L,
+            ).copy(season = 1, inWatchlist = true, listStatus = ListStatus.WATCHING)
+        val inProgressMovie =
+            createRow(metaId = "movie_prog", type = "movie", positionMs = 120_000L, updatedAt = 200L)
+        val inProgressSeries =
+            createRow(metaId = "series_prog", type = "series", positionMs = 120_000L, updatedAt = 300L)
+
+        val result = ContinueWatchingRules(listOf(seriesWatching, inProgressMovie, inProgressSeries), now = 500L)
+        assertEquals(listOf("series_prog", "series_up_next", "movie_prog"), result.map { it.metaId })
+    }
+
+    @Test
+    fun CW5_finishedMovie_leavesTheList_andTheNextNewestIsFirst() {
+        val finishedMovie = createRow(metaId = "movie_done", type = "movie", watched = true, updatedAt = 400L)
+        val inProgressSeries =
+            createRow(metaId = "series_prog", type = "series", positionMs = 120_000L, updatedAt = 300L)
+
+        val result = ContinueWatchingRules(listOf(finishedMovie, inProgressSeries))
+        assertEquals(listOf("series_prog"), result.map { it.metaId })
+    }
 }
