@@ -2,7 +2,9 @@ package com.nexus.stream.presentation.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -10,24 +12,38 @@ import androidx.navigation.toRoute
 import com.nexus.stream.presentation.feature.addons.AddonManagerScreen
 import com.nexus.stream.presentation.feature.detail.DetailScreen
 import com.nexus.stream.presentation.feature.discover.DiscoverScreen
+import com.nexus.stream.presentation.feature.downloads.DownloadsScreen
 import com.nexus.stream.presentation.feature.home.HomeScreen
 import com.nexus.stream.presentation.feature.library.LibraryScreen
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import com.nexus.stream.presentation.feature.player.PlayerScreen
-import com.nexus.stream.presentation.feature.search.SearchScreen
 import com.nexus.stream.presentation.feature.settings.SettingsScreen
+import kotlinx.coroutines.flow.filter
 
 @Composable
 fun NexusNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     playbackSessionHolder: PlaybackSessionHolder? = null,
+    tabReselects: TabReselects = remember { TabReselects() },
 ) {
     LaunchedEffect(playbackSessionHolder) {
         playbackSessionHolder?.openRequests?.collect {
-            navController.navigate(Player)
+            if (navController.currentDestination?.hasRoute<Player>() != true) {
+                navController.navigate(Player)
+            }
         }
     }
+
+    val discoverReselects =
+        remember(tabReselects) {
+            tabReselects.events.filter { it == TopLevelDestination.DISCOVER }
+        }
+
+    val libraryReselects =
+        remember(tabReselects) {
+            tabReselects.events.filter { it == TopLevelDestination.LIBRARY }
+        }
 
     NavHost(
         navController = navController,
@@ -44,13 +60,25 @@ fun NexusNavHost(
             )
         }
         composable<Discover> {
-            DiscoverScreen()
+            DiscoverScreen(
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
+                onNavigateToAddons = { navController.navigate(Addons()) },
+                reselectEvents = discoverReselects,
+            )
         }
-        composable<Search> {
-            SearchScreen()
+        composable<Downloads> {
+            DownloadsScreen()
         }
         composable<Library> {
-            LibraryScreen()
+            LibraryScreen(
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
+                onNavigateToDiscover = { navController.navigate(Discover) },
+                reselectEvents = libraryReselects,
+            )
         }
         composable<Settings> {
             SettingsScreen(
@@ -75,6 +103,12 @@ fun NexusNavHost(
         composable<Player> {
             PlayerScreen(
                 onNavigateUp = { navController.navigateUp() },
+                onSwitchToNext = {
+                    navController.navigate(Player) {
+                        popUpTo<Player> { inclusive = true }
+                    }
+                },
+                playbackSessionHolder = playbackSessionHolder,
             )
         }
     }

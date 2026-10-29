@@ -33,6 +33,7 @@ import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StreamProxy
 import com.nexus.stream.domain.repository.TorrentEngine
 import com.nexus.stream.domain.usecase.LoadOnlineSubtitles
+import com.nexus.stream.domain.usecase.NextUi
 import com.nexus.stream.domain.usecase.PlaybackProgressTracker
 import com.nexus.stream.domain.usecase.ProgressRules
 import com.nexus.stream.domain.usecase.SUBTITLES_OFF
@@ -42,6 +43,7 @@ import com.nexus.stream.domain.usecase.groupByLanguage
 import com.nexus.stream.domain.usecase.matchTrackByLanguage
 import com.nexus.stream.domain.usecase.progressKeyFor
 import com.nexus.stream.domain.usecase.progressVideoId
+import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.theme.tokens.SubtitlePalette
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -195,6 +197,9 @@ data class PlayerUiState(
     val onlineSubtitles: OnlineSubtitlesState = OnlineSubtitlesState.Idle,
     val applyingSubtitleKey: String? = null,
     val subtitleError: SubtitleError? = null,
+    val nextUi: NextUi = NextUi.None,
+    val nextEpisodeLabel: Pair<Int, Int>? = null,
+    val autoPlayCountdownSeconds: Int? = null,
 ) {
     override fun toString(): String =
         "PlayerUiState(title=$title, phase=$phase, pos=$positionMs, dur=$durationMs, " +
@@ -203,7 +208,8 @@ data class PlayerUiState(
             "seekStepMs=$seekStepMs, holdSpeed=$holdSpeed, " +
             "rate=$rate, scale=$scale, drawer=$drawer, canOpenExternal=$canOpenExternal, " +
             "subtitleDelayMs=$subtitleDelayMs, onlineSubsState=${onlineSubtitles::class.simpleName}, " +
-            "applyingSubtitleKey=$applyingSubtitleKey, subtitleError=$subtitleError)"
+            "applyingSubtitleKey=$applyingSubtitleKey, subtitleError=$subtitleError, " +
+            "nextUi=$nextUi, nextEpisodeLabel=$nextEpisodeLabel, countdown=$autoPlayCountdownSeconds)"
 }
 
 sealed interface PlayerEvent {
@@ -276,12 +282,22 @@ sealed interface PlayerEvent {
     data object CycleScale : PlayerEvent
 
     data object OpenExternal : PlayerEvent
+
+    data object NextEpisodeTapped : PlayerEvent
+
+    data object NextEpisodeDismissed : PlayerEvent
 }
 
 sealed interface PlayerEffect {
     data class OpenExternal(
         val url: String,
         val title: String,
+    ) : PlayerEffect
+
+    data object SwitchToNext : PlayerEffect
+
+    data class ChooseNextSource(
+        val request: PlaybackRequest,
     ) : PlayerEffect
 }
 
@@ -301,6 +317,7 @@ class PlayerViewModel
         private val subtitleFileImporter: SubtitleFileImporter,
         private val saveProgress: SaveProgress,
         private val progressRepository: ProgressRepository,
+        private val nextEpisodeControllerFactory: NextEpisodeController.Factory,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
         @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
@@ -316,6 +333,7 @@ class PlayerViewModel
         internal var progressTracker: PlaybackProgressTracker? = null
         private var resumeDeferred: Deferred<WatchProgress?>? = null
         private var resumeHandled = false
+        private var nextEpisodeController: NextEpisodeController? = null
 
         private var controller: PlayerController? = null
         private var proxySession: ProxySession? = null
@@ -363,6 +381,35 @@ class PlayerViewModel
 
             val selection = holder.current.value
             val isTorrent = selection?.source is PlaybackSource.Torrent
+
+            val nextCtrl = nextEpisodeControllerFactory.create(viewModelScope)
+            this.nextEpisodeController = nextCtrl
+            viewModelScope.launch(mainDispatcher) {
+                nextCtrl.state.collect { st ->
+                    _uiState.update {
+                        it.copy(
+                            nextUi = st.nextUi,
+                            nextEpisodeLabel = st.nextEpisodeLabel,
+                            autoPlayCountdownSeconds = st.autoPlayCountdownSeconds,
+                        )
+                    }
+                }
+            }
+            viewModelScope.launch(mainDispatcher) {
+                nextCtrl.effects.collect { eff ->
+                    when (eff) {
+                        is NextEpisodeEffect.SwitchToNext -> {
+                            _effects.send(PlayerEffect.SwitchToNext)
+                        }
+
+                        is NextEpisodeEffect.ChooseNextSource -> {
+                            _effects.send(
+                                PlayerEffect.ChooseNextSource(eff.request),
+                            )
+                        }
+                    }
+                }
+            }
             val target = selection?.toProgressTarget().also { progressTarget = it }
             if (target != null) {
                 progressTracker =
@@ -463,10 +510,27 @@ class PlayerViewModel
         fun getController(): PlayerController? = controller
 
         fun onEvent(event: PlayerEvent) {
-            if (!handleDrawerAndTrackEvent(event) && !handleSubtitleEvent(event)) {
+            if (!handleDrawerAndTrackEvent(event) && !handleSubtitleEvent(event) && !handleNextEpisodeEvent(event)) {
                 handlePlaybackEvent(event)
             }
         }
+
+        private fun handleNextEpisodeEvent(event: PlayerEvent): Boolean =
+            when (event) {
+                PlayerEvent.NextEpisodeTapped -> {
+                    nextEpisodeController?.onNextTapped()
+                    true
+                }
+
+                PlayerEvent.NextEpisodeDismissed -> {
+                    nextEpisodeController?.onDismiss()
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
 
         private fun handleDrawerAndTrackEvent(event: PlayerEvent): Boolean =
             when (event) {
@@ -1155,6 +1219,8 @@ class PlayerViewModel
                 handlePlayingSnapshot(ctrl, snap)
             }
 
+            nextEpisodeController?.onSnapshot(snap.durationMs, snap.positionMs, snap.ended)
+
             _uiState.update { current ->
                 current.copy(
                     positionMs = snap.positionMs,
@@ -1173,23 +1239,10 @@ class PlayerViewModel
             ctrl: PlayerController,
             snap: PlayerSnapshot,
         ) {
-            if (!resumeHandled && snap.isSeekable && snap.durationMs > 0) {
-                resumeHandled = true
-                viewModelScope.launch(mainDispatcher) {
-                    val saved =
-                        try {
-                            resumeDeferred?.await()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            null
-                        }
-                    val resumeMs = ProgressRules.resumePositionMs(saved, snap.durationMs)
-                    if (resumeMs != null) ctrl.seekTo(resumeMs)
-                }
-            }
+            handleResumePosition(ctrl, snap)
             if (!firstPlayingSnapshotSeen) {
                 firstPlayingSnapshotSeen = true
+                holder.current.value?.let { nextEpisodeController?.onPlaybackStarted(it) }
                 autoSelectTimeoutJob?.cancel()
                 autoSelectTimeoutJob =
                     viewModelScope.launch(mainDispatcher) {
@@ -1214,6 +1267,27 @@ class PlayerViewModel
                 if (snap.isSeekable) {
                     pendingResumePositionMs = null
                     if (target > 0) ctrl.seekTo(target)
+                }
+            }
+        }
+
+        private fun handleResumePosition(
+            ctrl: PlayerController,
+            snap: PlayerSnapshot,
+        ) {
+            if (!resumeHandled && snap.isSeekable && snap.durationMs > 0) {
+                resumeHandled = true
+                viewModelScope.launch(mainDispatcher) {
+                    val saved =
+                        try {
+                            resumeDeferred?.await()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                    val resumeMs = ProgressRules.resumePositionMs(saved, snap.durationMs)
+                    if (resumeMs != null) ctrl.seekTo(resumeMs)
                 }
             }
         }
@@ -1323,6 +1397,7 @@ class PlayerViewModel
         public override fun onCleared() {
             super.onCleared()
             progressTracker?.flush()
+            nextEpisodeController?.clear()
             autoSelectTimeoutJob?.cancel()
             subtitleFileImporter.cleanup()
             onlineSubtitlesJob?.cancel()

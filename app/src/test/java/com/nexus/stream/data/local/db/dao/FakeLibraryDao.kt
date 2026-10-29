@@ -15,6 +15,11 @@ class FakeLibraryDao : LibraryDao {
                 .map { LibraryStatusTuple(metaId = it.metaId, listStatus = it.listStatus) }
         }
 
+    override fun observeWatchlist(): Flow<List<LibraryItemEntity>> =
+        items.map { map ->
+            map.values.filter { it.inWatchlist }
+        }
+
     override suspend fun get(metaId: String): LibraryItemEntity? = items.value[metaId]
 
     override suspend fun upsert(entity: LibraryItemEntity) {

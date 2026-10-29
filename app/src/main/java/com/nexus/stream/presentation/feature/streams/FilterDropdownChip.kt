@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nexus.stream.presentation.theme.NexusTheme
 
@@ -28,6 +30,7 @@ fun <T> FilterDropdownChip(
     options: List<DropdownOption<T>>,
     onSelect: (T?) -> Unit,
     modifier: Modifier = Modifier,
+    minHeight: Dp = 48.dp,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -35,7 +38,13 @@ fun <T> FilterDropdownChip(
         FilterChip(
             selected = isNonDefault,
             onClick = { expanded = true },
-            label = { Text(selectedLabel) },
+            label = {
+                Text(
+                    text = selectedLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             trailingIcon = {
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
@@ -48,7 +57,7 @@ fun <T> FilterDropdownChip(
                     selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ),
-            modifier = Modifier.heightIn(min = 48.dp),
+            modifier = Modifier.heightIn(min = minHeight),
         )
 
         DropdownMenu(

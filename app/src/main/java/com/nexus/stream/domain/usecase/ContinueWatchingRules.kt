@@ -37,8 +37,10 @@ class ContinueWatchingRules
                     .values
                     .mapNotNull { group -> group.maxByOrNull { it.updatedAt } }
                     .mapNotNull { row -> toItem(row, now) }
-                    .sortedByDescending { it.updatedAt }
-                    .take(MAX_ITEMS)
+                    .sortedWith(
+                        compareByDescending<ContinueWatchingItem> { it.updatedAt }
+                            .thenBy { it.metaId },
+                    ).take(MAX_ITEMS)
 
             private fun toItem(
                 row: ContinueRow,

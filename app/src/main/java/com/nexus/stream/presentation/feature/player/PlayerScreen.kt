@@ -50,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,6 +75,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.ThemeMode
 import com.nexus.stream.domain.model.ThemeSettings
+import com.nexus.stream.domain.usecase.NextUi
+import com.nexus.stream.presentation.common.LocalPlayback
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.feature.streams.ExternalActions
@@ -83,16 +86,30 @@ import com.nexus.stream.presentation.theme.tokens.PlayerOverlayColors
 private const val PICK_FILE_CARD_WIDTH_FRACTION = 0.7f
 private val PICK_FILE_LIST_MAX_HEIGHT = 200.dp
 private val NETWORK_CARD_TOP_PADDING = 64.dp
+private val NEXT_EPISODE_OVERLAY_BOTTOM_PADDING = 80.dp
 
 @Composable
 fun PlayerScreen(
     onNavigateUp: () -> Unit,
     modifier: Modifier = Modifier,
+    onSwitchToNext: () -> Unit = {},
+    playbackSessionHolder: PlaybackSessionHolder? = null,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val playbackLauncher = LocalPlayback.current
+    var isChoosingSource by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isChoosingSource, playbackSessionHolder) {
+        if (isChoosingSource) {
+            playbackSessionHolder?.openRequests?.collect {
+                isChoosingSource = false
+                onSwitchToNext()
+            }
+        }
+    }
 
     val activity = remember(context) { context.findActivity() }
     val window = activity?.window
@@ -138,6 +155,15 @@ fun PlayerScreen(
                                 ).show()
                         },
                     )
+                }
+
+                PlayerEffect.SwitchToNext -> {
+                    onSwitchToNext()
+                }
+
+                is PlayerEffect.ChooseNextSource -> {
+                    isChoosingSource = true
+                    playbackLauncher.open(effect.request)
                 }
             }
         }
@@ -228,6 +254,8 @@ fun PlayerScreen(
         onSetSpeed = { viewModel.onEvent(PlayerEvent.SetSpeed(it)) },
         onCycleScale = { viewModel.onEvent(PlayerEvent.CycleScale) },
         onOpenExternal = { viewModel.onEvent(PlayerEvent.OpenExternal) },
+        onNextTapped = { viewModel.onEvent(PlayerEvent.NextEpisodeTapped) },
+        onDismissNext = { viewModel.onEvent(PlayerEvent.NextEpisodeDismissed) },
         surfaceFactory = controller?.let { ctrl -> { ctx -> ctrl.createSurface(ctx) } },
         surfaceRelease = { controller?.detachSurface() },
         modifier = modifier,
@@ -261,6 +289,8 @@ internal fun PlayerScreenContent(
     onSetSpeed: (Float) -> Unit = {},
     onCycleScale: () -> Unit = {},
     onOpenExternal: () -> Unit = {},
+    onNextTapped: () -> Unit = {},
+    onDismissNext: () -> Unit = {},
     surfaceFactory: ((Context) -> android.view.View)? = null,
     surfaceRelease: (() -> Unit)? = null,
 ) {
@@ -366,6 +396,20 @@ internal fun PlayerScreenContent(
                         onDismiss = onDismissNetworkCard,
                     )
                 }
+            }
+
+            if (uiState.nextUi != NextUi.None) {
+                NextEpisodeOverlay(
+                    nextUi = uiState.nextUi,
+                    nextEpisodeLabel = uiState.nextEpisodeLabel,
+                    countdownSeconds = uiState.autoPlayCountdownSeconds,
+                    onNextTapped = onNextTapped,
+                    onDismiss = onDismissNext,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = NexusTheme.spacing.md, bottom = NEXT_EPISODE_OVERLAY_BOTTOM_PADDING),
+                )
             }
 
             PlayerStateOverlay(

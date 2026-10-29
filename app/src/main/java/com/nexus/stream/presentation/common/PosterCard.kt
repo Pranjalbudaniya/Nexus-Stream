@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,22 +67,23 @@ fun PosterCard(
     subtitle: String? = null,
     onLongClick: (() -> Unit)? = null,
     onLongClickLabel: String? = null,
+    fillWidth: Boolean = false,
 ) {
-    val (width: Dp, height: Dp) =
-        when (item.posterShape) {
-            PosterShape.POSTER -> POSTER_WIDTH to POSTER_HEIGHT
-            PosterShape.SQUARE -> SQUARE_SIZE to SQUARE_SIZE
-            PosterShape.LANDSCAPE -> LANDSCAPE_WIDTH to LANDSCAPE_HEIGHT
-        }
-
     val posterActions = LocalPosterActions.current
     val effectiveLongClick: () -> Unit = onLongClick ?: { posterActions.show(item, fromContinue = false) }
     val effectiveLongClickLabel = onLongClickLabel ?: stringResource(R.string.open_actions)
 
+    val cardModifier =
+        if (fillWidth) {
+            modifier.fillMaxWidth()
+        } else {
+            val width = if (item.posterShape == PosterShape.LANDSCAPE) LANDSCAPE_WIDTH else POSTER_WIDTH
+            modifier.width(width)
+        }
+
     Column(
         modifier =
-            modifier
-                .width(width)
+            cardModifier
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = effectiveLongClick,
@@ -98,8 +100,7 @@ fun PosterCard(
     ) {
         Box(
             modifier =
-                Modifier
-                    .size(width, height)
+                posterCardBoxModifier(item.posterShape, fillWidth)
                     .clip(NexusTheme.shapes.poster)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
@@ -131,12 +132,14 @@ fun PosterCard(
             }
         }
         Spacer(modifier = Modifier.height(NexusTheme.spacing.xs))
+        val textModifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier
         Text(
             text = item.name,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            maxLines = if (fillWidth) 1 else 2,
             overflow = TextOverflow.Ellipsis,
+            modifier = textModifier,
         )
         if (!subtitle.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(NexusTheme.spacing.xxs))
@@ -146,10 +149,35 @@ fun PosterCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = textModifier,
             )
         }
     }
 }
+
+private fun posterCardBoxModifier(
+    shape: PosterShape,
+    fillWidth: Boolean,
+): Modifier =
+    if (fillWidth) {
+        val aspectRatio =
+            when (shape) {
+                PosterShape.POSTER -> 120f / 180f
+                PosterShape.SQUARE -> 1f
+                PosterShape.LANDSCAPE -> 200f / 112f
+            }
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(aspectRatio)
+    } else {
+        val (width, height) =
+            when (shape) {
+                PosterShape.POSTER -> POSTER_WIDTH to POSTER_HEIGHT
+                PosterShape.SQUARE -> SQUARE_SIZE to SQUARE_SIZE
+                PosterShape.LANDSCAPE -> LANDSCAPE_WIDTH to LANDSCAPE_HEIGHT
+            }
+        Modifier.size(width, height)
+    }
 
 @Composable
 private fun PosterImageOrPlaceholder(
@@ -360,6 +388,31 @@ internal fun PosterCardWithBadgePreview() {
                     genres = listOf("Drama"),
                 ),
             mark = PosterMark.WATCHED,
+            onClick = {},
+        )
+    }
+}
+
+@Preview(name = "PosterCard - Fill width")
+@Composable
+internal fun PosterCardFillWidthPreview() {
+    NexusTheme {
+        PosterCard(
+            item =
+                MetaPreview(
+                    id = "tt0111161",
+                    type = "movie",
+                    name = "The Shawshank Redemption",
+                    poster = "https://example.com/poster.jpg",
+                    posterShape = PosterShape.POSTER,
+                    background = null,
+                    logo = null,
+                    description = null,
+                    releaseInfo = "1994",
+                    imdbRating = "9.3",
+                    genres = listOf("Drama"),
+                ),
+            fillWidth = true,
             onClick = {},
         )
     }

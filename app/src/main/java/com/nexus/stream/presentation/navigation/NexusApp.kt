@@ -11,7 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -49,6 +51,8 @@ fun NexusApp(
         }
     }
 
+    val tabReselects = remember { TabReselects() }
+
     StreamsSheetHost(
         onNavigateToStore = { category ->
             navController.navigate(Addons(storeCategory = category))
@@ -66,10 +70,12 @@ fun NexusApp(
                     if (showBottomBar) {
                         NavigationBar {
                             TopLevelDestination.entries.forEach { destination ->
+                                val isSelected =
+                                    currentDestination?.hasRoute(destination.route::class) == true
                                 NavigationBarItem(
-                                    selected =
-                                        currentDestination?.hasRoute(destination.route::class) == true,
+                                    selected = isSelected,
                                     onClick = {
+                                        tabReselects.onTabClick(destination, isSelected)
                                         navController.navigate(destination.route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
                                                 saveState = true
@@ -79,10 +85,19 @@ fun NexusApp(
                                         }
                                     },
                                     icon = {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = stringResource(destination.labelResId),
-                                        )
+                                        val vector = destination.icon
+                                        val resId = destination.iconResId
+                                        if (vector != null) {
+                                            Icon(
+                                                imageVector = vector,
+                                                contentDescription = stringResource(destination.labelResId),
+                                            )
+                                        } else if (resId != null) {
+                                            Icon(
+                                                painter = painterResource(resId),
+                                                contentDescription = stringResource(destination.labelResId),
+                                            )
+                                        }
                                     },
                                     label = {
                                         Text(
@@ -104,6 +119,7 @@ fun NexusApp(
                             .padding(innerPadding)
                             .consumeWindowInsets(innerPadding),
                     playbackSessionHolder = playbackSessionHolder,
+                    tabReselects = tabReselects,
                 )
             }
         }

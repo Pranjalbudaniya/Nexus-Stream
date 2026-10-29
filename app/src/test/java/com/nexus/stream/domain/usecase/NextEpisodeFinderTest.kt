@@ -151,4 +151,31 @@ class NextEpisodeFinderTest {
             assertNotNull(next)
             assertEquals("s1:1:2", next?.videoId)
         }
+
+    @Test
+    fun NG4_finder_usesForceRefreshFalse() =
+        runTest {
+            val v1 = video(1, 1)
+            val v2 = video(1, 2)
+            val meta = testMeta(listOf(v1, v2))
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            finder.find("series", "s1", "s1:1:1")
+            coVerify(exactly = 1) { metaRepository.getMeta("series", "s1", forceRefresh = false) }
+        }
+
+    @Test
+    fun NG5_finder_staleMetaIsStillUsed() =
+        runTest {
+            val v1 = video(1, 1)
+            val v2 = video(1, 2)
+            val meta = testMeta(listOf(v1, v2))
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.STALE))
+
+            val next = finder.find("series", "s1", "s1:1:1")
+            assertNotNull(next)
+            assertEquals("s1:1:2", next?.videoId)
+        }
 }

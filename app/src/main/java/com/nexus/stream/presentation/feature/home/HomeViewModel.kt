@@ -14,11 +14,14 @@ import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.RowState
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
+import com.nexus.stream.domain.repository.EmptyHomeRowConfigRepository
+import com.nexus.stream.domain.repository.HomeRowConfigRepository
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.BuildHero
 import com.nexus.stream.domain.usecase.BuildHomeRows
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
+import com.nexus.stream.domain.usecase.applyRowConfig
 import com.nexus.stream.domain.usecase.buildPosterMarks
 import com.nexus.stream.domain.usecase.isAdultContent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,6 +76,7 @@ data class HomeUiState(
     val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val hasAddons: Boolean = false,
     val hasCatalogRows: Boolean = false,
+    val allRowsHidden: Boolean = false,
     val seedFailed: Boolean = false,
     val offline: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -116,6 +120,7 @@ class HomeViewModel
         private val progressRepository: ProgressRepository,
         private val contentPrefsRepository: ContentPrefsRepository,
         @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
+        private val homeRowConfigRepository: HomeRowConfigRepository = EmptyHomeRowConfigRepository,
     ) : ViewModel() {
         private val buildHomeRows = BuildHomeRows()
         private val buildHero = BuildHero()
@@ -137,6 +142,7 @@ class HomeViewModel
 
         private val rowStates = mutableMapOf<String, HomeRow>()
         private val rowJobs = mutableMapOf<String, Job>()
+        private var rawCatalogSpecs: List<HomeRowSpec> = emptyList()
         private var currentSpecs: List<HomeRowSpec> = emptyList()
         private var hasAddons = false
         private var seedFailed = false
@@ -223,21 +229,24 @@ class HomeViewModel
                 combine(
                     addonRepository.observeAll(),
                     addonRepository.observeActive(),
-                ) { all, active ->
-                    Pair(all, active)
-                }.collectLatest { (all, active) ->
+                    homeRowConfigRepository.config,
+                ) { all, active, config ->
+                    Triple(all, active, config)
+                }.collectLatest { (all, active, config) ->
                     hasAddons = all.isNotEmpty()
                     val specs = withContext(dispatcher) { buildHomeRows(active) }
-                    currentSpecs = specs
+                    rawCatalogSpecs = specs
+                    val visibleSpecs = applyRowConfig(specs, config)
+                    currentSpecs = visibleSpecs
 
-                    val newKeySet = specs.map { it.key }.toSet()
+                    val newKeySet = visibleSpecs.map { it.key }.toSet()
                     val removedKeys = rowStates.keys - newKeySet
                     for (key in removedKeys) {
                         rowJobs.remove(key)?.cancel()
                         rowStates.remove(key)
                     }
 
-                    for (spec in specs) {
+                    for (spec in visibleSpecs) {
                         if (spec.key !in rowStates) {
                             rowStates[spec.key] = HomeRow(spec = spec, status = RowStatus.Loading)
                             loadRow(spec, force = false)
@@ -369,7 +378,8 @@ class HomeViewModel
                     listStatuses = listStatusesMap,
                     posterMarks = posterMarks,
                     hasAddons = hasAddons,
-                    hasCatalogRows = currentSpecs.isNotEmpty(),
+                    hasCatalogRows = rawCatalogSpecs.isNotEmpty(),
+                    allRowsHidden = rawCatalogSpecs.isNotEmpty() && currentSpecs.isEmpty(),
                     seedFailed = seedFailed,
                     offline = offline,
                     isRefreshing = isRefreshing,

@@ -1,5 +1,6 @@
 package com.nexus.stream.presentation.feature.home
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,6 +41,7 @@ import com.nexus.stream.presentation.common.ContentRow
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
+import com.nexus.stream.presentation.common.NexusOutlinedButton
 import com.nexus.stream.presentation.common.NexusRefreshBox
 import com.nexus.stream.presentation.common.labelResId
 import com.nexus.stream.presentation.theme.NexusTheme
@@ -175,6 +177,24 @@ internal fun HomeScreenContent(
                                 )
                             }
                         }
+
+                        if (uiState.allRowsHidden) {
+                            item(key = "all_rows_hidden") {
+                                AllRowsHiddenView(
+                                    onOpenSettings = onNavigateToSettings,
+                                    modifier =
+                                        Modifier.padding(
+                                            top =
+                                                if (uiState.continueWatching.isEmpty()) {
+                                                    NexusTheme.spacing.xxl
+                                                } else {
+                                                    NexusTheme.spacing.lg
+                                                },
+                                        ),
+                                )
+                            }
+                        }
+
                         items(
                             items = uiState.rows,
                             key = { it.spec.key },
@@ -364,6 +384,79 @@ internal fun HomeScreenOfflinePreview() {
                     hasAddons = true,
                     hasCatalogRows = true,
                     offline = true,
+                ),
+            onEvent = {},
+            onNavigateToSettings = {},
+            onNavigateToAddons = {},
+            onItemClick = { _, _ -> },
+        )
+    }
+}
+
+@Composable
+private fun AllRowsHiddenView(
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = NexusTheme.spacing
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.lg, vertical = spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.home_all_rows_hidden_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(spacing.xs))
+        Text(
+            text = stringResource(R.string.home_all_rows_hidden_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(spacing.md))
+        NexusOutlinedButton(onClick = onOpenSettings) {
+            Text(stringResource(R.string.home_all_rows_hidden_button))
+        }
+    }
+}
+
+@Preview(name = "HomeScreen - All Rows Hidden Light")
+@Composable
+internal fun HomeScreenAllRowsHiddenLightPreview() {
+    NexusTheme {
+        HomeScreenContent(
+            uiState =
+                HomeUiState(
+                    hasAddons = true,
+                    hasCatalogRows = true,
+                    allRowsHidden = true,
+                ),
+            onEvent = {},
+            onNavigateToSettings = {},
+            onNavigateToAddons = {},
+            onItemClick = { _, _ -> },
+        )
+    }
+}
+
+@Preview(name = "HomeScreen - All Rows Hidden Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun HomeScreenAllRowsHiddenDarkPreview() {
+    NexusTheme {
+        HomeScreenContent(
+            uiState =
+                HomeUiState(
+                    hasAddons = true,
+                    hasCatalogRows = true,
+                    allRowsHidden = true,
                 ),
             onEvent = {},
             onNavigateToSettings = {},

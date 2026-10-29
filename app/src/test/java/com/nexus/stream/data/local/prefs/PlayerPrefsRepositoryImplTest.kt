@@ -313,4 +313,22 @@ class PlayerPrefsRepositoryImplTest {
             repo.setSubtitleColor("neon_pink_not_in_palette")
             assertEquals("cyan", repo.subtitleStyle.first().colorId)
         }
+
+    @Test
+    fun AP1_autoPlayNext_defaultsToTrue() =
+        runTest {
+            val (repo, _) = createRepository(this, "autoplay_default.preferences_pb")
+            assertTrue(repo.autoPlayNext.first())
+        }
+
+    @Test
+    fun AP2_setAutoPlayNext_persists() =
+        runTest {
+            val (repo, _) = createRepository(this, "autoplay_persists.preferences_pb")
+            assertTrue(repo.autoPlayNext.first())
+            repo.setAutoPlayNext(false)
+            assertFalse(repo.autoPlayNext.first())
+            repo.setAutoPlayNext(true)
+            assertTrue(repo.autoPlayNext.first())
+        }
 }

@@ -9,10 +9,10 @@ data object Home
 data object Discover
 
 @Serializable
-data object Search
+data object Library
 
 @Serializable
-data object Library
+data object Downloads
 
 @Serializable
 data object Settings

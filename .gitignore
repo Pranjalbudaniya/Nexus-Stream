@@ -19,6 +19,7 @@ captures/
 *.aab
 
 # Signing
+keystore.properties
 *.jks
 *.keystore
 

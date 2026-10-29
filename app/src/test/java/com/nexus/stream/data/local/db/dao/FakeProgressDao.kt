@@ -128,4 +128,43 @@ class FakeProgressDao(
                 .filter { it.watched && it.type.equals("movie", ignoreCase = true) }
                 .map { it.metaId }
         }
+
+    override fun observeHistoryRows(limit: Int): Flow<List<ContinueRow>> {
+        val libDao = libraryDao
+        if (libDao != null) {
+            return combine(progressEntities, libDao.items) { progressMap, libraryMap ->
+                val byMeta = progressMap.values.groupBy { it.metaId }
+                byMeta.values
+                    .mapNotNull { rows ->
+                        val newest = rows.maxByOrNull { it.updatedAt } ?: return@mapNotNull null
+                        val libraryItem = libraryMap[newest.metaId]
+                        ContinueRow(
+                            metaId = newest.metaId,
+                            type = newest.type,
+                            name = libraryItem?.name,
+                            poster = libraryItem?.poster,
+                            videoId = newest.videoId,
+                            season = newest.season,
+                            episode = newest.episode,
+                            positionMs = newest.positionMs,
+                            durationMs = newest.durationMs,
+                            watched = newest.watched,
+                            updatedAt = newest.updatedAt,
+                            inWatchlist = libraryItem?.inWatchlist ?: false,
+                            listStatus =
+                                libraryItem?.listStatus?.let {
+                                    runCatching { ListStatus.valueOf(it) }.getOrNull()
+                                },
+                        )
+                    }.sortedByDescending { it.updatedAt }
+                    .take(limit)
+            }
+        }
+        return continueRows.map { it.take(limit) }
+    }
+
+    override suspend fun deleteAll() {
+        progressEntities.value = emptyMap()
+        continueRows.value = emptyList()
+    }
 }

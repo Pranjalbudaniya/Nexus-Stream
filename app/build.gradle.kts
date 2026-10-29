@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -15,8 +17,11 @@ android {
         applicationId = "com.nexus.stream"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Version rule: versionCode = major * 10000 + minor * 100 + patch
+        val appVersionName = "1.0.0"
+        val versionParts = appVersionName.split(".").map { it.toInt() }
+        versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -24,9 +29,37 @@ android {
         }
     }
 
+    val keystoreProps = rootProject.file("keystore.properties") // never committed
+    signingConfigs {
+        create("release") {
+            if (keystoreProps.exists()) {
+                val properties =
+                    Properties().apply {
+                        keystoreProps.inputStream().use { load(it) }
+                    }
+                storeFile = rootProject.file(properties.getProperty("storeFile"))
+                storePassword = properties.getProperty("storePassword")
+                keyAlias = properties.getProperty("keyAlias")
+                keyPassword = properties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+        }
+        release {
+            isMinifyEnabled = false
+            // While no release key is configured the release APK uses the debug keystore
+            // of the building machine; every release must be built with the same key or
+            // installed copies cannot be updated.
+            signingConfig =
+                if (keystoreProps.exists()) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 

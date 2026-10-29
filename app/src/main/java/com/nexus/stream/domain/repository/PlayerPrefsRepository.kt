@@ -21,6 +21,7 @@ interface PlayerPrefsRepository {
     val preferredAudioLanguage: Flow<String?>
     val preferredSubtitleLanguage: Flow<String?>
     val subtitleStyle: Flow<SubtitleStyle>
+    val autoPlayNext: Flow<Boolean>
 
     suspend fun setQuickPlay(enabled: Boolean)
 
@@ -49,4 +50,6 @@ interface PlayerPrefsRepository {
     suspend fun setSubtitleEdge(edge: SubtitleEdge)
 
     suspend fun setSubtitleBold(bold: Boolean)
+
+    suspend fun setAutoPlayNext(enabled: Boolean)
 }

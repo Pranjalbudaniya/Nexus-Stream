@@ -7,6 +7,7 @@ import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.CatalogSpec
 import com.nexus.stream.domain.model.ContinueWatchingItem
+import com.nexus.stream.domain.model.HomeRowConfig
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.MetaPreview
@@ -15,6 +16,7 @@ import com.nexus.stream.domain.model.PosterMark
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.AddonRepository
 import com.nexus.stream.domain.repository.ContentPrefsRepository
+import com.nexus.stream.domain.repository.HomeRowConfigRepository
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.ProgressRepository
 import com.nexus.stream.domain.usecase.EnsureDefaultAddons
@@ -48,6 +50,7 @@ class HomeViewModelTest {
     private val libraryRepository: LibraryRepository = mockk(relaxed = true)
     private val progressRepository: ProgressRepository = mockk(relaxed = true)
     private val contentPrefsRepository: ContentPrefsRepository = mockk()
+    private val homeRowConfigRepository: HomeRowConfigRepository = mockk()
 
     private val allAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
     private val enabledAddonsFlow = MutableStateFlow<List<Addon>>(emptyList())
@@ -55,6 +58,7 @@ class HomeViewModelTest {
     private val listStatusesFlow = MutableStateFlow<Map<String, ListStatus>>(emptyMap())
     private val watchedMovieIdsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val continueWatchingFlow = MutableStateFlow<List<ContinueWatchingItem>>(emptyList())
+    private val homeRowConfigFlow = MutableStateFlow(HomeRowConfig())
 
     @Before
     fun setUp() {
@@ -66,6 +70,7 @@ class HomeViewModelTest {
         every { libraryRepository.observeListStatuses() } returns listStatusesFlow
         every { progressRepository.observeWatchedMovieIds() } returns watchedMovieIdsFlow
         every { progressRepository.observeContinueWatching() } returns continueWatchingFlow
+        every { homeRowConfigRepository.config } returns homeRowConfigFlow
         coEvery { libraryRepository.setStatus(any(), any()) } returns Unit
         coEvery { ensureDefaultAddons() } returns Outcome.Success(Unit)
     }
@@ -84,6 +89,7 @@ class HomeViewModelTest {
             progressRepository = progressRepository,
             contentPrefsRepository = contentPrefsRepository,
             dispatcher = testDispatcher,
+            homeRowConfigRepository = homeRowConfigRepository,
         )
 
     @Test
@@ -511,5 +517,196 @@ class HomeViewModelTest {
 
             assertEquals(items, viewModel.uiState.value.continueWatching)
             assertEquals(items, viewModel.continueWatching)
+        }
+
+    @Test
+    fun HM1_hiddenRows_areNotLoaded() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon(name = "Addon1", type = "movie", catalogId = "cat1")
+            val addon2 = createAddon(name = "Addon2", type = "series", catalogId = "cat2")
+            allAddonsFlow.value = listOf(addon1, addon2)
+            enabledAddonsFlow.value = listOf(addon1, addon2)
+
+            val keyA = "https://Addon1.com/manifest.json|movie|cat1"
+            val keyB = "https://Addon2.com/manifest.json|series|cat2"
+            homeRowConfigFlow.value = HomeRowConfig(hidden = setOf(keyB))
+
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(emptyList())
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyA }, any()) }
+            coVerify(exactly = 0) { homeRowLoader.load(match { it.key == keyB }, any()) }
+
+            val rows = viewModel.uiState.value.rows
+            assertEquals(1, rows.size)
+            assertEquals(keyA, rows[0].spec.key)
+        }
+
+    @Test
+    fun HM2_reorder_changesTheRowOrder_withoutReloading() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon(name = "Addon1", type = "movie", catalogId = "cat1")
+            val addon2 = createAddon(name = "Addon2", type = "series", catalogId = "cat2")
+            allAddonsFlow.value = listOf(addon1, addon2)
+            enabledAddonsFlow.value = listOf(addon1, addon2)
+
+            val keyA = "https://Addon1.com/manifest.json|movie|cat1"
+            val keyB = "https://Addon2.com/manifest.json|series|cat2"
+
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(emptyList())
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(keyA, keyB),
+                viewModel.uiState.value.rows
+                    .map { it.spec.key },
+            )
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyA }, any()) }
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyB }, any()) }
+
+            homeRowConfigFlow.value = HomeRowConfig(order = listOf(keyB, keyA))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(keyB, keyA),
+                viewModel.uiState.value.rows
+                    .map { it.spec.key },
+            )
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyA }, any()) }
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyB }, any()) }
+        }
+
+    @Test
+    fun HM3_hidingTheHeroRow_movesTheHeroToTheNextVisibleRow() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon(name = "Addon1", type = "movie", catalogId = "cat1")
+            val addon2 = createAddon(name = "Addon2", type = "series", catalogId = "cat2")
+            allAddonsFlow.value = listOf(addon1, addon2)
+            enabledAddonsFlow.value = listOf(addon1, addon2)
+
+            val keyA = "https://Addon1.com/manifest.json|movie|cat1"
+            val keyB = "https://Addon2.com/manifest.json|series|cat2"
+
+            val itemsA =
+                listOf(
+                    createMetaPreview("a1", "A1", background = "https://bgA1.jpg"),
+                    createMetaPreview("a2", "A2", background = "https://bgA2.jpg"),
+                    createMetaPreview("a3", "A3", background = "https://bgA3.jpg"),
+                )
+            val itemsB =
+                listOf(
+                    createMetaPreview("b1", "B1", background = "https://bgB1.jpg"),
+                    createMetaPreview("b2", "B2", background = "https://bgB2.jpg"),
+                    createMetaPreview("b3", "B3", background = "https://bgB3.jpg"),
+                )
+
+            coEvery { homeRowLoader.load(match { it.key == keyA }, any()) } returns Outcome.Success(itemsA)
+            coEvery { homeRowLoader.load(match { it.key == keyB }, any()) } returns Outcome.Success(itemsB)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(itemsA, viewModel.uiState.value.hero)
+
+            homeRowConfigFlow.value = HomeRowConfig(hidden = setOf(keyA))
+            advanceUntilIdle()
+
+            assertEquals(itemsB, viewModel.uiState.value.hero)
+        }
+
+    @Test
+    fun HM4_allRowsHidden_setsTheFlag_andKeepsHasCatalogRows() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon(name = "Addon1", type = "movie", catalogId = "cat1")
+            val addon2 = createAddon(name = "Addon2", type = "series", catalogId = "cat2")
+            allAddonsFlow.value = listOf(addon1, addon2)
+            enabledAddonsFlow.value = listOf(addon1, addon2)
+
+            val keyA = "https://Addon1.com/manifest.json|movie|cat1"
+            val keyB = "https://Addon2.com/manifest.json|series|cat2"
+
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(emptyList())
+
+            homeRowConfigFlow.value = HomeRowConfig(hidden = setOf(keyA, keyB))
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.allRowsHidden)
+            assertTrue(viewModel.uiState.value.hasCatalogRows)
+            assertTrue(
+                viewModel.uiState.value.rows
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun HM5_unhidingARow_loadsItOnce() =
+        runTest(testDispatcher) {
+            val addon1 = createAddon(name = "Addon1", type = "movie", catalogId = "cat1")
+            val addon2 = createAddon(name = "Addon2", type = "series", catalogId = "cat2")
+            allAddonsFlow.value = listOf(addon1, addon2)
+            enabledAddonsFlow.value = listOf(addon1, addon2)
+
+            val keyB = "https://Addon2.com/manifest.json|series|cat2"
+
+            homeRowConfigFlow.value = HomeRowConfig(hidden = setOf(keyB))
+            coEvery { homeRowLoader.load(any(), any()) } returns Outcome.Success(emptyList())
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { homeRowLoader.load(match { it.key == keyB }, any()) }
+
+            homeRowConfigFlow.value = HomeRowConfig()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { homeRowLoader.load(match { it.key == keyB }, any()) }
+            assertEquals(2, viewModel.uiState.value.rows.size)
+        }
+
+    @Test
+    fun HM6_continueWatching_followsTheRepositoryOrder_andUpdates() =
+        runTest(testDispatcher) {
+            val itemA =
+                ContinueWatchingItem(
+                    metaId = "a",
+                    type = "movie",
+                    name = "Movie A",
+                    poster = null,
+                    videoId = "a",
+                    season = null,
+                    episode = null,
+                    positionMs = 100L,
+                    durationMs = 200L,
+                    updatedAt = 1000L,
+                )
+            val itemB =
+                ContinueWatchingItem(
+                    metaId = "b",
+                    type = "movie",
+                    name = "Movie B",
+                    poster = null,
+                    videoId = "b",
+                    season = null,
+                    episode = null,
+                    positionMs = 150L,
+                    durationMs = 200L,
+                    updatedAt = 2000L,
+                )
+
+            val viewModel = createViewModel()
+            continueWatchingFlow.value = listOf(itemA, itemB)
+            advanceUntilIdle()
+
+            assertEquals(listOf(itemA, itemB), viewModel.uiState.value.continueWatching)
+
+            continueWatchingFlow.value = listOf(itemB, itemA)
+            advanceUntilIdle()
+
+            assertEquals(listOf(itemB, itemA), viewModel.uiState.value.continueWatching)
         }
 }
