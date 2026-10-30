@@ -3,11 +3,13 @@ package com.nexus.stream.data.local.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.nexus.stream.data.local.db.dao.AddonDao
+import com.nexus.stream.data.local.db.dao.DownloadDao
 import com.nexus.stream.data.local.db.dao.LibraryDao
 import com.nexus.stream.data.local.db.dao.MetaCacheDao
 import com.nexus.stream.data.local.db.dao.ProgressDao
 import com.nexus.stream.data.local.db.dao.SearchHistoryDao
 import com.nexus.stream.data.local.db.entity.AddonEntity
+import com.nexus.stream.data.local.db.entity.DownloadEntity
 import com.nexus.stream.data.local.db.entity.LibraryItemEntity
 import com.nexus.stream.data.local.db.entity.MetaCacheEntity
 import com.nexus.stream.data.local.db.entity.SearchHistoryEntity
@@ -22,8 +24,9 @@ import com.nexus.stream.data.local.db.entity.WatchProgressEntity
         SearchHistoryEntity::class,
         SkipSegmentCacheEntity::class,
         MetaCacheEntity::class,
+        DownloadEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class NexusDatabase : RoomDatabase() {
@@ -36,4 +39,6 @@ abstract class NexusDatabase : RoomDatabase() {
     abstract fun metaCacheDao(): MetaCacheDao
 
     abstract fun searchHistoryDao(): SearchHistoryDao
+
+    abstract fun downloadDao(): DownloadDao
 }
