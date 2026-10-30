@@ -57,6 +57,7 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.MetaSource
+import com.nexus.stream.domain.usecase.DetailDownloadState
 import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.presentation.common.ListStatusDialog
@@ -168,6 +169,8 @@ fun DetailScreenContent(
                             ),
                     ) {
                         item(key = "header") {
+                            val headerDownloadState =
+                                state.activeVideoId?.let { state.downloadStates[it] } ?: DetailDownloadState.None
                             DetailHeader(
                                 meta = state.meta,
                                 inWatchlist = state.inWatchlist,
@@ -175,6 +178,7 @@ fun DetailScreenContent(
                                 isSynopsisExpanded = state.isSynopsisExpanded,
                                 trailerUrl = state.trailerUrl,
                                 primaryPlay = state.primaryPlay,
+                                downloadState = headerDownloadState,
                                 onPlayMain = { onEvent(DetailEvent.PlayMain) },
                                 onChooseSource = { onEvent(DetailEvent.ChooseSource) },
                                 onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
@@ -435,6 +439,7 @@ internal fun SeriesEpisodesSection(
         onPlayEpisode = onPlayEpisode,
         onToggleWatched = onToggleWatched,
         onDownload = onDownload,
+        downloadStates = content.downloadStates,
         modifier = modifier,
     )
 }

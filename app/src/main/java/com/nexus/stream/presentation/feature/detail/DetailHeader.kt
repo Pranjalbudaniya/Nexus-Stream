@@ -24,8 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +57,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -63,6 +67,8 @@ import com.nexus.stream.R
 import com.nexus.stream.domain.model.ListStatus
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.PlayIntent
+import com.nexus.stream.domain.usecase.DetailDownloadState
+import com.nexus.stream.domain.usecase.detailDownloadRes
 import com.nexus.stream.domain.usecase.timeLeftParts
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
@@ -71,6 +77,7 @@ import com.nexus.stream.presentation.theme.NexusTheme
 
 private const val GRADIENT_STOP_THRESHOLD: Float = 0.55f
 private const val LOGO_WIDTH_FRACTION: Float = 0.7f
+private const val PREVIEW_PERCENT: Int = 42
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -91,6 +98,7 @@ fun DetailHeader(
     onOpenAllDirectors: () -> Unit,
     modifier: Modifier = Modifier,
     listStatus: ListStatus? = null,
+    downloadState: DetailDownloadState = DetailDownloadState.None,
 ) {
     val configuration = LocalConfiguration.current
     val headerHeight = headerHeightDp(configuration.screenHeightDp.toFloat()).dp
@@ -127,6 +135,7 @@ fun DetailHeader(
                 inWatchlist = inWatchlist,
                 listStatus = listStatus,
                 trailerUrl = trailerUrl,
+                downloadState = downloadState,
                 onOpenWatchOptions = onOpenWatchOptions,
                 onOpenTrailer = onOpenTrailer,
                 onDownload = onDownload,
@@ -278,6 +287,7 @@ private fun ActionButtonsRow(
     meta: MetaDetail,
     inWatchlist: Boolean,
     trailerUrl: String?,
+    downloadState: DetailDownloadState,
     onOpenWatchOptions: () -> Unit,
     onOpenTrailer: () -> Unit,
     onDownload: () -> Unit,
@@ -340,24 +350,97 @@ private fun ActionButtonsRow(
             }
         }
 
-        if (meta.type == "movie") {
-            NexusOutlinedButton(
+        if (meta.type == "movie" || meta.type == "series") {
+            DetailDownloadButton(
+                downloadState = downloadState,
                 onClick = onDownload,
                 modifier = Modifier.weight(1f),
-            ) {
+            )
+        }
+    }
+}
+
+@Composable
+fun DetailDownloadButton(
+    downloadState: DetailDownloadState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NexusOutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+    ) {
+        when (downloadState) {
+            DetailDownloadState.None -> {
                 Icon(
                     painter = painterResource(R.drawable.ic_download),
                     contentDescription = null,
                     modifier = Modifier.size(ButtonDefaults.IconSize),
                 )
-                Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
-                Text(
-                    text = stringResource(R.string.detail_download),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            }
+
+            DetailDownloadState.Queued -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                    strokeWidth = 2.dp,
+                )
+            }
+
+            is DetailDownloadState.Downloading -> {
+                val progress = downloadState.percent?.let { it / 100f }
+                if (progress != null) {
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+
+            DetailDownloadState.Paused -> {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                )
+            }
+
+            DetailDownloadState.Failed -> {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            DetailDownloadState.Completed -> {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
+        Spacer(modifier = Modifier.width(NexusTheme.spacing.xs))
+        val label =
+            if (downloadState is DetailDownloadState.Downloading && downloadState.percent != null) {
+                stringResource(R.string.detail_download_progress, downloadState.percent)
+            } else {
+                stringResource(detailDownloadRes(downloadState))
+            }
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -416,19 +499,19 @@ private fun PrimaryPlayButton(
     modifier: Modifier = Modifier,
 ) {
     when (primaryPlay) {
-        is PrimaryPlayState.NotReady -> NotReadyPlayButton(modifier)
-        is PrimaryPlayState.Ready -> ReadyPlayButton(primaryPlay, onPlayMain, onChooseSource, modifier)
-    }
-}
+        is PrimaryPlayState.NotReady -> {
+            NexusButton(
+                onClick = {},
+                enabled = false,
+                modifier = modifier,
+            ) {
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSize))
+            }
+        }
 
-@Composable
-private fun NotReadyPlayButton(modifier: Modifier = Modifier) {
-    NexusButton(
-        onClick = {},
-        enabled = false,
-        modifier = modifier,
-    ) {
-        Spacer(modifier = Modifier.size(ButtonDefaults.IconSize))
+        is PrimaryPlayState.Ready -> {
+            ReadyPlayButton(primaryPlay, onPlayMain, onChooseSource, modifier)
+        }
     }
 }
 
@@ -619,4 +702,23 @@ private fun formatResumeVisuals(intent: PlayIntent.Resume): ResumeVisuals {
         progressFraction = fraction,
         a11yDesc = a11yDesc,
     )
+}
+
+@Preview(name = "DetailDownloadButton - States - Light")
+@Preview(name = "DetailDownloadButton - States - Dark", uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DetailDownloadButtonStatesPreview() {
+    NexusTheme {
+        Column(
+            modifier = Modifier.padding(NexusTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.sm),
+        ) {
+            DetailDownloadButton(downloadState = DetailDownloadState.None, onClick = {})
+            DetailDownloadButton(downloadState = DetailDownloadState.Queued, onClick = {})
+            DetailDownloadButton(downloadState = DetailDownloadState.Downloading(PREVIEW_PERCENT), onClick = {})
+            DetailDownloadButton(downloadState = DetailDownloadState.Paused, onClick = {})
+            DetailDownloadButton(downloadState = DetailDownloadState.Failed, onClick = {})
+            DetailDownloadButton(downloadState = DetailDownloadState.Completed, onClick = {})
+        }
+    }
 }

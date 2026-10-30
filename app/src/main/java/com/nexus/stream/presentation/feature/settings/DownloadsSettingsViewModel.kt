@@ -11,16 +11,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-fun downloadsSummary(
-    wifiOnly: Boolean,
-    maxConcurrent: Int,
-): String =
-    if (wifiOnly) {
-        "Wi-Fi only · $maxConcurrent at a time"
-    } else {
-        "Any network · $maxConcurrent at a time"
-    }
-
 data class DownloadsSettingsUiState(
     val wifiOnly: Boolean = true,
     val maxConcurrent: Int = 2,

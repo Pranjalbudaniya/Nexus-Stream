@@ -50,6 +50,7 @@ class SettingsSectionsTest {
                 SettingsSection.PLAYER,
                 SettingsSection.SUBTITLES,
                 SettingsSection.TORRENT,
+                SettingsSection.DOWNLOADS,
                 SettingsSection.ABOUT,
             )
         assertEquals(expected, SettingsSection.entries)
@@ -174,5 +175,16 @@ class SettingsSectionsTest {
     @Test
     fun SM13_homeRows_summary_noRows() {
         assertEquals("No rows yet", homeRowsSummary(totalCount = 0, hiddenCount = 0))
+    }
+
+    @Test
+    fun SM14_downloads_summary_wifiOnlyAndCount() {
+        assertEquals("Wi-Fi only · 2 at a time", downloadsSummary(wifiOnly = true, maxConcurrent = 2))
+        assertEquals("Any network · 3 at a time", downloadsSummary(wifiOnly = false, maxConcurrent = 3))
+    }
+
+    @Test
+    fun SM15_downloads_summary_followsTheValues() {
+        assertEquals("Wi-Fi only · 1 at a time", downloadsSummary(wifiOnly = true, maxConcurrent = 1))
     }
 }

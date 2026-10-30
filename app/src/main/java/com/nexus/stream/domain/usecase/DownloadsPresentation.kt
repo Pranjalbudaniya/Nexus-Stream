@@ -48,6 +48,33 @@ sealed interface DetailDownloadState {
     data object Completed : DetailDownloadState
 }
 
+fun detailDownloadRes(state: DetailDownloadState): Int =
+    when (state) {
+        DetailDownloadState.None -> {
+            R.string.detail_download
+        }
+
+        DetailDownloadState.Queued -> {
+            R.string.detail_download_queued
+        }
+
+        is DetailDownloadState.Downloading -> {
+            if (state.percent != null) R.string.detail_download_progress else R.string.detail_download_queued
+        }
+
+        DetailDownloadState.Paused -> {
+            R.string.detail_download_paused
+        }
+
+        DetailDownloadState.Failed -> {
+            R.string.detail_download_failed
+        }
+
+        DetailDownloadState.Completed -> {
+            R.string.detail_download_done
+        }
+    }
+
 data class StorageSummary(
     val usedBytes: Long,
     val freeBytes: Long,
@@ -95,17 +122,6 @@ private fun downloadingStatus(
     }
 }
 
-private fun pausedStatus(item: DownloadItem): StatusText {
-    val total = item.totalBytes
-    val downloaded = item.downloadedBytes
-    val percent = if (total > 0L) ((downloaded * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX) else 0
-    return if (item.pauseReason == PauseReason.SYSTEM_TIME_LIMIT) {
-        StatusText(R.string.downloads_status_paused_system, listOf(percent))
-    } else {
-        StatusText(R.string.downloads_status_paused, listOf(percent))
-    }
-}
-
 fun rowStatus(
     item: DownloadItem,
     live: DownloadLive? = null,
@@ -132,7 +148,14 @@ fun rowStatus(
         }
 
         DownloadState.PAUSED -> {
-            pausedStatus(item)
+            val total = item.totalBytes
+            val downloaded = item.downloadedBytes
+            val percent = if (total > 0L) ((downloaded * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX) else 0
+            if (item.pauseReason == PauseReason.SYSTEM_TIME_LIMIT) {
+                StatusText(R.string.downloads_status_paused_system, listOf(percent))
+            } else {
+                StatusText(R.string.downloads_status_paused, listOf(percent))
+            }
         }
 
         DownloadState.FAILED -> {

@@ -24,6 +24,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
     private val deepLinkHolder = OneShot<String>()
+    private val openDownloadsHolder = OneShot<Unit>()
 
     @Inject
     lateinit var playbackSessionHolder: PlaybackSessionHolder
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleDeepLinkIntent(intent)
+        handleOpenDownloadsIntent(intent)
         setContent {
             val uiState by themeViewModel.uiState.collectAsState()
             when (val state = uiState) {
@@ -46,6 +48,7 @@ class MainActivity : ComponentActivity() {
                         Surface(color = MaterialTheme.colorScheme.background) {
                             NexusApp(
                                 deepLinkHolder = deepLinkHolder,
+                                openDownloadsHolder = openDownloadsHolder,
                                 playbackSessionHolder = playbackSessionHolder,
                             )
                         }
@@ -59,6 +62,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleDeepLinkIntent(intent)
+        handleOpenDownloadsIntent(intent)
+    }
+
+    private fun handleOpenDownloadsIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("open_downloads", false) == true) {
+            openDownloadsHolder.set(Unit)
+            intent.removeExtra("open_downloads")
+        }
     }
 
     private fun handleDeepLinkIntent(intent: Intent?) {

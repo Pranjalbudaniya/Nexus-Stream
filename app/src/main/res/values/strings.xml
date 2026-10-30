@@ -472,7 +472,6 @@
     <string name="detail_watchlist">Watchlist</string>
     <string name="detail_download">Download</string>
     <string name="detail_download_desc">Download %1$s</string>
-    <string name="detail_download_not_available">Downloads aren\'t available yet.</string>
     <string name="detail_genres">Genres</string>
     <string name="detail_cast">Cast</string>
     <string name="detail_directors_heading">Directors</string>

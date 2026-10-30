@@ -37,16 +37,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusCard
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.common.PlaybackRequest
+import com.nexus.stream.presentation.common.rememberNotificationPermissionGate
 import com.nexus.stream.presentation.theme.NexusTheme
 import kotlinx.coroutines.launch
 
@@ -63,6 +66,7 @@ fun StreamsSheet(
     onNavigateToStore: (String) -> Unit,
     modifier: Modifier = Modifier,
     onDownloadResult: (com.nexus.stream.domain.model.EnqueueResult) -> Unit = {},
+    onDownloadMessage: (Int) -> Unit = {},
     viewModel: StreamsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,6 +134,7 @@ fun StreamsSheet(
                 is StreamsEffect.ShowMessage -> {
                     val msg = formatStreamsMessage(context, effect.messageRes, effect.formatArgs)
                     snackbarHostState.showSnackbar(msg)
+                    onDownloadMessage(effect.messageRes)
                 }
 
                 is StreamsEffect.NavigateToStore -> {
@@ -162,6 +167,17 @@ fun StreamsSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(SHEET_MAX_HEIGHT_FRACTION),
         ) {
+            val permissionGate = rememberNotificationPermissionGate()
+            val handleStreamClick: (ParsedStream) -> Unit = { stream ->
+                if (request.downloadMode) {
+                    permissionGate {
+                        viewModel.onEvent(StreamsEvent.PlayStream(stream))
+                    }
+                } else {
+                    viewModel.onEvent(StreamsEvent.PlayStream(stream))
+                }
+            }
+
             StreamsSheetContent(
                 request = request,
                 uiState = uiState,
@@ -170,6 +186,7 @@ fun StreamsSheet(
                     viewModel.onEvent(StreamsEvent.Dismiss)
                     onDismiss()
                 },
+                onStreamClick = handleStreamClick,
             )
 
             SnackbarHost(
@@ -193,6 +210,7 @@ private fun StreamsSheetContent(
     uiState: StreamsUiState,
     onEvent: (StreamsEvent) -> Unit,
     onDismiss: () -> Unit,
+    onStreamClick: (ParsedStream) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = NexusTheme.spacing
@@ -221,9 +239,21 @@ private fun StreamsSheetContent(
             onEvent = onEvent,
         )
 
+        if (request.downloadMode && uiState.hiddenCount > 0) {
+            Text(
+                text = stringResource(R.string.streams_download_hidden, uiState.hiddenCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         StreamsResumeStatusRow(uiState.resume)
 
-        StreamsListContent(uiState = uiState, onEvent = onEvent)
+        StreamsListContent(
+            uiState = uiState,
+            onEvent = onEvent,
+            onStreamClick = onStreamClick,
+        )
     }
 }
 
@@ -242,8 +272,14 @@ private fun StreamsSheetHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
+            val titleText =
+                if (request.downloadMode) {
+                    stringResource(R.string.streams_download_title)
+                } else {
+                    stringResource(R.string.streams_title, request.title)
+                }
             Text(
-                text = stringResource(R.string.streams_title, request.title),
+                text = titleText,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -376,11 +412,14 @@ private fun StreamsResumeStatusRow(
 private fun StreamsListContent(
     uiState: StreamsUiState,
     onEvent: (StreamsEvent) -> Unit,
+    onStreamClick: (ParsedStream) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = NexusTheme.spacing
 
-    if (uiState.total == 0 && uiState.isDone) {
+    if (uiState.isDownloadEmpty && uiState.isDone) {
+        StreamsEmptyDownload(modifier = modifier)
+    } else if (uiState.total == 0 && uiState.isDone) {
         StreamsEmptyNoAddons(onFindStreams = { onEvent(StreamsEvent.FindStreams) }, modifier = modifier)
     } else if (uiState.isLoading && uiState.allStreams.isEmpty()) {
         Column(
@@ -418,7 +457,7 @@ private fun StreamsListContent(
                 StreamRow(
                     stream = stream,
                     isLastUsed = stream.key == uiState.lastUsedKey,
-                    onClick = { onEvent(StreamsEvent.PlayStream(stream)) },
+                    onClick = { onStreamClick(stream) },
                     onShowDetails = { onEvent(StreamsEvent.ShowDetails(stream)) },
                     onCopyFileName = { onEvent(StreamsEvent.CopyFileName(it)) },
                     onCopyLink = { onEvent(StreamsEvent.CopyLink(stream)) },
@@ -427,6 +466,25 @@ private fun StreamsListContent(
                     onOpenLink = { onEvent(StreamsEvent.OpenLinkExternal(stream)) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun StreamsEmptyDownload(modifier: Modifier = Modifier) {
+    val spacing = NexusTheme.spacing
+    NexusCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(spacing.md),
+            verticalArrangement = Arrangement.spacedBy(spacing.sm),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(R.string.streams_download_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
