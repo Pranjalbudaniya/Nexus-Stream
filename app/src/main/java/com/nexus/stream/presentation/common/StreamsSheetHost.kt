@@ -23,6 +23,8 @@ data class PlaybackRequest(
     val metaName: String? = null,
     val autoResume: Boolean = false,
     val sourceHintKey: String? = null,
+    val downloadMode: Boolean = false,
+    val replaceDownloadId: String? = null,
 )
 
 fun buildPlaybackRequest(

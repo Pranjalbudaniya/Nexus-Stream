@@ -1,5 +1,6 @@
 package com.nexus.stream.presentation.feature.streams
 
+import com.nexus.stream.data.download.FakeDownloadManager
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
@@ -170,6 +171,7 @@ class StreamsFilterViewModelTest {
             playbackSessionHolder = playbackSessionHolder,
             sourceMemoryRepository = mockk(relaxed = true),
             defaultDispatcher = testDispatcher,
+            downloadManager = FakeDownloadManager(),
         )
 
     @Test

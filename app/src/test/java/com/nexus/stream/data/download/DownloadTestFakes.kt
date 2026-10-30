@@ -2,15 +2,20 @@ package com.nexus.stream.data.download
 
 import com.nexus.stream.data.torrent.NetworkStatus
 import com.nexus.stream.domain.model.DownloadDisplay
+import com.nexus.stream.domain.model.DownloadEffect
 import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadKind
+import com.nexus.stream.domain.model.DownloadLive
 import com.nexus.stream.domain.model.DownloadRequest
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.EnqueueResult
 import com.nexus.stream.domain.model.PauseReason
+import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.DownloadClock
 import com.nexus.stream.domain.repository.DownloadFileStore
+import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.DownloadNetwork
 import com.nexus.stream.domain.repository.DownloadNotifier
 import com.nexus.stream.domain.repository.DownloadPlatformComponents
@@ -29,6 +34,7 @@ import com.nexus.stream.domain.usecase.DownloadEventNotification
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -272,6 +278,17 @@ class FakeDownloadPrefsRepository : DownloadPrefsRepository {
     }
 }
 
+class FakeContentPrefsRepository(
+    initialFamilyMode: Boolean = false,
+) : ContentPrefsRepository {
+    val familyModeFlow = MutableStateFlow(initialFamilyMode)
+    override val familyMode: Flow<Boolean> = familyModeFlow
+
+    override suspend fun setFamilyMode(enabled: Boolean) {
+        familyModeFlow.value = enabled
+    }
+}
+
 data class DownloadTestDependencies(
     val repo: FakeDownloadRepository = FakeDownloadRepository(),
     val prefs: FakeDownloadPrefsRepository = FakeDownloadPrefsRepository(),
@@ -353,3 +370,85 @@ fun createTestDownloadItem(
     createdAt = 100L,
     updatedAt = 100L,
 )
+
+class FakeDownloadManager : DownloadManager {
+    val itemsFlow = MutableStateFlow<List<DownloadItem>>(emptyList())
+    override val items: Flow<List<DownloadItem>> = itemsFlow
+
+    val liveFlow = MutableStateFlow<Map<String, DownloadLive>>(emptyMap())
+    override val live: StateFlow<Map<String, DownloadLive>> = liveFlow
+
+    val effectsFlow = MutableSharedFlow<DownloadEffect>()
+    override val effects: Flow<DownloadEffect> = effectsFlow
+
+    val enqueueCalls = mutableListOf<DownloadRequest>()
+    var enqueueResult: EnqueueResult = EnqueueResult.Added("test-id")
+
+    val pauseCalls = mutableListOf<String>()
+    val resumeCalls = mutableListOf<String>()
+    var pauseAllCalls = 0
+    var resumeAllCalls = 0
+    val allowMobileDataCalls = mutableListOf<String?>()
+    val cancelCalls = mutableListOf<String>()
+    val deleteCalls = mutableListOf<String>()
+    var deleteCompletedCalls = 0
+    val replaceSourceCalls = mutableListOf<Pair<String, DownloadSource>>()
+    var fileOfResult: (String) -> File? = { null }
+    var verifyCompletedResult: (String) -> Boolean = { true }
+
+    override suspend fun enqueue(request: DownloadRequest): EnqueueResult {
+        enqueueCalls.add(request)
+        return enqueueResult
+    }
+
+    override fun pause(id: String) {
+        pauseCalls.add(id)
+    }
+
+    override fun resume(id: String) {
+        resumeCalls.add(id)
+    }
+
+    override fun pauseAll() {
+        pauseAllCalls++
+    }
+
+    override fun resumeAll() {
+        resumeAllCalls++
+    }
+
+    override fun allowMobileData(id: String?) {
+        allowMobileDataCalls.add(id)
+    }
+
+    override suspend fun cancel(id: String) {
+        cancelCalls.add(id)
+    }
+
+    override suspend fun delete(id: String) {
+        deleteCalls.add(id)
+    }
+
+    override suspend fun deleteCompleted() {
+        deleteCompletedCalls++
+    }
+
+    override suspend fun replaceSource(
+        id: String,
+        source: DownloadSource,
+    ) {
+        replaceSourceCalls.add(id to source)
+    }
+
+    override suspend fun onAppStart() {
+        // No-op in test fake
+    }
+
+    override suspend fun onServiceTimeout() {
+        // No-op in test fake
+    }
+
+    override suspend fun verifyCompleted(id: String): Boolean = verifyCompletedResult(id)
+
+    override fun fileOf(id: String): File? = fileOfResult(id)
+}

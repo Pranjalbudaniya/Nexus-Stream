@@ -41,6 +41,8 @@ internal data class FilteredStateBundle(
     val hasDirect: Boolean,
     val hasTorrent: Boolean,
     val hasCached: Boolean,
+    val hiddenCount: Int = 0,
+    val isDownloadEmpty: Boolean = false,
 )
 
 internal object StreamsFilterComputer {
@@ -192,5 +194,7 @@ internal object StreamsFilterComputer {
             showLanguageFilter = b.languages.size >= 2,
             showTypeFilter = b.hasDirect && b.hasTorrent,
             showCachedFilter = b.hasCached,
+            hiddenCount = b.hiddenCount,
+            isDownloadEmpty = b.isDownloadEmpty,
         )
 }

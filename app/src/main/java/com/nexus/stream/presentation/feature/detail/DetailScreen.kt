@@ -77,6 +77,7 @@ fun DetailScreen(
     onNavigateUp: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenAddons: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,6 +99,10 @@ fun DetailScreen(
 
                 is DetailEffect.ShowMessage -> {
                     snackbarHostState.showSnackbar(effect.message)
+                }
+
+                DetailEffect.OpenDownloads -> {
+                    onOpenDownloads()
                 }
             }
         }
@@ -626,5 +631,5 @@ fun streamsSheetRequest(
         videoId = videoId,
         title = state.streamsSheetTitle ?: meta.name,
         autoResume = state.streamsSheetAutoResume,
-    )
+    ).copy(downloadMode = state.streamsSheetDownloadMode)
 }

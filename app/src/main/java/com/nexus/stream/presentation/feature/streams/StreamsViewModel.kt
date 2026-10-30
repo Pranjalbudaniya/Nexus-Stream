@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.stream.R
 import com.nexus.stream.di.DefaultDispatcher
 import com.nexus.stream.domain.model.Addon
+import com.nexus.stream.domain.model.DownloadDisplay
+import com.nexus.stream.domain.model.DownloadRequest
+import com.nexus.stream.domain.model.DownloadSource
+import com.nexus.stream.domain.model.EnqueueResult
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
 import com.nexus.stream.domain.model.SourceFingerprint
@@ -17,6 +21,7 @@ import com.nexus.stream.domain.model.hashAddonKey
 import com.nexus.stream.domain.model.supports
 import com.nexus.stream.domain.repository.AddonFailure
 import com.nexus.stream.domain.repository.AddonRepository
+import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.PlayerPrefsRepository
 import com.nexus.stream.domain.repository.SourceMemoryRepository
 import com.nexus.stream.domain.repository.StreamRepository
@@ -30,6 +35,7 @@ import com.nexus.stream.domain.usecase.StreamOrdering
 import com.nexus.stream.domain.usecase.decideResume
 import com.nexus.stream.domain.usecase.lastUsedKey
 import com.nexus.stream.domain.usecase.progressKeyFor
+import com.nexus.stream.domain.usecase.sanitizeRequestHeaders
 import com.nexus.stream.presentation.common.PlaybackRequest
 import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -106,7 +112,13 @@ data class StreamsUiState(
     val quickPlayHandled: Boolean = false,
     val resume: ResumeUi = ResumeUi.None,
     val lastUsedKey: String? = null,
+    val isDownloadMode: Boolean = false,
+    val hiddenCount: Int = 0,
+    val isDownloadEmpty: Boolean = false,
 ) {
+    val downloadMode: Boolean get() = isDownloadMode
+    val showDownloadEmpty: Boolean get() = isDownloadEmpty
+
     val filters: StreamFilters
         get() =
             StreamFilters(
@@ -144,6 +156,10 @@ sealed interface StreamsEffect {
 
     data class NavigateToStore(
         val category: String,
+    ) : StreamsEffect
+
+    data class DownloadResult(
+        val result: EnqueueResult,
     ) : StreamsEffect
 
     data object DismissSheet : StreamsEffect
@@ -232,6 +248,7 @@ class StreamsViewModel
         private val sourceMemoryRepository: SourceMemoryRepository,
         private val startPlayback: StartPlayback = StartPlayback(playbackCapabilities, playbackSessionHolder),
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+        private val downloadManager: DownloadManager,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(StreamsUiState())
         val uiState: StateFlow<StreamsUiState> = _uiState.asStateFlow()
@@ -419,6 +436,7 @@ class StreamsViewModel
             _uiState.update {
                 StreamsUiState(
                     request = request,
+                    isDownloadMode = request.downloadMode,
                     isLoading = true,
                     selectedResolution = StreamFilterMemory.resolution,
                     selectedLanguage = StreamFilterMemory.language,
@@ -585,7 +603,7 @@ class StreamsViewModel
             }
 
             evaluateResumeDecision()
-            val suppressQuickPlay = request.autoResume && awaitFingerprint() != null
+            val suppressQuickPlay = request.downloadMode || (request.autoResume && awaitFingerprint() != null)
 
             if (emission.done && !_uiState.value.quickPlayHandled) {
                 _uiState.update { it.copy(quickPlayHandled = true) }
@@ -666,6 +684,10 @@ class StreamsViewModel
         }
 
         private suspend fun playStream(stream: ParsedStream) {
+            if (_uiState.value.isDownloadMode) {
+                handleDownloadStream(stream)
+                return
+            }
             val req = _uiState.value.request
             when (val result = startPlayback(req, stream)) {
                 is StartResult.Started -> {
@@ -682,6 +704,58 @@ class StreamsViewModel
 
                 is StartResult.NeedsGate -> {
                     // Not triggered today
+                }
+            }
+        }
+
+        private suspend fun handleDownloadStream(stream: ParsedStream) {
+            val req = _uiState.value.request ?: return
+            val source = stream.stream.source
+            if (source !is StreamSource.Url) {
+                _effects.emit(StreamsEffect.ShowMessage(R.string.download_rejected))
+                return
+            }
+
+            val sanitised = sanitizeRequestHeaders(source.requestHeaders)
+            val httpSource = DownloadSource.Http(source.url, sanitised)
+            val replaceId = req.replaceDownloadId
+            if (replaceId != null) {
+                downloadManager.replaceSource(replaceId, httpSource)
+                _effects.emit(StreamsEffect.ShowMessage(R.string.download_link_replaced))
+                _effects.emit(StreamsEffect.DismissSheet)
+            } else {
+                val display =
+                    DownloadDisplay(
+                        metaId = req.metaId,
+                        type = req.type,
+                        title = req.title,
+                        metaName = req.metaName,
+                        posterUrl = req.posterUrl,
+                        videoId = req.videoId,
+                        season = req.season,
+                        episode = req.episode,
+                        fileNameHint = stream.stream.filename,
+                    )
+                val downloadRequest =
+                    DownloadRequest(
+                        source = httpSource,
+                        display = display,
+                        sizeHint = stream.stream.videoSize,
+                    )
+                when (val result = downloadManager.enqueue(downloadRequest)) {
+                    is EnqueueResult.Added -> {
+                        _effects.emit(StreamsEffect.DownloadResult(result))
+                        _effects.emit(StreamsEffect.DismissSheet)
+                    }
+
+                    is EnqueueResult.Duplicate -> {
+                        _effects.emit(StreamsEffect.DownloadResult(result))
+                        _effects.emit(StreamsEffect.DismissSheet)
+                    }
+
+                    is EnqueueResult.Rejected -> {
+                        _effects.emit(StreamsEffect.ShowMessage(R.string.download_rejected))
+                    }
                 }
             }
         }

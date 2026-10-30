@@ -62,6 +62,7 @@ fun StreamsSheet(
     onDismiss: () -> Unit,
     onNavigateToStore: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onDownloadResult: (com.nexus.stream.domain.model.EnqueueResult) -> Unit = {},
     viewModel: StreamsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -133,6 +134,10 @@ fun StreamsSheet(
 
                 is StreamsEffect.NavigateToStore -> {
                     onNavigateToStore(effect.category)
+                }
+
+                is StreamsEffect.DownloadResult -> {
+                    onDownloadResult(effect.result)
                 }
 
                 StreamsEffect.DismissSheet -> {
