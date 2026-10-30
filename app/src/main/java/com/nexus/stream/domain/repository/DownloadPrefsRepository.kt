@@ -1,0 +1,16 @@
+package com.nexus.stream.domain.repository
+
+import kotlinx.coroutines.flow.Flow
+
+const val MAX_CONCURRENT_DEFAULT = 2
+const val MAX_CONCURRENT_MIN = 1
+const val MAX_CONCURRENT_MAX = 3
+
+interface DownloadPrefsRepository {
+    val wifiOnly: Flow<Boolean>
+    val maxConcurrent: Flow<Int>
+
+    suspend fun setWifiOnly(enabled: Boolean)
+
+    suspend fun setMaxConcurrent(count: Int)
+}

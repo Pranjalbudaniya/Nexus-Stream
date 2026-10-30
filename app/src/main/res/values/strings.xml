@@ -797,5 +797,32 @@
     <string name="home_all_rows_hidden_title">All Home rows are hidden</string>
     <string name="home_all_rows_hidden_body">Turn rows back on in Settings, Home rows.</string>
     <string name="home_all_rows_hidden_button">Open settings</string>
+
+    <!-- P16a: Download engine -->
+    <string name="download_notification_channel_progress">Download progress</string>
+    <string name="download_notification_channel_events">Download results</string>
+    <string name="download_notif_title_one">Downloading</string>
+    <string name="download_notif_title_many">Downloading %1$d items</string>
+    <string name="download_notif_text_progress">%1$d%% · %2$s</string>
+    <string name="download_notif_waiting_wifi">Waiting for Wi-Fi</string>
+    <string name="download_notif_waiting_network">Waiting for network</string>
+    <string name="download_notif_waiting_both">Waiting for Wi-Fi or network</string>
+    <string name="download_notif_pause_all">Pause all</string>
+    <string name="download_notif_resume_all">Resume all</string>
+    <string name="download_notif_public">Downloads</string>
+    <string name="download_event_done_title">Download finished</string>
+    <string name="download_event_failed_title">Download problem</string>
+    <string name="download_event_public_done">Download finished</string>
+    <string name="download_event_public_failed">Download problem</string>
+    <string name="download_event_paused_title">Downloads paused</string>
+    <string name="download_event_paused_text">Android limits how long downloads can run in the background. Tap to resume.</string>
+    <string name="download_failure_link_expired">The link expired</string>
+    <string name="download_failure_storage">Not enough storage</string>
+    <string name="download_failure_network">No connection</string>
+    <string name="download_failure_server">The server refused</string>
+    <string name="download_failure_not_video">The file isn\'t a video</string>
+    <string name="download_failure_missing">The file is missing</string>
+    <string name="download_failure_unknown">Something went wrong</string>
+    <string name="download_failure_incomplete">The download didn\'t finish</string>
 </resources>
 
