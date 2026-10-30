@@ -2,6 +2,7 @@ package com.nexus.stream
 
 import android.app.Application
 import com.nexus.stream.di.IoDispatcher
+import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.UpdateManager
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineDispatcher
@@ -16,6 +17,9 @@ private const val AUTO_CHECK_DELAY_MS = 15_000L
 @HiltAndroidApp
 class NexusApp : Application() {
     @Inject
+    lateinit var downloadManager: DownloadManager
+
+    @Inject
     lateinit var updateManager: UpdateManager
 
     @Inject
@@ -26,6 +30,7 @@ class NexusApp : Application() {
         super.onCreate()
         CoroutineScope(ioDispatcher + SupervisorJob()).launch {
             try {
+                downloadManager.onAppStart()
                 updateManager.onAppStart()
                 delay(AUTO_CHECK_DELAY_MS)
                 updateManager.autoCheckIfDue()

@@ -100,3 +100,14 @@ interface DownloadServiceController {
 fun interface DownloadClock {
     fun now(): Long
 }
+
+data class DownloadPlatformComponents
+    @javax.inject.Inject
+    constructor(
+        val downloader: HttpDownloader,
+        val fileStore: DownloadFileStore,
+        val network: DownloadNetwork,
+        val storageInfo: StorageInfo,
+        val notifier: DownloadNotifier,
+        val serviceController: DownloadServiceController,
+    )
