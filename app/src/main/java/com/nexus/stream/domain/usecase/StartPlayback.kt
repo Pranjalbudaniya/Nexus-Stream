@@ -91,6 +91,10 @@ class StartPlayback
                 is PlaybackSource.Unsupported -> {
                     StartResult.Unsupported(source.reason)
                 }
+
+                is PlaybackSource.Local -> {
+                    StartResult.Unsupported()
+                }
             }
         }
 

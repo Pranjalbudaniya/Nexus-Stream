@@ -283,6 +283,16 @@ class DefaultDownloadManager(
 
     override fun fileOf(id: String): File? = platform.fileStore.fileOf(id)
 
+    override suspend fun verifyCompleted(id: String): Boolean {
+        val item = repository.get(id)
+        val isCompleted = item?.state == DownloadState.COMPLETED
+        val exists = isCompleted && platform.fileStore.fileOf(id)?.exists() == true
+        if (isCompleted && !exists) {
+            repository.updateState(id, DownloadState.FAILED, clock.now(), failure = DownloadFailure.FILE_MISSING)
+        }
+        return exists
+    }
+
     private fun triggerScheduler() {
         scope.launch(ioDispatcher) {
             schedulerMutex.withLock {

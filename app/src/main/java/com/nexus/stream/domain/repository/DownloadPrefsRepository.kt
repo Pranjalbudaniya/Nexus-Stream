@@ -9,8 +9,11 @@ const val MAX_CONCURRENT_MAX = 3
 interface DownloadPrefsRepository {
     val wifiOnly: Flow<Boolean>
     val maxConcurrent: Flow<Int>
+    val introSeen: Flow<Boolean>
 
     suspend fun setWifiOnly(enabled: Boolean)
 
     suspend fun setMaxConcurrent(count: Int)
+
+    suspend fun markIntroSeen()
 }

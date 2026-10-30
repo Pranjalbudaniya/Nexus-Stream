@@ -30,6 +30,7 @@ class DownloadPrefsRepositoryImpl
     ) : DownloadPrefsRepository {
         private val wifiOnlyKey = booleanPreferencesKey("wifi_only")
         private val maxConcurrentKey = intPreferencesKey("max_concurrent")
+        private val introSeenKey = booleanPreferencesKey("download_intro_seen")
 
         private val safeData: Flow<Preferences> =
             dataStore.data.catch { exception ->
@@ -59,6 +60,15 @@ class DownloadPrefsRepositoryImpl
                 }
             }
 
+        override val introSeen: Flow<Boolean> =
+            safeData.map { prefs ->
+                try {
+                    prefs[introSeenKey] ?: false
+                } catch (_: ClassCastException) {
+                    false
+                }
+            }
+
         override suspend fun setWifiOnly(enabled: Boolean) {
             dataStore.edit { prefs ->
                 prefs[wifiOnlyKey] = enabled
@@ -68,6 +78,12 @@ class DownloadPrefsRepositoryImpl
         override suspend fun setMaxConcurrent(count: Int) {
             dataStore.edit { prefs ->
                 prefs[maxConcurrentKey] = count.coerceIn(MAX_CONCURRENT_MIN, MAX_CONCURRENT_MAX)
+            }
+        }
+
+        override suspend fun markIntroSeen() {
+            dataStore.edit { prefs ->
+                prefs[introSeenKey] = true
             }
         }
     }

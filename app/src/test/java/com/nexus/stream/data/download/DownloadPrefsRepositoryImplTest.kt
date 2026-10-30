@@ -99,4 +99,42 @@ class DownloadPrefsRepositoryImplTest {
             }
             assertEquals(2, repo.maxConcurrent.first())
         }
+
+    @Test
+    fun PR5_introSeen_defaultsToFalse_andPersists() =
+        runTest {
+            val file = File(tmpFolder.root, "download_prefs_intro.preferences_pb")
+            val scope1 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val ds1: DataStore<Preferences> =
+                PreferenceDataStoreFactory.create(
+                    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                    scope = scope1,
+                    produceFile = { file },
+                )
+            val repo1 = DownloadPrefsRepositoryImpl(ds1)
+            assertFalse(repo1.introSeen.first())
+            repo1.markIntroSeen()
+            scope1.cancel()
+
+            val scope2 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val ds2: DataStore<Preferences> =
+                PreferenceDataStoreFactory.create(
+                    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                    scope = scope2,
+                    produceFile = { file },
+                )
+            val repo2 = DownloadPrefsRepositoryImpl(ds2)
+            assertTrue(repo2.introSeen.first())
+            scope2.cancel()
+        }
+
+    @Test
+    fun PR6_introSeen_corruptedValue_readsFalse() =
+        runTest {
+            val (repo, dataStore) = createRepository(this)
+            dataStore.edit { prefs ->
+                prefs[stringPreferencesKey("download_intro_seen")] = "corrupted"
+            }
+            assertFalse(repo.introSeen.first())
+        }
 }

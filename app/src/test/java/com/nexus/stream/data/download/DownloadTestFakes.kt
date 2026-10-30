@@ -257,6 +257,7 @@ class FakeDownloadClock : DownloadClock {
 class FakeDownloadPrefsRepository : DownloadPrefsRepository {
     override val wifiOnly = MutableStateFlow(true)
     override val maxConcurrent = MutableStateFlow(2)
+    override val introSeen = MutableStateFlow(false)
 
     override suspend fun setWifiOnly(enabled: Boolean) {
         wifiOnly.value = enabled
@@ -264,6 +265,10 @@ class FakeDownloadPrefsRepository : DownloadPrefsRepository {
 
     override suspend fun setMaxConcurrent(count: Int) {
         maxConcurrent.value = count
+    }
+
+    override suspend fun markIntroSeen() {
+        introSeen.value = true
     }
 }
 

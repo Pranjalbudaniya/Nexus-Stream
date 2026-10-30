@@ -43,5 +43,7 @@ interface DownloadManager {
 
     suspend fun onServiceTimeout()
 
+    suspend fun verifyCompleted(id: String): Boolean
+
     fun fileOf(id: String): File?
 }

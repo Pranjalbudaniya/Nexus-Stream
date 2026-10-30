@@ -21,6 +21,12 @@ sealed interface PlaybackSource {
     data class Unsupported(
         val reason: UnsupportedReason,
     ) : PlaybackSource
+
+    data class Local(
+        val filePath: String,
+    ) : PlaybackSource {
+        override fun toString(): String = "PlaybackSource.Local"
+    }
 }
 
 enum class UnsupportedReason {

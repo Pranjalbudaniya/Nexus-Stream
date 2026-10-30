@@ -648,4 +648,38 @@ class DefaultDownloadManagerTest {
                     .offset,
             )
         }
+
+    @Test
+    fun DM29_verifyCompleted_missingFile_marksFileMissing() =
+        runTest {
+            val (manager, deps) = createManager(backgroundScope, UnconfinedTestDispatcher(testScheduler))
+            val item =
+                createTestDownloadItem(id = "d29", state = DownloadState.COMPLETED, filePath = "/missing/d29.mp4")
+            deps.repo.insert(item)
+
+            val result = manager.verifyCompleted("d29")
+            assertFalse(result)
+            advanceUntilIdle()
+
+            val updated = deps.repo.get("d29")
+            assertEquals(DownloadState.FAILED, updated?.state)
+            assertEquals(DownloadFailure.FILE_MISSING, updated?.failure)
+        }
+
+    @Test
+    fun DM30_verifyCompleted_existingFile_returnsTrue() =
+        runTest {
+            val (manager, deps) = createManager(backgroundScope, UnconfinedTestDispatcher(testScheduler))
+            val file = File(deps.fileStore.root, "d30.mp4")
+            file.writeBytes(ByteArray(100))
+            val item = createTestDownloadItem(id = "d30", state = DownloadState.COMPLETED, filePath = file.absolutePath)
+            deps.repo.insert(item)
+
+            val result = manager.verifyCompleted("d30")
+            assertTrue(result)
+            advanceUntilIdle()
+
+            val updated = deps.repo.get("d30")
+            assertEquals(DownloadState.COMPLETED, updated?.state)
+        }
 }

@@ -1,0 +1,319 @@
+package com.nexus.stream.domain.usecase
+
+import com.nexus.stream.R
+import com.nexus.stream.domain.model.DownloadFailure
+import com.nexus.stream.domain.model.DownloadItem
+import com.nexus.stream.domain.model.DownloadKind
+import com.nexus.stream.domain.model.DownloadLive
+import com.nexus.stream.domain.model.DownloadSource
+import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.PauseReason
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DownloadsPresentationTest {
+    private fun createItem(
+        id: String = "id1",
+        state: DownloadState = DownloadState.DOWNLOADING,
+        title: String = "Test Movie",
+        metaId: String = "tt1",
+        videoId: String = "tt1:1:1",
+    ): DownloadItem =
+        DownloadItem(
+            id = id,
+            kind = DownloadKind.HTTP,
+            source = DownloadSource.Http("https://example.com/v.mp4"),
+            metaId = metaId,
+            type = "movie",
+            title = title,
+            metaName = null,
+            videoId = videoId,
+            season = null,
+            episode = null,
+            fileName = "$id.mp4",
+            totalBytes = 1000L,
+            downloadedBytes = 0L,
+            state = state,
+            pauseReason = null,
+            failure = null,
+            createdAt = 100L,
+            updatedAt = 100L,
+            completedAt = null,
+        )
+
+    @Test
+    fun DP1_sections_areInProgressProblemsReady_inThatOrder() {
+        val items =
+            listOf(
+                createItem(id = "1", state = DownloadState.DOWNLOADING),
+                createItem(id = "2", state = DownloadState.FAILED).copy(failure = DownloadFailure.NETWORK),
+                createItem(id = "3", state = DownloadState.COMPLETED),
+            )
+        val sections = groupDownloads(items, familyMode = false)
+        assertEquals(3, sections.size)
+        assertEquals(DownloadSectionKind.IN_PROGRESS, sections[0].kind)
+        assertEquals(DownloadSectionKind.PROBLEMS, sections[1].kind)
+        assertEquals(DownloadSectionKind.READY, sections[2].kind)
+    }
+
+    @Test
+    fun DP2_emptySections_areSkipped() {
+        val items = listOf(createItem(id = "1", state = DownloadState.COMPLETED))
+        val sections = groupDownloads(items, familyMode = false)
+        assertEquals(1, sections.size)
+        assertEquals(DownloadSectionKind.READY, sections[0].kind)
+    }
+
+    @Test
+    fun DP3_inProgress_ordersActiveThenWaitingThenPaused() {
+        val paused = createItem(id = "1", state = DownloadState.PAUSED).copy(createdAt = 1L)
+        val queued = createItem(id = "2", state = DownloadState.QUEUED).copy(createdAt = 2L)
+        val downloading = createItem(id = "3", state = DownloadState.DOWNLOADING).copy(createdAt = 3L)
+        val waitingWifi = createItem(id = "4", state = DownloadState.WAITING_FOR_WIFI).copy(createdAt = 4L)
+
+        val sections = groupDownloads(listOf(paused, queued, downloading, waitingWifi), familyMode = false)
+        assertEquals(1, sections.size)
+        val ids = sections[0].items.map { it.id }
+        assertEquals(listOf("3", "2", "4", "1"), ids)
+    }
+
+    @Test
+    fun DP4_ready_isNewestCompletedFirst() {
+        val item1 = createItem(id = "1", state = DownloadState.COMPLETED).copy(completedAt = 100L)
+        val item2 = createItem(id = "2", state = DownloadState.COMPLETED).copy(completedAt = 200L)
+
+        val sections = groupDownloads(listOf(item1, item2), familyMode = false)
+        assertEquals(1, sections.size)
+        assertEquals(listOf("2", "1"), sections[0].items.map { it.id })
+    }
+
+    @Test
+    fun DP5_status_downloading_percentSpeedEta() {
+        val item = createItem(state = DownloadState.DOWNLOADING).copy(downloadedBytes = 420L, totalBytes = 1000L)
+        val live = DownloadLive(bytes = 420L, speedBps = 5 * 1024 * 1024L, etaSeconds = 180L)
+
+        val status = rowStatus(item, live)
+        assertEquals(R.string.downloads_status_downloading, status.stringRes)
+        assertEquals(42, status.args[0])
+        assertNotNull(status.args[1])
+        assertNotNull(status.args[2])
+    }
+
+    @Test
+    fun DP6_status_downloading_unknownTotal() {
+        val item = createItem(state = DownloadState.DOWNLOADING).copy(downloadedBytes = 300L, totalBytes = 0L)
+        val live = DownloadLive(bytes = 300L, speedBps = 1000L)
+
+        val status = rowStatus(item, live)
+        assertEquals(R.string.downloads_status_downloading_unknown, status.stringRes)
+        assertEquals(300L, status.args[0])
+        assertEquals("1000 B/s", status.args[1])
+    }
+
+    @Test
+    fun DP7_status_queued_andWaiting() {
+        val queued = rowStatus(createItem(state = DownloadState.QUEUED))
+        val waitingWifi = rowStatus(createItem(state = DownloadState.WAITING_FOR_WIFI))
+        val waitingNet = rowStatus(createItem(state = DownloadState.WAITING_FOR_NETWORK))
+
+        assertEquals(R.string.downloads_status_queued, queued.stringRes)
+        assertEquals(R.string.downloads_status_wifi, waitingWifi.stringRes)
+        assertEquals(R.string.downloads_status_network, waitingNet.stringRes)
+    }
+
+    @Test
+    fun DP8_status_downloadingWithZeroSpeed_saysStarting() {
+        val item = createItem(state = DownloadState.DOWNLOADING).copy(downloadedBytes = 100L, totalBytes = 1000L)
+        val live = DownloadLive(bytes = 100L, speedBps = 0L)
+
+        val status = rowStatus(item, live)
+        assertEquals(R.string.downloads_status_starting, status.stringRes)
+        assertEquals(10, status.args[0])
+    }
+
+    @Test
+    fun DP9_status_waitingForNetwork_whenOffline() {
+        val item =
+            createItem(state = DownloadState.WAITING_FOR_NETWORK).copy(
+                downloadedBytes = 500L,
+                totalBytes = 1000L,
+            )
+        val status = rowStatus(item)
+        assertEquals(R.string.downloads_status_network, status.stringRes)
+        assertTrue(status.args.isEmpty())
+    }
+
+    @Test
+    fun DP10_status_pausedByUser_hasPercent() {
+        val item =
+            createItem(state = DownloadState.PAUSED).copy(
+                pauseReason = PauseReason.USER,
+                downloadedBytes = 400L,
+                totalBytes = 1000L,
+            )
+        val status = rowStatus(item)
+        assertEquals(R.string.downloads_status_paused, status.stringRes)
+        assertEquals(40, status.args[0])
+    }
+
+    @Test
+    fun DP11_status_pausedBySystem_saysSo() {
+        val item =
+            createItem(state = DownloadState.PAUSED).copy(
+                pauseReason = PauseReason.SYSTEM_TIME_LIMIT,
+                downloadedBytes = 400L,
+                totalBytes = 1000L,
+            )
+        val status = rowStatus(item)
+        assertEquals(R.string.downloads_status_paused_system, status.stringRes)
+        assertEquals(40, status.args[0])
+    }
+
+    @Test
+    fun DP12_status_failed_hasAReasonPerFailure() {
+        DownloadFailure.entries.forEach { failure ->
+            val item = createItem(state = DownloadState.FAILED).copy(failure = failure)
+            val status = rowStatus(item)
+            assertTrue(status.stringRes != 0)
+        }
+    }
+
+    @Test
+    fun DP13_status_completed_sizeAndDate() {
+        val t = 1_700_000_000_000L
+        val item = createItem(state = DownloadState.COMPLETED).copy(totalBytes = 1_400_000_000L, completedAt = t)
+        val status = rowStatus(item)
+        assertEquals(R.string.downloads_status_done, status.stringRes)
+        assertEquals(1_400_000_000L, status.args[0])
+        assertEquals(t, status.args[1])
+    }
+
+    @Test
+    fun DP14_primaryAction_perState() {
+        assertEquals(RowAction.PAUSE, primaryAction(createItem(state = DownloadState.DOWNLOADING)))
+        assertEquals(RowAction.PAUSE, primaryAction(createItem(state = DownloadState.QUEUED)))
+        assertEquals(RowAction.PAUSE, primaryAction(createItem(state = DownloadState.WAITING_FOR_WIFI)))
+        assertEquals(RowAction.RESUME, primaryAction(createItem(state = DownloadState.PAUSED)))
+        assertEquals(
+            RowAction.RETRY,
+            primaryAction(createItem(state = DownloadState.FAILED).copy(failure = DownloadFailure.SERVER_ERROR)),
+        )
+        assertEquals(
+            RowAction.FIND_NEW_LINK,
+            primaryAction(createItem(state = DownloadState.FAILED).copy(failure = DownloadFailure.LINK_EXPIRED)),
+        )
+        assertEquals(
+            RowAction.REMOVE,
+            primaryAction(createItem(state = DownloadState.FAILED).copy(failure = DownloadFailure.FILE_MISSING)),
+        )
+        assertEquals(RowAction.NONE, primaryAction(createItem(state = DownloadState.COMPLETED)))
+    }
+
+    @Test
+    fun DP15_rowTitle_usesTheSeriesNameWhenPresent() {
+        val seriesItem = createItem(title = "Show S1 E2").copy(metaName = "Show")
+        val movieItem = createItem(title = "Movie Title")
+
+        assertEquals("Show", rowTitle(seriesItem))
+        assertEquals("Movie Title", rowTitle(movieItem))
+    }
+
+    @Test
+    fun DP16_storageSummary_usedAndLow() {
+        val items =
+            listOf(
+                createItem(id = "1").copy(downloadedBytes = 1_000_000_000L),
+                createItem(id = "2").copy(downloadedBytes = 2_000_000_000L),
+            )
+        val lowFree = 500L * 1024L * 1024L
+        val highFree = 5L * 1024L * 1024L * 1024L
+
+        val summaryLow = storageSummary(items, lowFree)
+        assertEquals(3_000_000_000L, summaryLow.usedBytes)
+        assertTrue(summaryLow.low)
+
+        val summaryHigh = storageSummary(items, highFree)
+        assertEquals(3_000_000_000L, summaryHigh.usedBytes)
+        assertFalse(summaryHigh.low)
+    }
+
+    @Test
+    fun DP17_familyFilter_hidesAdultNames() {
+        val clean = createItem(id = "clean", title = "Dune")
+        val adult = createItem(id = "adult", title = "Hot XXX Video")
+
+        val withFamilyOn = groupDownloads(listOf(clean, adult), familyMode = true)
+        val itemsOn = withFamilyOn.flatMap { it.items }
+        assertTrue(itemsOn.any { it.id == "clean" })
+        assertFalse(itemsOn.any { it.id == "adult" })
+
+        val withFamilyOff = groupDownloads(listOf(clean, adult), familyMode = false)
+        val itemsOff = withFamilyOff.flatMap { it.items }
+        assertTrue(itemsOff.any { it.id == "clean" })
+        assertTrue(itemsOff.any { it.id == "adult" })
+    }
+
+    @Test
+    fun DP18_detailButtonState_perState() {
+        assertEquals(DetailDownloadState.None, detailButtonState(emptyList(), "m1", "v1"))
+        assertEquals(
+            DetailDownloadState.Queued,
+            detailButtonState(listOf(createItem(state = DownloadState.QUEUED)), "tt1", "tt1:1:1"),
+        )
+        val dlItem = createItem(state = DownloadState.DOWNLOADING).copy(downloadedBytes = 420L, totalBytes = 1000L)
+        assertEquals(
+            DetailDownloadState.Downloading(42),
+            detailButtonState(listOf(dlItem), "tt1", "tt1:1:1"),
+        )
+        assertEquals(
+            DetailDownloadState.Paused,
+            detailButtonState(listOf(createItem(state = DownloadState.PAUSED)), "tt1", "tt1:1:1"),
+        )
+        assertEquals(
+            DetailDownloadState.Failed,
+            detailButtonState(listOf(createItem(state = DownloadState.FAILED)), "tt1", "tt1:1:1"),
+        )
+        assertEquals(
+            DetailDownloadState.Completed,
+            detailButtonState(listOf(createItem(state = DownloadState.COMPLETED)), "tt1", "tt1:1:1"),
+        )
+    }
+
+    @Test
+    fun DP19_detailButtonState_picksTheMostRelevantItem() {
+        val failed = createItem(id = "1", state = DownloadState.FAILED)
+        val downloading =
+            createItem(id = "2", state = DownloadState.DOWNLOADING).copy(
+                downloadedBytes = 500L,
+                totalBytes = 1000L,
+            )
+        val completed = createItem(id = "3", state = DownloadState.COMPLETED)
+
+        assertEquals(
+            DetailDownloadState.Downloading(50),
+            detailButtonState(listOf(failed, downloading), "tt1", "tt1:1:1"),
+        )
+        assertEquals(
+            DetailDownloadState.Completed,
+            detailButtonState(listOf(completed, failed), "tt1", "tt1:1:1"),
+        )
+    }
+
+    @Test
+    fun DP20_activeCount_countsDownloadingQueuedAndWaiting() {
+        val items =
+            listOf(
+                createItem(id = "1", state = DownloadState.DOWNLOADING),
+                createItem(id = "2", state = DownloadState.QUEUED),
+                createItem(id = "3", state = DownloadState.WAITING_FOR_WIFI),
+                createItem(id = "4", state = DownloadState.WAITING_FOR_NETWORK),
+                createItem(id = "5", state = DownloadState.PAUSED),
+                createItem(id = "6", state = DownloadState.FAILED),
+                createItem(id = "7", state = DownloadState.COMPLETED),
+            )
+        assertEquals(4, activeCount(items))
+    }
+}

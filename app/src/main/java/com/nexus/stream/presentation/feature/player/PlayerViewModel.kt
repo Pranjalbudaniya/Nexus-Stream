@@ -1,5 +1,6 @@
 package com.nexus.stream.presentation.feature.player
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.stream.data.player.AudioFocusController
@@ -65,6 +66,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import javax.inject.Inject
 
 private const val CONTROLS_HIDE_DELAY_MS = 3_000L
@@ -1013,6 +1015,18 @@ class PlayerViewModel
                     val req = source.request.copy(cacheKey = cacheKey)
                     activeTorrentRequest = req
                     startTorrentPlayback(req)
+                }
+
+                is PlaybackSource.Local -> {
+                    _uiState.update { it.copy(phase = PlayerPhase.Preparing(PreparingLabel.OPENING)) }
+                    viewModelScope.launch(mainDispatcher) {
+                        try {
+                            val ctrl = obtainController()
+                            playUrl(ctrl, Uri.fromFile(File(source.filePath)).toString())
+                        } catch (_: Exception) {
+                            _uiState.update { it.copy(phase = PlayerPhase.Error(PlayerError.UNPLAYABLE)) }
+                        }
+                    }
                 }
 
                 is PlaybackSource.External, is PlaybackSource.Unsupported -> {
