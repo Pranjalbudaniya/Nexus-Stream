@@ -66,13 +66,7 @@ fun NexusApp(
     LaunchedEffect(pendingOpenDownloads) {
         if (pendingOpenDownloads != null) {
             openDownloadsHolder.consume()
-            navController.navigate(TopLevelDestination.DOWNLOADS.route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
-            }
+            navController.navigateToTopLevel(TopLevelDestination.DOWNLOADS)
         }
     }
 
@@ -83,13 +77,7 @@ fun NexusApp(
             navController.navigate(Addons(storeCategory = category))
         },
         onNavigateToDownloads = {
-            navController.navigate(TopLevelDestination.DOWNLOADS.route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
-            }
+            navController.navigateToTopLevel(TopLevelDestination.DOWNLOADS)
         },
         onNavigateToSettings = {
             navController.navigate(Settings)
@@ -113,13 +101,7 @@ fun NexusApp(
                                     selected = isSelected,
                                     onClick = {
                                         tabReselects.onTabClick(destination, isSelected)
-                                        navController.navigate(destination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        navController.navigateToTopLevel(destination)
                                     },
                                     icon = {
                                         val iconContent: @Composable () -> Unit = {

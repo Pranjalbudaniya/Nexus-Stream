@@ -79,7 +79,7 @@ fun NexusNavHost(
                 onItemClick = { type, id ->
                     navController.navigate(Detail(type = type, id = id))
                 },
-                onNavigateToDiscover = { navController.navigate(Discover) },
+                onNavigateToDiscover = { navController.navigateToTopLevel(TopLevelDestination.DISCOVER) },
                 onOpenSettings = { navController.navigate(Settings) },
                 reselectEvents = downloadsReselects,
                 playbackSessionHolder = playbackSessionHolder,
@@ -90,7 +90,7 @@ fun NexusNavHost(
                 onItemClick = { type, id ->
                     navController.navigate(Detail(type = type, id = id))
                 },
-                onNavigateToDiscover = { navController.navigate(Discover) },
+                onNavigateToDiscover = { navController.navigateToTopLevel(TopLevelDestination.DISCOVER) },
                 reselectEvents = libraryReselects,
             )
         }
@@ -113,13 +113,7 @@ fun NexusNavHost(
                 onNavigateUp = { navController.navigateUp() },
                 onOpenAddons = { navController.navigate(Addons()) },
                 onOpenDownloads = {
-                    navController.navigate(Downloads) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    navController.navigateToTopLevel(TopLevelDestination.DOWNLOADS)
                 },
             )
         }
