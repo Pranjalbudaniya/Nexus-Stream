@@ -17,6 +17,9 @@ import com.nexus.stream.data.download.DownloadPrefsRepositoryImpl
 import com.nexus.stream.data.download.DownloadRepositoryImpl
 import com.nexus.stream.data.download.DownloadServiceControllerImpl
 import com.nexus.stream.data.download.HttpDownloaderImpl
+import com.nexus.stream.data.download.TorrentDownloaderImpl
+import com.nexus.stream.data.torrent.JLibTorrentBackend
+import com.nexus.stream.data.torrent.TorrentDownloadBackend
 import com.nexus.stream.domain.repository.DownloadClock
 import com.nexus.stream.domain.repository.DownloadFileStore
 import com.nexus.stream.domain.repository.DownloadManager
@@ -28,6 +31,7 @@ import com.nexus.stream.domain.repository.DownloadRepository
 import com.nexus.stream.domain.repository.DownloadServiceController
 import com.nexus.stream.domain.repository.HttpDownloader
 import com.nexus.stream.domain.repository.StorageInfo
+import com.nexus.stream.domain.repository.TorrentDownloader
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -53,6 +57,14 @@ interface DownloadBindingModule {
     @Binds
     @Singleton
     fun bindHttpDownloader(impl: HttpDownloaderImpl): HttpDownloader
+
+    @Binds
+    @Singleton
+    fun bindTorrentDownloader(impl: TorrentDownloaderImpl): TorrentDownloader
+
+    @Binds
+    @Singleton
+    fun bindTorrentDownloadBackend(impl: JLibTorrentBackend): TorrentDownloadBackend
 
     @Binds
     @Singleton

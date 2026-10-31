@@ -14,6 +14,7 @@ import com.nexus.stream.domain.model.EnqueueResult
 import com.nexus.stream.domain.model.PauseReason
 import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.DownloadClock
+import com.nexus.stream.domain.repository.DownloadEngines
 import com.nexus.stream.domain.repository.DownloadFileStore
 import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.DownloadNetwork
@@ -29,6 +30,11 @@ import com.nexus.stream.domain.repository.ProxyDiagnostics
 import com.nexus.stream.domain.repository.ProxySession
 import com.nexus.stream.domain.repository.StorageInfo
 import com.nexus.stream.domain.repository.StreamProxy
+import com.nexus.stream.domain.repository.TorrentDownloader
+import com.nexus.stream.domain.repository.TorrentFileChoice
+import com.nexus.stream.domain.repository.TorrentResult
+import com.nexus.stream.domain.repository.TorrentTask
+import com.nexus.stream.domain.repository.TorrentUpdate
 import com.nexus.stream.domain.usecase.AggregateNotificationModel
 import com.nexus.stream.domain.usecase.DownloadEventNotification
 import kotlinx.coroutines.CoroutineDispatcher
@@ -289,10 +295,28 @@ class FakeContentPrefsRepository(
     }
 }
 
+class FakeTorrentDownloader : TorrentDownloader {
+    val downloadCalls = mutableListOf<TorrentTask>()
+    var resultToReturn: TorrentResult =
+        TorrentResult.Completed(java.io.File("/downloads/torrents/item/video.mkv"), 1000L)
+    var updatesToEmit = listOf<TorrentUpdate>()
+    var onDownloadBlock: (suspend (TorrentTask, (TorrentUpdate) -> Unit) -> TorrentResult)? = null
+
+    override suspend fun download(
+        task: TorrentTask,
+        onUpdate: (TorrentUpdate) -> Unit,
+    ): TorrentResult {
+        downloadCalls.add(task)
+        updatesToEmit.forEach { onUpdate(it) }
+        return onDownloadBlock?.invoke(task, onUpdate) ?: resultToReturn
+    }
+}
+
 data class DownloadTestDependencies(
     val repo: FakeDownloadRepository = FakeDownloadRepository(),
     val prefs: FakeDownloadPrefsRepository = FakeDownloadPrefsRepository(),
     val downloader: FakeHttpDownloader = FakeHttpDownloader(),
+    val torrentDownloader: FakeTorrentDownloader = FakeTorrentDownloader(),
     val fileStore: FakeDownloadFileStore,
     val network: FakeDownloadNetwork = FakeDownloadNetwork(),
     val storageInfo: FakeStorageInfo = FakeStorageInfo(),
@@ -309,7 +333,7 @@ fun createTestDownloadManager(
 ): DefaultDownloadManager {
     val platform =
         DownloadPlatformComponents(
-            downloader = deps.downloader,
+            engines = DownloadEngines(deps.downloader, deps.torrentDownloader),
             fileStore = deps.fileStore,
             network = deps.network,
             storageInfo = deps.storageInfo,
@@ -360,6 +384,32 @@ fun createTestDownloadItem(
     title = "T",
     videoId = "v1",
     fileName = "$id.mp4",
+    downloadedBytes = downloadedBytes,
+    totalBytes = 1000L,
+    state = state,
+    failure = null,
+    pauseReason = null,
+    filePath = filePath,
+    supportsResume = true,
+    createdAt = 100L,
+    updatedAt = 100L,
+)
+
+fun createTestTorrentDownloadItem(
+    id: String,
+    state: DownloadState = DownloadState.COMPLETED,
+    hash: String = "0123456789abcdef0123456789abcdef01234567",
+    filePath: String? = null,
+    downloadedBytes: Long = 0L,
+) = DownloadItem(
+    id = id,
+    kind = DownloadKind.TORRENT,
+    source = DownloadSource.Torrent(hash),
+    metaId = "m_$id",
+    type = "series",
+    title = "Torrent Show",
+    videoId = "v_$id",
+    fileName = "$id.mkv",
     downloadedBytes = downloadedBytes,
     totalBytes = 1000L,
     state = state,
@@ -451,4 +501,16 @@ class FakeDownloadManager : DownloadManager {
     override suspend fun verifyCompleted(id: String): Boolean = verifyCompletedResult(id)
 
     override fun fileOf(id: String): File? = fileOfResult(id)
+
+    val selectTorrentFileCalls = mutableListOf<Pair<String, Int>>()
+    val fileChoicesMap = mutableMapOf<String, List<TorrentFileChoice>>()
+
+    override suspend fun selectTorrentFile(
+        id: String,
+        fileIndex: Int,
+    ) {
+        selectTorrentFileCalls.add(id to fileIndex)
+    }
+
+    override fun getTorrentFileChoices(id: String): List<TorrentFileChoice> = fileChoicesMap[id].orEmpty()
 }

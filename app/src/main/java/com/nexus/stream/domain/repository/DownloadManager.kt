@@ -46,4 +46,11 @@ interface DownloadManager {
     suspend fun verifyCompleted(id: String): Boolean
 
     fun fileOf(id: String): File?
+
+    suspend fun selectTorrentFile(
+        id: String,
+        fileIndex: Int,
+    )
+
+    fun getTorrentFileChoices(id: String): List<TorrentFileChoice> = emptyList()
 }

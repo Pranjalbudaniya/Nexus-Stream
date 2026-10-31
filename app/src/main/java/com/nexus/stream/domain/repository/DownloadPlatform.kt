@@ -101,13 +101,23 @@ fun interface DownloadClock {
     fun now(): Long
 }
 
+data class DownloadEngines
+    @javax.inject.Inject
+    constructor(
+        val http: HttpDownloader,
+        val torrent: TorrentDownloader,
+    )
+
 data class DownloadPlatformComponents
     @javax.inject.Inject
     constructor(
-        val downloader: HttpDownloader,
+        val engines: DownloadEngines,
         val fileStore: DownloadFileStore,
         val network: DownloadNetwork,
         val storageInfo: StorageInfo,
         val notifier: DownloadNotifier,
         val serviceController: DownloadServiceController,
-    )
+    ) {
+        val downloader: HttpDownloader get() = engines.http
+        val torrentDownloader: TorrentDownloader get() = engines.torrent
+    }

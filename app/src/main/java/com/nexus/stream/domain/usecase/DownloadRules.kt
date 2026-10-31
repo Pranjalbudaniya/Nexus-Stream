@@ -3,6 +3,7 @@ package com.nexus.stream.domain.usecase
 import com.nexus.stream.data.torrent.NetworkStatus
 import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
+import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.NetworkGate
 import java.util.Locale
@@ -184,9 +185,20 @@ fun pickToStart(
             DownloadState.WAITING_FOR_NETWORK,
         )
 
-    return items
-        .filter { it.state in eligibleStates && gate(it) == NetworkGate.Proceed }
-        .sortedBy { it.createdAt }
+    val runningHashes =
+        items
+            .filter { it.state == DownloadState.DOWNLOADING }
+            .mapNotNull { (it.source as? DownloadSource.Torrent)?.infoHash?.lowercase() }
+            .toSet()
+
+    val eligible =
+        items
+            .filter { it.state in eligibleStates && gate(it) == NetworkGate.Proceed }
+            .sortedBy { it.createdAt }
+    val runnableIds = runnableTorrentIds(eligible, runningHashes).toSet()
+
+    return eligible
+        .filter { it.id in runnableIds }
         .take(availableSlots)
         .map { it.id }
 }
