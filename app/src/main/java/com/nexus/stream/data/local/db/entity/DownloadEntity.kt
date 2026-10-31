@@ -42,4 +42,6 @@ data class DownloadEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val completedAt: Long?,
+    val galleryUri: String? = null,
+    val galleryState: String = "NONE",
 )

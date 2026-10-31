@@ -7,6 +7,8 @@ import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
 import com.nexus.stream.domain.model.PauseReason
 import com.nexus.stream.domain.repository.DownloadRepository
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +17,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,17 +27,26 @@ class DownloadRepositoryImpl
     constructor(
         private val dao: DownloadDao,
     ) : DownloadRepository {
+        private val galleryFailures = ConcurrentHashMap<String, GalleryFailure>()
+
         override fun observeAll(): Flow<List<DownloadItem>> =
-            dao.observeAll().map { list -> list.map { DownloadMapper.toDomain(it) } }
+            dao.observeAll().map { list -> list.map { DownloadMapper.toDomain(it, galleryFailures[it.id]) } }
 
         override fun observeForMeta(metaId: String): Flow<List<DownloadItem>> =
-            dao.observeForMeta(metaId).map { list -> list.map { DownloadMapper.toDomain(it) } }
+            dao.observeForMeta(metaId).map { list -> list.map { DownloadMapper.toDomain(it, galleryFailures[it.id]) } }
 
-        override suspend fun get(id: String): DownloadItem? = dao.get(id)?.let { DownloadMapper.toDomain(it) }
+        override suspend fun get(id: String): DownloadItem? =
+            dao.get(id)?.let { DownloadMapper.toDomain(it, galleryFailures[it.id]) }
 
-        override suspend fun getAll(): List<DownloadItem> = dao.getAll().map { DownloadMapper.toDomain(it) }
+        override suspend fun getAll(): List<DownloadItem> =
+            dao.getAll().map { DownloadMapper.toDomain(it, galleryFailures[it.id]) }
 
         override suspend fun insert(item: DownloadItem) {
+            if (item.galleryFailure != null) {
+                galleryFailures[item.id] = item.galleryFailure
+            } else if (item.galleryState != GalleryState.FAILED) {
+                galleryFailures.remove(item.id)
+            }
             dao.upsert(DownloadMapper.toEntity(item))
         }
 
@@ -137,6 +149,7 @@ class DownloadRepositoryImpl
         }
 
         override suspend fun delete(id: String) {
+            galleryFailures.remove(id)
             dao.delete(id)
         }
     }
@@ -163,13 +176,18 @@ private object DownloadMapper {
             json.decodeFromString(ListSerializer(String.serializer()), jsonStr)
         }.getOrNull().orEmpty()
 
-    fun toDomain(entity: DownloadEntity): DownloadItem {
+    fun toDomain(
+        entity: DownloadEntity,
+        failure: GalleryFailure? = null,
+    ): DownloadItem {
         val parsedKind = runCatching { DownloadKind.valueOf(entity.kind) }.getOrDefault(DownloadKind.HTTP)
         val parsedState = runCatching { DownloadState.valueOf(entity.state) }.getOrDefault(DownloadState.FAILED)
         val parsedFailure =
             entity.failure?.let { runCatching { DownloadFailure.valueOf(it) }.getOrDefault(DownloadFailure.UNKNOWN) }
                 ?: if (parsedState == DownloadState.FAILED) DownloadFailure.UNKNOWN else null
         val parsedPauseReason = entity.pauseReason?.let { runCatching { PauseReason.valueOf(it) }.getOrNull() }
+        val parsedGalleryState =
+            runCatching { GalleryState.valueOf(entity.galleryState) }.getOrDefault(GalleryState.NONE)
 
         val source: DownloadSource =
             if (parsedKind == DownloadKind.TORRENT) {
@@ -211,6 +229,9 @@ private object DownloadMapper {
             etag = entity.etag,
             lastModified = entity.lastModified,
             allowMetered = entity.allowMetered,
+            galleryState = parsedGalleryState,
+            galleryUri = entity.galleryUri,
+            galleryFailure = failure,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt,
             completedAt = entity.completedAt,
@@ -253,6 +274,8 @@ private object DownloadMapper {
             createdAt = item.createdAt,
             updatedAt = item.updatedAt,
             completedAt = item.completedAt,
+            galleryUri = item.galleryUri,
+            galleryState = item.galleryState.name,
         )
     }
 }

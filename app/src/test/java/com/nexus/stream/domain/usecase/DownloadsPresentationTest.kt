@@ -497,7 +497,7 @@ class DownloadsPresentationTest {
             listOf(
                 GalleryFailure.NO_SPACE to R.string.downloads_gallery_reason_space,
                 GalleryFailure.WRITE_FAILED to R.string.downloads_gallery_reason_write,
-                GalleryFailure.SOURCE_MISSING to R.string.downloads_gallery_reason_missing,
+                GalleryFailure.FILE_MISSING to R.string.downloads_gallery_reason_missing,
                 GalleryFailure.UNAVAILABLE to R.string.downloads_gallery_reason_unavailable,
             )
         for ((failure, expectedReasonRes) in failures) {

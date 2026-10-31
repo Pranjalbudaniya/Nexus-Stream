@@ -220,7 +220,7 @@ private object StatusResolvers {
         when (failure) {
             GalleryFailure.NO_SPACE -> R.string.downloads_gallery_reason_space
             GalleryFailure.WRITE_FAILED -> R.string.downloads_gallery_reason_write
-            GalleryFailure.SOURCE_MISSING -> R.string.downloads_gallery_reason_missing
+            GalleryFailure.FILE_MISSING -> R.string.downloads_gallery_reason_missing
             GalleryFailure.UNAVAILABLE -> R.string.downloads_gallery_reason_unavailable
         }
 }

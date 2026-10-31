@@ -19,6 +19,7 @@ import com.nexus.stream.domain.usecase.etaSeconds
 import com.nexus.stream.domain.usecase.hasEnoughStorage
 import com.nexus.stream.domain.usecase.torrentSaveDir
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -170,6 +171,11 @@ private suspend fun DefaultDownloadManager.handleTorrentResult(
                 updatedAt = now,
             )
             emitEffect(DownloadEffect.Completed(item.id))
+            if (prefsRepository.saveToGallery.first()) {
+                scope.launch(ioDispatcher) {
+                    exportToGallery(item.id)
+                }
+            }
         }
 
         is TorrentResult.NeedsUserPick -> {
@@ -224,6 +230,11 @@ private suspend fun DefaultDownloadManager.handleDownloadCompleted(
     val now = clock.now()
     repository.updateCompleted(item.id, finished.absolutePath, result.total, now, now)
     emitEffect(DownloadEffect.Completed(item.id))
+    if (prefsRepository.saveToGallery.first()) {
+        scope.launch(ioDispatcher) {
+            exportToGallery(item.id)
+        }
+    }
 }
 
 private suspend fun DefaultDownloadManager.handleDownloadFailed(

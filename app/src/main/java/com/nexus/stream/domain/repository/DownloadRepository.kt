@@ -4,6 +4,8 @@ import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
 import com.nexus.stream.domain.model.PauseReason
 import kotlinx.coroutines.flow.Flow
 

@@ -11,6 +11,8 @@ import com.nexus.stream.domain.model.DownloadRequest
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.EnqueueResult
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
 import com.nexus.stream.domain.model.PauseReason
 import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.DownloadClock
@@ -23,6 +25,8 @@ import com.nexus.stream.domain.repository.DownloadPlatformComponents
 import com.nexus.stream.domain.repository.DownloadPrefsRepository
 import com.nexus.stream.domain.repository.DownloadRepository
 import com.nexus.stream.domain.repository.DownloadServiceController
+import com.nexus.stream.domain.repository.GalleryExportResult
+import com.nexus.stream.domain.repository.GalleryExporter
 import com.nexus.stream.domain.repository.HttpDownloader
 import com.nexus.stream.domain.repository.HttpResult
 import com.nexus.stream.domain.repository.HttpTask
@@ -317,6 +321,47 @@ class FakeTorrentDownloader : TorrentDownloader {
     }
 }
 
+class FakeGalleryExporter : GalleryExporter {
+    val exportCalls = mutableListOf<ExportCall>()
+    val deleteCalls = mutableListOf<String>()
+    var cleanupPendingCalled = 0
+    var nextResult: GalleryExportResult = GalleryExportResult.Saved("content://media/external/video/media/100")
+    var onExportHandler: (suspend (File, String, String, (Long, Long) -> Unit) -> GalleryExportResult)? = null
+    val existingUris = mutableSetOf<String>()
+
+    data class ExportCall(
+        val file: File,
+        val displayName: String,
+        val mimeType: String,
+    )
+
+    override suspend fun export(
+        file: File,
+        displayName: String,
+        mimeType: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit,
+    ): GalleryExportResult {
+        exportCalls.add(ExportCall(file, displayName, mimeType))
+        onExportHandler?.let { return it(file, displayName, mimeType, onProgress) }
+        val res = nextResult
+        if (res is GalleryExportResult.Saved) {
+            existingUris.add(res.uri)
+        }
+        return res
+    }
+
+    override suspend fun exists(uri: String): Boolean = existingUris.contains(uri)
+
+    override suspend fun delete(uri: String): Boolean {
+        deleteCalls.add(uri)
+        return existingUris.remove(uri)
+    }
+
+    override suspend fun cleanupPending() {
+        cleanupPendingCalled++
+    }
+}
+
 data class DownloadTestDependencies(
     val repo: FakeDownloadRepository = FakeDownloadRepository(),
     val prefs: FakeDownloadPrefsRepository = FakeDownloadPrefsRepository(),
@@ -329,6 +374,7 @@ data class DownloadTestDependencies(
     val serviceController: FakeDownloadServiceController = FakeDownloadServiceController(),
     val streamProxy: FakeStreamProxy = FakeStreamProxy(),
     val clock: FakeDownloadClock = FakeDownloadClock(),
+    val galleryExporter: FakeGalleryExporter = FakeGalleryExporter(),
 )
 
 fun createTestDownloadManager(
@@ -351,6 +397,7 @@ fun createTestDownloadManager(
         streamProxy = deps.streamProxy,
         clock = deps.clock,
         platform = platform,
+        galleryExporter = deps.galleryExporter,
         scope = CoroutineScope(scope.coroutineContext + dispatcher),
     )
 }
@@ -506,6 +553,22 @@ class FakeDownloadManager : DownloadManager {
     override suspend fun verifyCompleted(id: String): Boolean = verifyCompletedResult(id)
 
     override fun fileOf(id: String): File? = fileOfResult(id)
+
+    val exportToGalleryCalls = mutableListOf<String>()
+    val removeFromGalleryCalls = mutableListOf<String>()
+    var exportAllToGalleryCalls = 0
+
+    override suspend fun exportToGallery(id: String) {
+        exportToGalleryCalls.add(id)
+    }
+
+    override suspend fun removeFromGallery(id: String) {
+        removeFromGalleryCalls.add(id)
+    }
+
+    override suspend fun exportAllToGallery() {
+        exportAllToGalleryCalls++
+    }
 
     val selectTorrentFileCalls = mutableListOf<Pair<String, Int>>()
     val fileChoicesMap = mutableMapOf<String, List<TorrentFileChoice>>()

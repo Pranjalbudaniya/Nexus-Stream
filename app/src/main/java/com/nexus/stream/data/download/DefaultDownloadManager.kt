@@ -12,6 +12,8 @@ import com.nexus.stream.domain.model.DownloadRequest
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.EnqueueResult
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
 import com.nexus.stream.domain.model.NetworkGate
 import com.nexus.stream.domain.model.PauseReason
 import com.nexus.stream.domain.repository.DownloadClock
@@ -19,6 +21,8 @@ import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.DownloadPlatformComponents
 import com.nexus.stream.domain.repository.DownloadPrefsRepository
 import com.nexus.stream.domain.repository.DownloadRepository
+import com.nexus.stream.domain.repository.GalleryExportResult
+import com.nexus.stream.domain.repository.GalleryExporter
 import com.nexus.stream.domain.repository.HttpResult
 import com.nexus.stream.domain.repository.HttpTask
 import com.nexus.stream.domain.repository.StreamProxy
@@ -32,7 +36,10 @@ import com.nexus.stream.domain.usecase.TORRENT_SUBDIR
 import com.nexus.stream.domain.usecase.downloadFileExtension
 import com.nexus.stream.domain.usecase.etaSeconds
 import com.nexus.stream.domain.usecase.findDuplicate
+import com.nexus.stream.domain.usecase.galleryFileName
+import com.nexus.stream.domain.usecase.galleryMimeType
 import com.nexus.stream.domain.usecase.hasEnoughStorage
+import com.nexus.stream.domain.usecase.hasEnoughStorageForExport
 import com.nexus.stream.domain.usecase.networkGate
 import com.nexus.stream.domain.usecase.pickToStart
 import com.nexus.stream.domain.usecase.torrentSaveDir
@@ -61,14 +68,15 @@ internal const val PROGRESS_PERSIST_INTERVAL_MS = 2000L
 internal const val PROGRESS_PERSIST_PERCENT = 1L
 internal const val PERCENT_MULTIPLIER = 100L
 
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 @Singleton
 class DefaultDownloadManager(
     internal val repository: DownloadRepository,
-    private val prefsRepository: DownloadPrefsRepository,
+    internal val prefsRepository: DownloadPrefsRepository,
     internal val streamProxy: StreamProxy,
     internal val clock: DownloadClock,
     internal val platform: DownloadPlatformComponents,
+    internal val galleryExporter: GalleryExporter,
     internal val scope: CoroutineScope,
 ) : DownloadManager {
     internal val torrentDownloader: TorrentDownloader get() = platform.torrentDownloader
@@ -85,6 +93,7 @@ class DefaultDownloadManager(
         streamProxy: StreamProxy,
         clock: DownloadClock,
         platform: DownloadPlatformComponents,
+        galleryExporter: GalleryExporter,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ) : this(
         repository = repository,
@@ -92,6 +101,7 @@ class DefaultDownloadManager(
         streamProxy = streamProxy,
         clock = clock,
         platform = platform,
+        galleryExporter = galleryExporter,
         scope = CoroutineScope(ioDispatcher + kotlinx.coroutines.SupervisorJob()),
     )
 
@@ -115,6 +125,7 @@ class DefaultDownloadManager(
     internal val lastProgressTimes = ConcurrentHashMap<String, Long>()
     internal val lastProgressBytes = ConcurrentHashMap<String, Long>()
     private val schedulerMutex = Mutex()
+    private val galleryMutex = Mutex()
 
     override val items: Flow<List<DownloadItem>> = repository.observeAll()
     override val live: StateFlow<Map<String, DownloadLive>> = _live.asStateFlow()
@@ -261,6 +272,9 @@ class DefaultDownloadManager(
     override suspend fun delete(id: String) {
         cancelActiveJob(id)
         val item = repository.get(id)
+        if (item?.galleryUri != null) {
+            galleryExporter.delete(item.galleryUri)
+        }
         if (item != null && item.kind == DownloadKind.TORRENT) {
             val torrentFolder = File(File(platform.fileStore.root, TORRENT_SUBDIR), id)
             torrentFolder.deleteRecursively()
@@ -275,6 +289,9 @@ class DefaultDownloadManager(
     override suspend fun deleteCompleted() {
         val completed = repository.getAll().filter { it.state == DownloadState.COMPLETED }
         for (item in completed) {
+            if (item.galleryUri != null) {
+                galleryExporter.delete(item.galleryUri)
+            }
             if (item.kind == DownloadKind.TORRENT) {
                 val torrentFolder = File(File(platform.fileStore.root, TORRENT_SUBDIR), item.id)
                 torrentFolder.deleteRecursively()
@@ -304,6 +321,38 @@ class DefaultDownloadManager(
     override suspend fun onAppStart() {
         try {
             reconcileAtStart()
+            galleryExporter.cleanupPending()
+            val all = repository.getAll()
+            val saveOn = prefsRepository.saveToGallery.first()
+            val now = clock.now()
+
+            for (item in all) {
+                if (item.galleryState == GalleryState.SAVING) {
+                    repository.insert(
+                        item.copy(
+                            galleryState = GalleryState.NONE,
+                            galleryUri = null,
+                            galleryFailure = null,
+                            updatedAt = now,
+                        ),
+                    )
+                    if (saveOn) {
+                        exportToGallery(item.id)
+                    }
+                } else if (item.galleryState == GalleryState.SAVED) {
+                    val uri = item.galleryUri
+                    if (uri == null || !galleryExporter.exists(uri)) {
+                        repository.insert(
+                            item.copy(
+                                galleryState = GalleryState.NONE,
+                                galleryUri = null,
+                                galleryFailure = null,
+                                updatedAt = now,
+                            ),
+                        )
+                    }
+                }
+            }
             triggerScheduler()
         } catch (_: Exception) {
             // onAppStart never throws
@@ -333,6 +382,172 @@ class DefaultDownloadManager(
             repository.updateState(id, DownloadState.FAILED, clock.now(), failure = DownloadFailure.FILE_MISSING)
         }
         return exists
+    }
+
+    override suspend fun exportToGallery(id: String) {
+        val preItem = repository.get(id) ?: return
+        if (preItem.galleryState == GalleryState.SAVING || preItem.galleryState == GalleryState.SAVED) return
+        galleryMutex.withLock {
+            val item = repository.get(id) ?: return@withLock
+            if (item.galleryState == GalleryState.SAVING || item.galleryState == GalleryState.SAVED) return@withLock
+            if (item.state != DownloadState.COMPLETED) return@withLock
+
+            val file = resolveExportFile(item) ?: return@withLock
+            if (!checkExportStorage(item, file)) return@withLock
+
+            repository.insert(
+                item.copy(
+                    galleryState = GalleryState.SAVING,
+                    galleryUri = null,
+                    galleryFailure = null,
+                    updatedAt = clock.now(),
+                ),
+            )
+            updateServiceState(repository.getAll())
+
+            try {
+                runGalleryExport(item, file)
+            } catch (e: CancellationException) {
+                repository.insert(
+                    item.copy(
+                        galleryState = GalleryState.NONE,
+                        galleryUri = null,
+                        galleryFailure = null,
+                        updatedAt = clock.now(),
+                    ),
+                )
+                throw e
+            } catch (_: Exception) {
+                repository.insert(
+                    item.copy(
+                        galleryState = GalleryState.FAILED,
+                        galleryUri = null,
+                        galleryFailure = GalleryFailure.WRITE_FAILED,
+                        updatedAt = clock.now(),
+                    ),
+                )
+                emitEffect(DownloadEffect.GalleryFailed(item.id, GalleryFailure.WRITE_FAILED))
+            } finally {
+                updateLive { current -> current - item.id }
+                updateServiceState(repository.getAll())
+            }
+        }
+    }
+
+    private suspend fun resolveExportFile(item: DownloadItem): File? {
+        val file =
+            if (item.kind == DownloadKind.TORRENT) {
+                item.filePath?.let { File(it) }
+            } else {
+                platform.fileStore.fileOf(item.id)
+            }
+        if (file == null || !file.exists()) {
+            repository.insert(
+                item.copy(
+                    galleryState = GalleryState.FAILED,
+                    galleryUri = null,
+                    galleryFailure = GalleryFailure.FILE_MISSING,
+                    updatedAt = clock.now(),
+                ),
+            )
+            emitEffect(DownloadEffect.GalleryFailed(item.id, GalleryFailure.FILE_MISSING))
+            return null
+        }
+        return file
+    }
+
+    private suspend fun checkExportStorage(
+        item: DownloadItem,
+        file: File,
+    ): Boolean {
+        val available = platform.storageInfo.availableBytes(platform.fileStore.root)
+        val fileSize = file.length()
+        if (!hasEnoughStorageForExport(available, fileSize)) {
+            repository.insert(
+                item.copy(
+                    galleryState = GalleryState.FAILED,
+                    galleryUri = null,
+                    galleryFailure = GalleryFailure.NO_SPACE,
+                    updatedAt = clock.now(),
+                ),
+            )
+            emitEffect(DownloadEffect.GalleryFailed(item.id, GalleryFailure.NO_SPACE))
+            return false
+        }
+        return true
+    }
+
+    private suspend fun runGalleryExport(
+        item: DownloadItem,
+        file: File,
+    ) {
+        val fileName =
+            galleryFileName(
+                title = item.title,
+                metaName = item.metaName,
+                season = item.season,
+                episode = item.episode,
+                extension = file.extension,
+            )
+        val mimeType = galleryMimeType(file.extension)
+        val result =
+            galleryExporter.export(file, fileName, mimeType) { copied, _ ->
+                updateLive { current ->
+                    val cur = current[item.id] ?: DownloadLive()
+                    current + (item.id to cur.copy(copiedBytes = copied))
+                }
+            }
+        when (result) {
+            is GalleryExportResult.Saved -> {
+                repository.insert(
+                    item.copy(
+                        galleryState = GalleryState.SAVED,
+                        galleryUri = result.uri,
+                        galleryFailure = null,
+                        updatedAt = clock.now(),
+                    ),
+                )
+            }
+
+            is GalleryExportResult.Failed -> {
+                repository.insert(
+                    item.copy(
+                        galleryState = GalleryState.FAILED,
+                        galleryUri = null,
+                        galleryFailure = result.failure,
+                        updatedAt = clock.now(),
+                    ),
+                )
+                emitEffect(DownloadEffect.GalleryFailed(item.id, result.failure))
+            }
+        }
+    }
+
+    override suspend fun removeFromGallery(id: String) {
+        val item = repository.get(id) ?: return
+        val uri = item.galleryUri
+        if (uri != null) {
+            galleryExporter.delete(uri)
+        }
+        repository.insert(
+            item.copy(
+                galleryState = GalleryState.NONE,
+                galleryUri = null,
+                galleryFailure = null,
+                updatedAt = clock.now(),
+            ),
+        )
+    }
+
+    override suspend fun exportAllToGallery() {
+        val completed =
+            repository.getAll().filter {
+                it.state == DownloadState.COMPLETED &&
+                    (it.galleryState == GalleryState.NONE || it.galleryState == GalleryState.FAILED)
+            }
+        for (item in completed) {
+            exportToGallery(item.id)
+        }
     }
 
     internal fun triggerScheduler() {
@@ -542,7 +757,8 @@ internal fun DefaultDownloadManager.updateServiceState(items: List<DownloadItem>
             it.state == DownloadState.DOWNLOADING ||
                 it.state == DownloadState.QUEUED ||
                 it.state == DownloadState.WAITING_FOR_WIFI ||
-                it.state == DownloadState.WAITING_FOR_NETWORK
+                it.state == DownloadState.WAITING_FOR_NETWORK ||
+                it.galleryState == GalleryState.SAVING
         }
     if (hasActive) {
         try {

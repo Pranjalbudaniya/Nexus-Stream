@@ -47,6 +47,12 @@ interface DownloadManager {
 
     fun fileOf(id: String): File?
 
+    suspend fun exportToGallery(id: String)
+
+    suspend fun removeFromGallery(id: String)
+
+    suspend fun exportAllToGallery()
+
     suspend fun selectTorrentFile(
         id: String,
         fileIndex: Int,

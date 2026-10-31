@@ -10,7 +10,7 @@ enum class GalleryState {
 enum class GalleryFailure {
     NO_SPACE,
     WRITE_FAILED,
-    SOURCE_MISSING,
+    FILE_MISSING,
     UNAVAILABLE,
 }
 
@@ -135,8 +135,8 @@ enum class DownloadPhase {
 }
 
 data class DownloadLive(
-    val bytes: Long,
-    val speedBps: Long,
+    val bytes: Long = 0L,
+    val speedBps: Long = 0L,
     val etaSeconds: Long? = null,
     val peers: Int = 0,
     val phase: DownloadPhase = DownloadPhase.TRANSFERRING,

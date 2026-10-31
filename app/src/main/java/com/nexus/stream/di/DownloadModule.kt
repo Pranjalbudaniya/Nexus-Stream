@@ -17,6 +17,7 @@ import com.nexus.stream.data.download.DownloadPrefsRepositoryImpl
 import com.nexus.stream.data.download.DownloadRepositoryImpl
 import com.nexus.stream.data.download.DownloadServiceControllerImpl
 import com.nexus.stream.data.download.HttpDownloaderImpl
+import com.nexus.stream.data.download.MediaStoreGalleryExporter
 import com.nexus.stream.data.download.TorrentDownloaderImpl
 import com.nexus.stream.data.torrent.JLibTorrentBackend
 import com.nexus.stream.data.torrent.TorrentDownloadBackend
@@ -29,6 +30,7 @@ import com.nexus.stream.domain.repository.DownloadPlatformComponents
 import com.nexus.stream.domain.repository.DownloadPrefsRepository
 import com.nexus.stream.domain.repository.DownloadRepository
 import com.nexus.stream.domain.repository.DownloadServiceController
+import com.nexus.stream.domain.repository.GalleryExporter
 import com.nexus.stream.domain.repository.HttpDownloader
 import com.nexus.stream.domain.repository.StorageInfo
 import com.nexus.stream.domain.repository.TorrentDownloader
@@ -89,6 +91,14 @@ interface DownloadBindingModule {
     @Binds
     @Singleton
     fun bindDownloadManager(impl: DefaultDownloadManager): DownloadManager
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+interface GalleryBindingModule {
+    @Binds
+    @Singleton
+    fun bindGalleryExporter(impl: MediaStoreGalleryExporter): GalleryExporter
 }
 
 @Module

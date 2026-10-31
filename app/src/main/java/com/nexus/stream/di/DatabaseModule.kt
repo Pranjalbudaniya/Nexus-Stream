@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.nexus.stream.data.local.db.MIGRATION_1_2
 import com.nexus.stream.data.local.db.MIGRATION_2_3
+import com.nexus.stream.data.local.db.MIGRATION_3_4
 import com.nexus.stream.data.local.db.NexusDatabase
 import com.nexus.stream.data.local.db.RoomTransactionRunner
 import com.nexus.stream.data.local.db.TransactionRunner
@@ -35,7 +36,7 @@ object DatabaseModule {
                 context,
                 NexusDatabase::class.java,
                 DATABASE_NAME,
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides
