@@ -887,5 +887,7 @@
     <string name="download_failure_missing">The file is missing</string>
     <string name="download_failure_unknown">Something went wrong</string>
     <string name="download_failure_incomplete">The download didn\'t finish</string>
+    <string name="download_failure_no_peers">No peers found</string>
+    <string name="download_failure_torrent_in_use">This torrent is playing right now. Try again later.</string>
 </resources>
 

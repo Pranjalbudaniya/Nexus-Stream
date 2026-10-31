@@ -242,6 +242,8 @@ class TorrentCacheStore internal constructor(
         activeHashes.remove(hash.lowercase())
     }
 
+    fun isActive(hash: String): Boolean = activeHashes.contains(hash.lowercase())
+
     suspend fun keepAfterStop(): Boolean = runCatching { keepAfterStopProvider() }.getOrDefault(false)
 
     suspend fun touch(hash: String) {

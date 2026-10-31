@@ -33,6 +33,8 @@ enum class DownloadFailure {
     UNSUPPORTED_SOURCE,
     TORRENT_NO_VIDEO_FILE,
     TORRENT_ENGINE,
+    TORRENT_NO_PEERS,
+    TORRENT_IN_USE,
     UNKNOWN,
 }
 
@@ -107,10 +109,20 @@ data class DownloadItem(
         "DownloadItem(id=$id, kind=$kind, state=$state, downloadedBytes=$downloadedBytes, totalBytes=$totalBytes)"
 }
 
+enum class DownloadPhase {
+    CONNECTING,
+    FETCHING_METADATA,
+    CHECKING_FILES,
+    TRANSFERRING,
+    STALLED,
+}
+
 data class DownloadLive(
     val bytes: Long,
     val speedBps: Long,
     val etaSeconds: Long? = null,
+    val peers: Int = 0,
+    val phase: DownloadPhase = DownloadPhase.TRANSFERRING,
 )
 
 sealed interface EnqueueResult {

@@ -84,17 +84,31 @@ private fun formatRate(
 fun failureReasonRes(failure: DownloadFailure): Int =
     when (failure) {
         DownloadFailure.LINK_EXPIRED -> R.string.download_failure_link_expired
-        DownloadFailure.NOT_A_VIDEO -> R.string.download_failure_not_video
+
+        DownloadFailure.NOT_A_VIDEO,
+        DownloadFailure.TORRENT_NO_VIDEO_FILE,
+        -> R.string.download_failure_not_video
+
         DownloadFailure.SERVER_ERROR -> R.string.download_failure_server
+
         DownloadFailure.NETWORK -> R.string.download_failure_network
-        DownloadFailure.INSUFFICIENT_STORAGE -> R.string.download_failure_storage
-        DownloadFailure.STORAGE_UNAVAILABLE -> R.string.download_failure_storage
+
+        DownloadFailure.INSUFFICIENT_STORAGE,
+        DownloadFailure.STORAGE_UNAVAILABLE,
+        -> R.string.download_failure_storage
+
         DownloadFailure.INCOMPLETE -> R.string.download_failure_incomplete
+
         DownloadFailure.FILE_MISSING -> R.string.download_failure_missing
-        DownloadFailure.UNSUPPORTED_SOURCE -> R.string.download_failure_unknown
-        DownloadFailure.TORRENT_NO_VIDEO_FILE -> R.string.download_failure_not_video
-        DownloadFailure.TORRENT_ENGINE -> R.string.download_failure_unknown
-        DownloadFailure.UNKNOWN -> R.string.download_failure_unknown
+
+        DownloadFailure.TORRENT_NO_PEERS -> R.string.download_failure_no_peers
+
+        DownloadFailure.TORRENT_IN_USE -> R.string.download_failure_torrent_in_use
+
+        DownloadFailure.UNSUPPORTED_SOURCE,
+        DownloadFailure.TORRENT_ENGINE,
+        DownloadFailure.UNKNOWN,
+        -> R.string.download_failure_unknown
     }
 
 private fun buildDownloadingNotification(
