@@ -48,6 +48,8 @@ import com.nexus.stream.domain.usecase.DownloadSection
 import com.nexus.stream.domain.usecase.DownloadSectionKind
 import com.nexus.stream.domain.usecase.PlayDownloaded
 import com.nexus.stream.domain.usecase.PlayResult
+import com.nexus.stream.domain.usecase.StorageCardModel
+import com.nexus.stream.domain.usecase.StorageHeaderAction
 import com.nexus.stream.domain.usecase.StorageSummary
 import com.nexus.stream.presentation.common.LocalPlayback
 import com.nexus.stream.presentation.common.rememberNotificationPermissionGate
@@ -97,7 +99,25 @@ fun DownloadsScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is DownloadsEffect.ShowMessage -> {
-                    snackbarHostState.showSnackbar(context.getString(effect.messageRes))
+                    val text =
+                        when (effect.formatArgs.size) {
+                            0 -> {
+                                context.getString(effect.messageRes)
+                            }
+
+                            1 -> {
+                                val arg = effect.formatArgs[0]
+                                val resolved = if (arg is Int) context.getString(arg) else arg
+                                context.getString(effect.messageRes, resolved)
+                            }
+
+                            else -> {
+                                val arg1 = effect.formatArgs[0]
+                                val res1 = if (arg1 is Int) context.getString(arg1) else arg1
+                                context.getString(effect.messageRes, res1)
+                            }
+                        }
+                    snackbarHostState.showSnackbar(text)
                 }
 
                 is DownloadsEffect.Play -> {
@@ -116,6 +136,10 @@ fun DownloadsScreen(
                     localPlayback.open(effect.request.copy(replaceDownloadId = effect.replaceDownloadId))
                 }
 
+                DownloadsEffect.NavigateToDiscover -> {
+                    onNavigateToDiscover()
+                }
+
                 DownloadsEffect.OpenSettings -> {
                     onOpenSettings()
                 }
@@ -130,7 +154,6 @@ fun DownloadsScreen(
     DownloadsScreenContent(
         uiState = uiState,
         onEvent = viewModel::onEvent,
-        onNavigateToDiscover = onNavigateToDiscover,
         snackbarHostState = snackbarHostState,
         modifier = modifier,
         listState = listState,
@@ -147,7 +170,6 @@ internal interface DownloadsEntryPoint {
 fun DownloadsScreenContent(
     uiState: DownloadsUiState,
     onEvent: (DownloadsEvent) -> Unit,
-    onNavigateToDiscover: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
@@ -179,7 +201,7 @@ fun DownloadsScreenContent(
 
                 uiState.isEmpty -> {
                     DownloadsEmptyState(
-                        onNavigateToDiscover = onNavigateToDiscover,
+                        onNavigateToDiscover = { onEvent(DownloadsEvent.BrowseDiscover) },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -197,14 +219,11 @@ fun DownloadsScreenContent(
                             ),
                         verticalArrangement = Arrangement.spacedBy(spacing.sm),
                     ) {
-                        // 1. Storage summary card
-                        uiState.storageSummary?.let { summary ->
-                            item(key = "storage_summary") {
-                                StorageSummaryCard(
-                                    summary = summary,
-                                    canPauseAll = uiState.canPauseAll,
-                                    canResumeAll = uiState.canResumeAll,
-                                    canDeleteCompleted = uiState.canDeleteCompleted,
+                        // 1. Compact storage card
+                        uiState.storageCard?.let { card ->
+                            item(key = "storage_card") {
+                                CompactStorageCard(
+                                    card = card,
                                     onPauseAll = { onEvent(DownloadsEvent.PauseAll) },
                                     onResumeAll = { onEvent(DownloadsEvent.ResumeAll) },
                                     onDeleteAll = { onEvent(DownloadsEvent.RequestDeleteAll) },
@@ -215,8 +234,10 @@ fun DownloadsScreenContent(
                         // 2. Wi-Fi banner
                         if (uiState.showWifiBanner) {
                             item(key = "wifi_banner") {
-                                WifiBanner(
-                                    onUseMobileData = { onEvent(DownloadsEvent.UseMobileData) },
+                                DownloadsBanner(
+                                    text = stringResource(R.string.downloads_banner_wifi),
+                                    actionText = stringResource(R.string.downloads_use_mobile),
+                                    onAction = { onEvent(DownloadsEvent.UseMobileData) },
                                 )
                             }
                         }
@@ -224,8 +245,10 @@ fun DownloadsScreenContent(
                         // 3. Notification banner
                         if (uiState.showNotificationsBanner) {
                             item(key = "notifications_banner") {
-                                NotificationBanner(
-                                    onTurnOn = { onEvent(DownloadsEvent.DismissNotificationsBanner) },
+                                DownloadsBanner(
+                                    text = stringResource(R.string.downloads_banner_notifications),
+                                    actionText = stringResource(R.string.downloads_turn_on),
+                                    onAction = { onEvent(DownloadsEvent.DismissNotificationsBanner) },
                                 )
                             }
                         }
@@ -265,6 +288,8 @@ fun DownloadsScreenContent(
                                     onRequestCancel = { onEvent(DownloadsEvent.RequestCancel(it)) },
                                     onRequestDelete = { onEvent(DownloadsEvent.RequestDelete(it)) },
                                     onChooseFile = { onEvent(DownloadsEvent.ChooseFile(it)) },
+                                    onSaveToGallery = { onEvent(DownloadsEvent.SaveToGallery(it)) },
+                                    onRemoveFromGallery = { onEvent(DownloadsEvent.RemoveFromGallery(it)) },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -361,7 +386,6 @@ internal fun DownloadsScreenEmptyPreview() {
         DownloadsScreenContent(
             uiState = DownloadsUiState(isEmpty = true, isLoading = false),
             onEvent = {},
-            onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
         )
     }
@@ -385,17 +409,18 @@ internal fun DownloadsScreenInProgressPreviewLight() {
                 DownloadsUiState(
                     sections = listOf(DownloadSection(DownloadSectionKind.IN_PROGRESS, items)),
                     live = live,
-                    storageSummary =
-                        StorageSummary(
+                    storageCard =
+                        StorageCardModel(
                             usedBytes = 420_000_000L,
                             freeBytes = 44_000_000_000L,
                             low = false,
+                            headerAction = StorageHeaderAction.PAUSE_ALL,
+                            showDeleteAll = false,
                         ),
                     canPauseAll = true,
                     isLoading = false,
                 ),
             onEvent = {},
-            onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
         )
     }
@@ -421,7 +446,6 @@ internal fun DownloadsScreenProblemsPreviewLight() {
                     isLoading = false,
                 ),
             onEvent = {},
-            onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
         )
     }
@@ -443,17 +467,18 @@ internal fun DownloadsScreenReadyPreviewDark() {
             uiState =
                 DownloadsUiState(
                     sections = listOf(DownloadSection(DownloadSectionKind.READY, items)),
-                    storageSummary =
-                        StorageSummary(
+                    storageCard =
+                        StorageCardModel(
                             usedBytes = 1_400_000_000L,
                             freeBytes = 30_000_000_000L,
                             low = false,
+                            headerAction = StorageHeaderAction.NONE,
+                            showDeleteAll = true,
                         ),
                     canDeleteCompleted = true,
                     isLoading = false,
                 ),
             onEvent = {},
-            onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
         )
     }
@@ -523,7 +548,6 @@ internal fun DownloadsScreenTorrentStatusesPreview() {
                     isLoading = false,
                 ),
             onEvent = {},
-            onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
         )
     }

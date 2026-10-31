@@ -428,4 +428,55 @@ class DownloadsViewModelTest {
                     .state,
             )
         }
+
+    @Test
+    fun DW23_saveToGallery_callsTheManager() =
+        runTest {
+            val item = createTestDownloadItem("c1", state = DownloadState.COMPLETED)
+            downloadManager.itemsFlow.value = listOf(item)
+
+            viewModel.onEvent(DownloadsEvent.SaveToGallery("c1"))
+            assertEquals(listOf("c1"), downloadManager.exportToGalleryCalls)
+        }
+
+    @Test
+    fun DW24_removeFromGallery_callsTheManager() =
+        runTest {
+            val item =
+                createTestDownloadItem("c2", state = DownloadState.COMPLETED)
+                    .copy(galleryState = com.nexus.stream.domain.model.GalleryState.SAVED)
+            downloadManager.itemsFlow.value = listOf(item)
+
+            viewModel.onEvent(DownloadsEvent.RemoveFromGallery("c2"))
+            assertEquals(listOf("c2"), downloadManager.removeFromGalleryCalls)
+        }
+
+    @Test
+    fun DW25_galleryFailureEffect_showsAMessage() =
+        runTest {
+            viewModel.effects.test {
+                downloadManager.effectsFlow.emit(
+                    DownloadEffect.GalleryFailed(
+                        "c3",
+                        com.nexus.stream.domain.model.GalleryFailure.NO_SPACE,
+                    ),
+                )
+                val effect = awaitItem()
+                assertTrue(effect is DownloadsEffect.ShowMessage)
+                assertEquals(R.string.downloads_gallery_failed, (effect as DownloadsEffect.ShowMessage).messageRes)
+                assertEquals(listOf(R.string.downloads_gallery_reason_space), effect.formatArgs)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun DW26_browseDiscover_emitsTheNavigationEffect() =
+        runTest {
+            viewModel.effects.test {
+                viewModel.onEvent(DownloadsEvent.BrowseDiscover)
+                val effect = awaitItem()
+                assertTrue(effect is DownloadsEffect.NavigateToDiscover)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

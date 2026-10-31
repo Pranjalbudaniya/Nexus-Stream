@@ -1,6 +1,7 @@
 package com.nexus.stream.presentation.feature.downloads
 
 import android.content.Context
+import android.content.res.Configuration
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.compose.foundation.background
@@ -17,7 +18,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -39,22 +45,34 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nexus.stream.R
+import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
+import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadLive
+import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.EpisodeLabel
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
+import com.nexus.stream.domain.usecase.ActionIcon
 import com.nexus.stream.domain.usecase.RowAction
+import com.nexus.stream.domain.usecase.RowMenuItem
 import com.nexus.stream.domain.usecase.StatusText
-import com.nexus.stream.domain.usecase.StorageSummary
+import com.nexus.stream.domain.usecase.StorageCardModel
+import com.nexus.stream.domain.usecase.StorageHeaderAction
+import com.nexus.stream.domain.usecase.actionDescription
+import com.nexus.stream.domain.usecase.actionIcon
 import com.nexus.stream.domain.usecase.episodeLabelOf
 import com.nexus.stream.domain.usecase.primaryAction
 import com.nexus.stream.domain.usecase.progressFraction
+import com.nexus.stream.domain.usecase.rowMenu
 import com.nexus.stream.domain.usecase.rowStatus
 import com.nexus.stream.domain.usecase.rowTitle
 import com.nexus.stream.presentation.common.NexusButton
@@ -63,13 +81,17 @@ import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.common.NexusOutlinedButton
 import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
-import java.time.Instant
 
 private const val POSTER_WIDTH_DP = 56
 private const val POSTER_HEIGHT_DP = 84
 private const val SKELETON_ROWS = 3
 private const val ARGS_COUNT_THREE = 3
 private const val ARG_INDEX_THREE = 3
+private const val PREVIEW_USED_BYTES = 248_000_000L
+private const val PREVIEW_FREE_BYTES = 12_000_000_000L
+private const val PREVIEW_HIGH_USED_BYTES = 50_000_000_000L
+private const val PREVIEW_LOW_FREE_BYTES = 800_000_000L
+private const val PREVIEW_EMPTY_FREE_BYTES = 20_000_000_000L
 
 @Composable
 fun formatStatusText(status: StatusText): String {
@@ -81,7 +103,7 @@ fun formatStatusText(status: StatusText): String {
                     Formatter.formatShortFileSize(context, arg)
                 }
 
-                is Instant -> {
+                is java.time.Instant -> {
                     DateUtils
                         .getRelativeTimeSpanString(
                             arg.toEpochMilli(),
@@ -92,6 +114,14 @@ fun formatStatusText(status: StatusText): String {
 
                 is StatusText -> {
                     formatStatusText(arg)
+                }
+
+                is Int -> {
+                    if (status.stringRes == R.string.downloads_gallery_failed) {
+                        stringResource(arg)
+                    } else {
+                        arg
+                    }
                 }
 
                 else -> {
@@ -110,11 +140,8 @@ fun formatStatusText(status: StatusText): String {
 }
 
 @Composable
-fun StorageSummaryCard(
-    summary: StorageSummary,
-    canPauseAll: Boolean,
-    canResumeAll: Boolean,
-    canDeleteCompleted: Boolean,
+fun CompactStorageCard(
+    card: StorageCardModel,
     onPauseAll: () -> Unit,
     onResumeAll: () -> Unit,
     onDeleteAll: () -> Unit,
@@ -122,105 +149,195 @@ fun StorageSummaryCard(
 ) {
     val context = LocalContext.current
     val spacing = NexusTheme.spacing
-    val usedStr = Formatter.formatShortFileSize(context, summary.usedBytes)
-    val freeStr = Formatter.formatShortFileSize(context, summary.freeBytes)
+    val usedStr = Formatter.formatShortFileSize(context, card.usedBytes)
+    val freeStr = Formatter.formatShortFileSize(context, card.freeBytes)
 
     NexusCard(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(spacing.md),
-            verticalArrangement = Arrangement.spacedBy(spacing.sm),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = spacing.md, vertical = spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            val text =
+                if (card.low) {
+                    stringResource(R.string.downloads_storage_almost_full, freeStr)
+                } else {
+                    stringResource(R.string.downloads_storage_summary, usedStr, freeStr)
+                }
+            val textColor =
+                if (card.low) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
             Text(
-                text = stringResource(R.string.downloads_storage_summary, usedStr, freeStr),
+                text = text,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
 
-            if (summary.low) {
-                Text(
-                    text = stringResource(R.string.downloads_storage_low),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+            when (card.headerAction) {
+                StorageHeaderAction.PAUSE_ALL -> {
+                    NexusIconButton(onClick = onPauseAll) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_pause),
+                            contentDescription = stringResource(R.string.downloads_pause_all_desc),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                StorageHeaderAction.RESUME_ALL -> {
+                    NexusIconButton(onClick = onResumeAll) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = stringResource(R.string.downloads_resume_all_desc),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                StorageHeaderAction.NONE -> {}
+            }
+
+            if (card.showDeleteAll) {
+                Box {
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    NexusIconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.downloads_more_desc),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.downloads_delete_all)) },
+                            onClick = {
+                                menuExpanded = false
+                                onDeleteAll()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DownloadsBanner(
+    text: String,
+    actionText: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val spacing = NexusTheme.spacing
+    NexusCard(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = spacing.md, vertical = spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            NexusTextButton(onClick = onAction) {
+                Text(actionText)
+            }
+        }
+    }
+}
+
+private object DownloadRowContent {
+    @Composable
+    fun Poster(posterUrl: String?) {
+        Box(
+            modifier =
+                Modifier
+                    .size(POSTER_WIDTH_DP.dp, POSTER_HEIGHT_DP.dp)
+                    .clip(NexusTheme.shapes.poster)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model =
+                        ImageRequest
+                            .Builder(LocalPlatformContext.current)
+                            .data(posterUrl)
+                            .crossfade(true)
+                            .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(24.dp),
                 )
             }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-            ) {
-                if (canPauseAll) {
-                    NexusTextButton(onClick = onPauseAll) {
-                        Text(stringResource(R.string.downloads_pause_all))
-                    }
-                } else if (canResumeAll) {
-                    NexusTextButton(onClick = onResumeAll) {
-                        Text(stringResource(R.string.downloads_resume_all))
-                    }
-                }
-
-                if (canDeleteCompleted) {
-                    NexusTextButton(onClick = onDeleteAll) {
-                        Text(stringResource(R.string.downloads_delete_all))
-                    }
-                }
-            }
         }
     }
-}
 
-@Composable
-fun WifiBanner(
-    onUseMobileData: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = spacing.md, vertical = spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.downloads_banner_wifi),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            NexusTextButton(onClick = onUseMobileData) {
-                Text(stringResource(R.string.downloads_use_mobile))
+    fun subtitle(
+        context: Context,
+        item: DownloadItem,
+    ): String {
+        val parts = mutableListOf<String>()
+        if (item.type == "series") {
+            val label = episodeLabelOf(item.season, item.episode)
+            if (label != null) {
+                val labelStr =
+                    when (label) {
+                        is EpisodeLabel.SeasonEpisode -> "S${label.season} E${label.episode}"
+                        is EpisodeLabel.EpisodeOnly -> "E${label.episode}"
+                        is EpisodeLabel.SeasonOnly -> "S${label.season}"
+                    }
+                parts.add(labelStr)
             }
         }
+        if (item.totalBytes > 0L) {
+            parts.add(Formatter.formatShortFileSize(context, item.totalBytes))
+        }
+        return parts.joinToString(" · ")
     }
-}
 
-@Composable
-fun NotificationBanner(
-    onTurnOn: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val spacing = NexusTheme.spacing
-    NexusCard(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = spacing.md, vertical = spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.downloads_banner_notifications),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+    @Composable
+    fun ProgressBar(item: DownloadItem) {
+        if (item.state == DownloadState.DOWNLOADING || item.state == DownloadState.PAUSED) {
+            val frac =
+                if (item.totalBytes > 0L) {
+                    progressFraction(item.downloadedBytes, item.totalBytes) ?: 0f
+                } else {
+                    0f
+                }
+            LinearProgressIndicator(
+                progress = { frac },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(NexusTheme.shapes.button),
             )
-            NexusTextButton(onClick = onTurnOn) {
-                Text(stringResource(R.string.downloads_turn_on))
-            }
         }
     }
 }
@@ -238,6 +355,8 @@ fun DownloadRow(
     onRequestDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
     onChooseFile: (String) -> Unit = {},
+    onSaveToGallery: (String) -> Unit = {},
+    onRemoveFromGallery: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val spacing = NexusTheme.spacing
@@ -250,40 +369,10 @@ fun DownloadRow(
                 .padding(vertical = spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Poster (56x84)
-        Box(
-            modifier =
-                Modifier
-                    .size(POSTER_WIDTH_DP.dp, POSTER_HEIGHT_DP.dp)
-                    .clip(NexusTheme.shapes.poster)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (!item.posterUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(item.posterUrl)
-                            .crossfade(true)
-                            .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Icon(
-                    painter = painterResource(R.drawable.ic_download),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
+        DownloadRowContent.Poster(item.posterUrl)
 
         Spacer(modifier = Modifier.width(spacing.md))
 
-        // Info and progress
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(spacing.xxs),
@@ -297,26 +386,10 @@ fun DownloadRow(
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
-            // Subtitle: episode label or year + total size
-            val parts = mutableListOf<String>()
-            if (item.type == "series") {
-                episodeLabelOf(item.season, item.episode)?.let { label ->
-                    val labelStr =
-                        when (label) {
-                            is EpisodeLabel.SeasonEpisode -> "S${label.season} E${label.episode}"
-                            is EpisodeLabel.EpisodeOnly -> "E${label.episode}"
-                            is EpisodeLabel.SeasonOnly -> "S${label.season}"
-                        }
-                    parts.add(labelStr)
-                }
-            }
-            if (item.totalBytes > 0L) {
-                parts.add(Formatter.formatShortFileSize(context, item.totalBytes))
-            }
-            val subtitle = parts.joinToString(" · ")
-            if (subtitle.isNotEmpty()) {
+            val subtitleText = DownloadRowContent.subtitle(context, item)
+            if (subtitleText.isNotEmpty()) {
                 Text(
-                    text = subtitle,
+                    text = subtitleText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -324,43 +397,17 @@ fun DownloadRow(
                 )
             }
 
-            // Status line
             val status = rowStatus(item, live)
+            val isError = item.state == DownloadState.FAILED || item.galleryState == GalleryState.FAILED
             Text(
                 text = formatStatusText(status),
                 style = MaterialTheme.typography.bodySmall,
-                color =
-                    if (item.state == DownloadState.FAILED) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Progress bar
-            if (item.state == DownloadState.DOWNLOADING || item.state == DownloadState.PAUSED) {
-                if (item.totalBytes > 0L) {
-                    val frac = progressFraction(item.downloadedBytes, item.totalBytes) ?: 0f
-                    LinearProgressIndicator(
-                        progress = { frac },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(NexusTheme.shapes.button),
-                    )
-                } else {
-                    LinearProgressIndicator(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(NexusTheme.shapes.button),
-                    )
-                }
-            }
+            DownloadRowContent.ProgressBar(item)
         }
 
         DownloadRowActions(
@@ -372,72 +419,113 @@ fun DownloadRow(
             onRequestCancel = onRequestCancel,
             onRequestDelete = onRequestDelete,
             onChooseFile = onChooseFile,
+            onSaveToGallery = onSaveToGallery,
+            onRemoveFromGallery = onRemoveFromGallery,
         )
     }
 }
 
-@Composable
-private fun DownloadRowActions(
-    item: DownloadItem,
-    onPause: (String) -> Unit,
-    onResume: (String) -> Unit,
-    onRetry: (String) -> Unit,
-    onFindNewLink: (DownloadItem) -> Unit,
-    onRequestCancel: (String) -> Unit,
-    onRequestDelete: (String) -> Unit,
-    onChooseFile: (String) -> Unit,
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
+private object DownloadRowActionsContent {
+    @Composable
+    fun ActionButton(
+        item: DownloadItem,
+        onPause: (String) -> Unit,
+        onResume: (String) -> Unit,
+        onRetry: (String) -> Unit,
+        onFindNewLink: (DownloadItem) -> Unit,
+        onRequestDelete: (String) -> Unit,
+        onChooseFile: (String) -> Unit,
     ) {
-        when (primaryAction(item)) {
-            RowAction.PAUSE -> {
-                NexusTextButton(onClick = { onPause(item.id) }) {
-                    Text(stringResource(R.string.downloads_action_pause))
+        val action = primaryAction(item)
+        val icon = actionIcon(action) ?: return
+        val desc = stringResource(actionDescription(action))
+        NexusIconButton(
+            onClick = {
+                when (action) {
+                    RowAction.PAUSE -> onPause(item.id)
+                    RowAction.RESUME -> onResume(item.id)
+                    RowAction.RETRY -> onRetry(item.id)
+                    RowAction.FIND_NEW_LINK -> onFindNewLink(item)
+                    RowAction.REMOVE -> onRequestDelete(item.id)
+                    RowAction.CHOOSE_FILE -> onChooseFile(item.id)
+                    RowAction.NONE -> Unit
                 }
-            }
-
-            RowAction.RESUME -> {
-                NexusTextButton(onClick = { onResume(item.id) }) {
-                    Text(stringResource(R.string.downloads_action_resume))
-                }
-            }
-
-            RowAction.RETRY -> {
-                NexusTextButton(onClick = { onRetry(item.id) }) {
-                    Text(stringResource(R.string.downloads_action_retry))
-                }
-            }
-
-            RowAction.FIND_NEW_LINK -> {
-                NexusTextButton(onClick = { onFindNewLink(item) }) {
-                    Text(stringResource(R.string.downloads_action_new_link))
-                }
-            }
-
-            RowAction.REMOVE -> {
-                NexusTextButton(onClick = { onRequestDelete(item.id) }) {
-                    Text(stringResource(R.string.downloads_action_remove))
-                }
-            }
-
-            RowAction.CHOOSE_FILE -> {
-                NexusTextButton(onClick = { onChooseFile(item.id) }) {
-                    Text(stringResource(R.string.downloads_action_choose_file))
-                }
-            }
-
-            RowAction.NONE -> {}
+            },
+        ) {
+            ActionIconRenderer(icon = icon, contentDescription = desc)
         }
+    }
 
+    @Composable
+    fun ActionIconRenderer(
+        icon: ActionIcon,
+        contentDescription: String,
+    ) {
+        when (icon) {
+            ActionIcon.PAUSE -> {
+                Icon(
+                    painter = painterResource(R.drawable.ic_pause),
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ActionIcon.PLAY -> {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ActionIcon.REFRESH -> {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ActionIcon.SEARCH -> {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ActionIcon.DELETE -> {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            ActionIcon.LIST -> {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.List,
+                    contentDescription = contentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun OverflowMenu(
+        item: DownloadItem,
+        onRequestCancel: (String) -> Unit,
+        onRequestDelete: (String) -> Unit,
+        onSaveToGallery: (String) -> Unit,
+        onRemoveFromGallery: (String) -> Unit,
+    ) {
+        var menuExpanded by remember { mutableStateOf(false) }
         Box {
             NexusIconButton(onClick = { menuExpanded = true }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.downloads_more_desc),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -446,39 +534,107 @@ private fun DownloadRowActions(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
-                when (item.state) {
-                    DownloadState.COMPLETED -> {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.downloads_menu_delete)) },
-                            onClick = {
-                                menuExpanded = false
-                                onRequestDelete(item.id)
-                            },
-                        )
-                    }
+                rowMenu(item).forEach { menuItem ->
+                    when (menuItem) {
+                        RowMenuItem.SAVE_TO_GALLERY -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_menu_save_gallery)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onSaveToGallery(item.id)
+                                },
+                            )
+                        }
 
-                    DownloadState.FAILED -> {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.downloads_action_remove)) },
-                            onClick = {
-                                menuExpanded = false
-                                onRequestDelete(item.id)
-                            },
-                        )
-                    }
+                        RowMenuItem.REMOVE_FROM_GALLERY -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_menu_remove_gallery)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRemoveFromGallery(item.id)
+                                },
+                            )
+                        }
 
-                    else -> {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.downloads_menu_cancel)) },
-                            onClick = {
-                                menuExpanded = false
-                                onRequestCancel(item.id)
-                            },
-                        )
+                        RowMenuItem.RETRY_GALLERY -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_menu_retry_gallery)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onSaveToGallery(item.id)
+                                },
+                            )
+                        }
+
+                        RowMenuItem.DELETE -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_menu_delete)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRequestDelete(item.id)
+                                },
+                            )
+                        }
+
+                        RowMenuItem.CANCEL -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_menu_cancel)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRequestCancel(item.id)
+                                },
+                            )
+                        }
+
+                        RowMenuItem.REMOVE -> {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.downloads_action_remove)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRequestDelete(item.id)
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DownloadRowActions(
+    item: DownloadItem,
+    onPause: (String) -> Unit,
+    onResume: (String) -> Unit,
+    onRetry: (String) -> Unit,
+    onFindNewLink: (DownloadItem) -> Unit,
+    onRequestCancel: (String) -> Unit,
+    onRequestDelete: (String) -> Unit,
+    onChooseFile: (String) -> Unit,
+    onSaveToGallery: (String) -> Unit,
+    onRemoveFromGallery: (String) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+    ) {
+        DownloadRowActionsContent.ActionButton(
+            item = item,
+            onPause = onPause,
+            onResume = onResume,
+            onRetry = onRetry,
+            onFindNewLink = onFindNewLink,
+            onRequestDelete = onRequestDelete,
+            onChooseFile = onChooseFile,
+        )
+        DownloadRowActionsContent.OverflowMenu(
+            item = item,
+            onRequestCancel = onRequestCancel,
+            onRequestDelete = onRequestDelete,
+            onSaveToGallery = onSaveToGallery,
+            onRemoveFromGallery = onRemoveFromGallery,
+        )
     }
 }
 
@@ -509,10 +665,13 @@ fun ConfirmDeleteDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val body =
+        stringResource(R.string.downloads_confirm_delete_body) + " " +
+            stringResource(R.string.downloads_confirm_gallery_note)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.downloads_confirm_delete_title)) },
-        text = { Text(stringResource(R.string.downloads_confirm_delete_body)) },
+        text = { Text(body) },
         confirmButton = {
             NexusButton(onClick = onConfirm) {
                 Text(stringResource(R.string.downloads_confirm_ok))
@@ -531,10 +690,13 @@ fun ConfirmDeleteAllDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val body =
+        stringResource(R.string.downloads_confirm_delete_all_body) + " " +
+            stringResource(R.string.downloads_confirm_gallery_note)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.downloads_confirm_delete_all_title)) },
-        text = { Text(stringResource(R.string.downloads_confirm_delete_all_body)) },
+        text = { Text(body) },
         confirmButton = {
             NexusButton(onClick = onConfirm) {
                 Text(stringResource(R.string.downloads_confirm_ok))
@@ -644,6 +806,124 @@ fun DownloadsSkeleton(modifier: Modifier = Modifier) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Preview(name = "DownloadsComponents - Light")
+@Preview(name = "DownloadsComponents - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DownloadsComponentsPreview() {
+    val itemBase =
+        DownloadItem(
+            id = "p1",
+            type = "movie",
+            metaId = "m1",
+            videoId = "v1",
+            title = "Preview Movie",
+            posterUrl = null,
+            fileName = "p1.mp4",
+            totalBytes = 1_000_000_000L,
+            downloadedBytes = 500_000_000L,
+            state = DownloadState.DOWNLOADING,
+            kind = DownloadKind.HTTP,
+            source = DownloadSource.Http("https://example.com/p1.mp4"),
+            createdAt = 0L,
+            updatedAt = 0L,
+        )
+    NexusTheme {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactStorageCard(
+                card =
+                    StorageCardModel(
+                        PREVIEW_USED_BYTES,
+                        PREVIEW_FREE_BYTES,
+                        false,
+                        StorageHeaderAction.PAUSE_ALL,
+                        true,
+                    ),
+                onPauseAll = {},
+                onResumeAll = {},
+                onDeleteAll = {},
+            )
+            CompactStorageCard(
+                card =
+                    StorageCardModel(
+                        PREVIEW_USED_BYTES,
+                        PREVIEW_FREE_BYTES,
+                        false,
+                        StorageHeaderAction.RESUME_ALL,
+                        true,
+                    ),
+                onPauseAll = {},
+                onResumeAll = {},
+                onDeleteAll = {},
+            )
+            CompactStorageCard(
+                card =
+                    StorageCardModel(
+                        PREVIEW_HIGH_USED_BYTES,
+                        PREVIEW_LOW_FREE_BYTES,
+                        true,
+                        StorageHeaderAction.NONE,
+                        true,
+                    ),
+                onPauseAll = {},
+                onResumeAll = {},
+                onDeleteAll = {},
+            )
+            CompactStorageCard(
+                card =
+                    StorageCardModel(
+                        0L,
+                        PREVIEW_EMPTY_FREE_BYTES,
+                        false,
+                        StorageHeaderAction.PAUSE_ALL,
+                        false,
+                    ),
+                onPauseAll = {},
+                onResumeAll = {},
+                onDeleteAll = {},
+            )
+            DownloadRow(
+                item = itemBase.copy(id = "pause", state = DownloadState.DOWNLOADING),
+                live = null,
+                onTapRow = {},
+                onPause = {},
+                onResume = {},
+                onRetry = {},
+                onFindNewLink = {},
+                onRequestCancel = {},
+                onRequestDelete = {},
+            )
+            DownloadRow(
+                item = itemBase.copy(id = "saved", state = DownloadState.COMPLETED, galleryState = GalleryState.SAVED),
+                live = null,
+                onTapRow = {},
+                onPause = {},
+                onResume = {},
+                onRetry = {},
+                onFindNewLink = {},
+                onRequestCancel = {},
+                onRequestDelete = {},
+            )
+            DownloadRow(
+                item =
+                    itemBase.copy(
+                        id = "failed",
+                        state = DownloadState.COMPLETED,
+                        galleryState = GalleryState.FAILED,
+                        galleryFailure = GalleryFailure.NO_SPACE,
+                    ),
+                live = null,
+                onTapRow = {},
+                onPause = {},
+                onResume = {},
+                onRetry = {},
+                onFindNewLink = {},
+                onRequestCancel = {},
+                onRequestDelete = {},
+            )
         }
     }
 }

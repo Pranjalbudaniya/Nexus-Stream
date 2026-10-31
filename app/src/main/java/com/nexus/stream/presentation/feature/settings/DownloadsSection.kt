@@ -1,9 +1,11 @@
 package com.nexus.stream.presentation.feature.settings
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -11,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.nexus.stream.R
+import com.nexus.stream.presentation.common.NexusButton
 import com.nexus.stream.presentation.common.NexusSlider
+import com.nexus.stream.presentation.common.NexusTextButton
 import com.nexus.stream.presentation.theme.NexusTheme
 import kotlin.math.roundToInt
 
@@ -52,33 +56,94 @@ fun DownloadsSection(
             )
         }
 
-        // 3. Location / uninstall caption
+        // 3. Save downloads to Gallery switch
+        SettingsSwitchRow(
+            title = stringResource(R.string.downloads_setting_gallery),
+            subtitle = stringResource(R.string.downloads_setting_gallery_caption),
+            checked = state.saveToGallery,
+            onCheckedChange = { onEvent(DownloadsSettingsEvent.SetSaveToGallery(it)) },
+        )
+
+        // 4. Save existing downloads now (n)
+        if (state.saveToGallery && state.unsavedCount > 0) {
+            SettingsRow(
+                title = stringResource(R.string.downloads_setting_gallery_existing, state.unsavedCount),
+                onClick = { onEvent(DownloadsSettingsEvent.SaveExisting) },
+            )
+        }
+
+        // 5. Location / uninstall caption
         Text(
             text = stringResource(R.string.downloads_setting_location),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = spacing.xs),
         )
+
+        // Offer dialog
+        if (state.showSaveExistingOffer) {
+            AlertDialog(
+                onDismissRequest = { onEvent(DownloadsSettingsEvent.DeclineOffer) },
+                title = { Text(stringResource(R.string.downloads_gallery_offer_title)) },
+                confirmButton = {
+                    NexusButton(onClick = { onEvent(DownloadsSettingsEvent.SaveExisting) }) {
+                        Text(stringResource(R.string.downloads_gallery_offer_all))
+                    }
+                },
+                dismissButton = {
+                    NexusTextButton(onClick = { onEvent(DownloadsSettingsEvent.DeclineOffer) }) {
+                        Text(stringResource(R.string.downloads_gallery_offer_new))
+                    }
+                },
+            )
+        }
     }
 }
 
-@Preview(name = "DownloadsSection - Light")
+@Preview(name = "DownloadsSection - Switch Off - Light")
+@Preview(name = "DownloadsSection - Switch Off - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DownloadsSectionPreviewLight() {
+internal fun DownloadsSectionSwitchOffPreview() {
     NexusTheme {
         DownloadsSection(
-            state = DownloadsSettingsUiState(wifiOnly = true, maxConcurrent = 2),
+            state = DownloadsSettingsUiState(wifiOnly = true, maxConcurrent = 2, saveToGallery = false),
             onEvent = {},
         )
     }
 }
 
-@Preview(name = "DownloadsSection - Dark", uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "DownloadsSection - Switch On - Light")
+@Preview(name = "DownloadsSection - Switch On - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun DownloadsSectionPreviewDark() {
+internal fun DownloadsSectionSwitchOnPreview() {
     NexusTheme {
         DownloadsSection(
-            state = DownloadsSettingsUiState(wifiOnly = false, maxConcurrent = 1),
+            state =
+                DownloadsSettingsUiState(
+                    wifiOnly = true,
+                    maxConcurrent = 2,
+                    saveToGallery = true,
+                    unsavedCount = 3,
+                ),
+            onEvent = {},
+        )
+    }
+}
+
+@Preview(name = "DownloadsSection - Offer Dialog - Light")
+@Preview(name = "DownloadsSection - Offer Dialog - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DownloadsSectionOfferDialogPreview() {
+    NexusTheme {
+        DownloadsSection(
+            state =
+                DownloadsSettingsUiState(
+                    wifiOnly = true,
+                    maxConcurrent = 2,
+                    saveToGallery = true,
+                    unsavedCount = 3,
+                    showSaveExistingOffer = true,
+                ),
             onEvent = {},
         )
     }

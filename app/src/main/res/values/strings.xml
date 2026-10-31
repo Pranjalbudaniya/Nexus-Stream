@@ -260,9 +260,6 @@
     <string name="downloads_gallery_offer_all">Save all</string>
     <string name="downloads_gallery_offer_new">Only new</string>
     <string name="downloads_setting_gallery_existing">Save existing downloads now (%1$d)</string>
-    <string name="downloads_storage_low">Storage is almost full.</string>
-    <string name="downloads_pause_all">Pause all</string>
-    <string name="downloads_resume_all">Resume all</string>
     <string name="downloads_delete_all">Delete all downloaded</string>
     <string name="downloads_section_in_progress">In progress</string>
     <string name="downloads_section_problems">Problems</string>
@@ -272,10 +269,6 @@
     <string name="downloads_use_mobile">Use mobile data</string>
     <string name="downloads_banner_notifications">Notifications are off. You won\'t see progress outside the app.</string>
     <string name="downloads_turn_on">Turn on</string>
-    <string name="downloads_action_pause">Pause</string>
-    <string name="downloads_action_resume">Resume</string>
-    <string name="downloads_action_retry">Retry</string>
-    <string name="downloads_action_new_link">Find new link</string>
     <string name="downloads_action_remove">Remove</string>
     <string name="downloads_menu_cancel">Cancel download</string>
     <string name="downloads_menu_delete">Delete from this phone</string>

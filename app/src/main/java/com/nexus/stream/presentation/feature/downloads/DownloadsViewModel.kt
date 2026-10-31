@@ -20,12 +20,14 @@ import com.nexus.stream.domain.repository.StorageInfo
 import com.nexus.stream.domain.repository.TorrentFileChoice
 import com.nexus.stream.domain.usecase.DownloadSection
 import com.nexus.stream.domain.usecase.StatusText
+import com.nexus.stream.domain.usecase.StorageCardModel
 import com.nexus.stream.domain.usecase.StorageSummary
 import com.nexus.stream.domain.usecase.activeCount
 import com.nexus.stream.domain.usecase.failureReasonRes
 import com.nexus.stream.domain.usecase.galleryFailureReasonRes
 import com.nexus.stream.domain.usecase.groupDownloads
 import com.nexus.stream.domain.usecase.rowStatus
+import com.nexus.stream.domain.usecase.storageCardModel
 import com.nexus.stream.domain.usecase.storageSummary
 import com.nexus.stream.presentation.common.PlaybackRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,6 +65,7 @@ data class DownloadsUiState(
     val sections: List<DownloadSection> = emptyList(),
     val live: Map<String, DownloadLive> = emptyMap(),
     val storageSummary: StorageSummary? = null,
+    val storageCard: StorageCardModel? = null,
     val showWifiBanner: Boolean = false,
     val showNotificationsBanner: Boolean = false,
     val confirmDialog: ConfirmDialog? = null,
@@ -146,6 +149,16 @@ sealed interface DownloadsEvent {
     ) : DownloadsEvent
 
     data object DismissPick : DownloadsEvent
+
+    data class SaveToGallery(
+        val id: String,
+    ) : DownloadsEvent
+
+    data class RemoveFromGallery(
+        val id: String,
+    ) : DownloadsEvent
+
+    data object BrowseDiscover : DownloadsEvent
 }
 
 sealed interface DownloadsEffect {
@@ -157,6 +170,8 @@ sealed interface DownloadsEffect {
         val type: String,
         val metaId: String,
     ) : DownloadsEffect
+
+    data object NavigateToDiscover : DownloadsEffect
 
     data class OpenDownloadSheet(
         val request: PlaybackRequest,
@@ -229,6 +244,7 @@ class DownloadsViewModel(
             ) { items, live, familyMode, dialog, filePick ->
                 val sections = groupDownloads(items, familyMode)
                 val summary = if (items.isNotEmpty()) storageSummary(items, freeSpaceProvider()) else null
+                val card = if (items.isNotEmpty()) storageCardModel(items, freeSpaceProvider()) else null
                 val hasWifiWait = items.any { it.state == DownloadState.WAITING_FOR_WIFI }
                 val active = activeCount(items) > 0
                 val showNotif = active && !notificationsBannerDismissed && !notificationPermissionGranted()
@@ -247,6 +263,7 @@ class DownloadsViewModel(
                     sections = sections,
                     live = live,
                     storageSummary = summary,
+                    storageCard = card,
                     showWifiBanner = hasWifiWait,
                     showNotificationsBanner = showNotif,
                     confirmDialog = dialog,
@@ -292,31 +309,82 @@ class DownloadsViewModel(
         }
     }
 
-    fun onEvent(event: DownloadsEvent) {
+    private fun handleDownloadAction(event: DownloadsEvent): Boolean =
         when (event) {
-            is DownloadsEvent.Pause -> downloadManager.pause(event.id)
-            is DownloadsEvent.Resume -> downloadManager.resume(event.id)
-            is DownloadsEvent.Retry -> downloadManager.resume(event.id)
-            DownloadsEvent.PauseAll -> downloadManager.pauseAll()
-            DownloadsEvent.ResumeAll -> downloadManager.resumeAll()
-            DownloadsEvent.UseMobileData -> downloadManager.allowMobileData(null)
-            DownloadsEvent.DismissNotificationsBanner -> handleDismissNotifications()
-            is DownloadsEvent.Play -> handlePlay(event.item)
-            is DownloadsEvent.TapRow -> handleTapRow(event.item)
-            is DownloadsEvent.FindNewLink -> handleFindNewLink(event.item)
-            else -> handleDialogEvent(event)
-        }
-    }
+            is DownloadsEvent.Pause -> {
+                downloadManager.pause(event.id)
+                true
+            }
 
-    private fun handleChooseFile(id: String) {
-        val choices = downloadManager.getTorrentFileChoices(id).sortedByDescending { it.sizeBytes }
-        val initialSelection = choices.firstOrNull()?.index ?: 0
-        filePickDialogFlow.value =
-            TorrentFilePickState(
-                downloadId = id,
-                candidates = choices,
-                selectedIndex = initialSelection,
-            )
+            is DownloadsEvent.Resume -> {
+                downloadManager.resume(event.id)
+                true
+            }
+
+            is DownloadsEvent.Retry -> {
+                downloadManager.resume(event.id)
+                true
+            }
+
+            DownloadsEvent.PauseAll -> {
+                downloadManager.pauseAll()
+                true
+            }
+
+            DownloadsEvent.ResumeAll -> {
+                downloadManager.resumeAll()
+                true
+            }
+
+            DownloadsEvent.UseMobileData -> {
+                downloadManager.allowMobileData(null)
+                true
+            }
+
+            is DownloadsEvent.SaveToGallery -> {
+                viewModelScope.launch { downloadManager.exportToGallery(event.id) }
+                true
+            }
+
+            is DownloadsEvent.RemoveFromGallery -> {
+                viewModelScope.launch { downloadManager.removeFromGallery(event.id) }
+                true
+            }
+
+            DownloadsEvent.BrowseDiscover -> {
+                viewModelScope.launch { _effects.emit(DownloadsEffect.NavigateToDiscover) }
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
+
+    fun onEvent(event: DownloadsEvent) {
+        if (handleDownloadAction(event)) return
+        when (event) {
+            DownloadsEvent.DismissNotificationsBanner -> {
+                notificationsBannerDismissed = true
+                _uiState.update { it.copy(showNotificationsBanner = false) }
+            }
+
+            is DownloadsEvent.Play -> {
+                handlePlay(event.item)
+            }
+
+            is DownloadsEvent.TapRow -> {
+                handleTapRow(event.item)
+            }
+
+            is DownloadsEvent.FindNewLink -> {
+                handleFindNewLink(event.item)
+            }
+
+            else -> {
+                handleDialogEvent(event)
+            }
+        }
     }
 
     private fun handleSelectFile(event: DownloadsEvent.SelectFile) {
@@ -331,14 +399,44 @@ class DownloadsViewModel(
 
     private fun handleDialogEvent(event: DownloadsEvent) {
         when (event) {
-            is DownloadsEvent.RequestCancel -> confirmDialogFlow.value = ConfirmDialog.Cancel(event.id)
-            is DownloadsEvent.RequestDelete -> confirmDialogFlow.value = ConfirmDialog.Delete(event.id)
-            DownloadsEvent.RequestDeleteAll -> confirmDialogFlow.value = ConfirmDialog.DeleteAll
-            DownloadsEvent.DismissConfirm -> confirmDialogFlow.value = null
-            is DownloadsEvent.ChooseFile -> handleChooseFile(event.id)
-            is DownloadsEvent.SelectFile -> handleSelectFile(event)
-            DownloadsEvent.DismissPick -> filePickDialogFlow.value = null
-            else -> handleConfirmAction(event)
+            is DownloadsEvent.RequestCancel -> {
+                confirmDialogFlow.value = ConfirmDialog.Cancel(event.id)
+            }
+
+            is DownloadsEvent.RequestDelete -> {
+                confirmDialogFlow.value = ConfirmDialog.Delete(event.id)
+            }
+
+            DownloadsEvent.RequestDeleteAll -> {
+                confirmDialogFlow.value = ConfirmDialog.DeleteAll
+            }
+
+            DownloadsEvent.DismissConfirm -> {
+                confirmDialogFlow.value = null
+            }
+
+            is DownloadsEvent.ChooseFile -> {
+                val choices = downloadManager.getTorrentFileChoices(event.id).sortedByDescending { it.sizeBytes }
+                val initialSelection = choices.firstOrNull()?.index ?: 0
+                filePickDialogFlow.value =
+                    TorrentFilePickState(
+                        downloadId = event.id,
+                        candidates = choices,
+                        selectedIndex = initialSelection,
+                    )
+            }
+
+            is DownloadsEvent.SelectFile -> {
+                handleSelectFile(event)
+            }
+
+            DownloadsEvent.DismissPick -> {
+                filePickDialogFlow.value = null
+            }
+
+            else -> {
+                handleConfirmAction(event)
+            }
         }
     }
 
@@ -391,10 +489,5 @@ class DownloadsViewModel(
         viewModelScope.launch {
             _effects.emit(DownloadsEffect.OpenDownloadSheet(req, replaceDownloadId = item.id))
         }
-    }
-
-    private fun handleDismissNotifications() {
-        notificationsBannerDismissed = true
-        _uiState.update { it.copy(showNotificationsBanner = false) }
     }
 }
