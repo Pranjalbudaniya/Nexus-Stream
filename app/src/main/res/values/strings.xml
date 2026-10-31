@@ -260,6 +260,15 @@
     <string name="downloads_status_paused">Paused · %1$d%%</string>
     <string name="downloads_status_paused_system">Paused by Android · %1$d%%</string>
     <string name="downloads_status_pick_file">Choose a file</string>
+    <string name="downloads_status_peers_looking">Looking for peers…</string>
+    <string name="downloads_status_metadata">Getting torrent info…</string>
+    <string name="downloads_status_checking">Checking files…</string>
+    <string name="downloads_status_checking_percent">Checking files… %1$d%%</string>
+    <string name="downloads_status_torrent">%1$d%% · %2$s · %3$s left · %4$d peers</string>
+    <string name="downloads_status_stalled">Stalled · no peers</string>
+    <string name="downloads_action_choose_file">Choose a file</string>
+    <string name="downloads_pick_title">Choose a file</string>
+    <string name="downloads_pick_confirm">Download</string>
     <string name="downloads_status_done">%1$s · %2$s</string>
     <string name="downloads_confirm_cancel_title">Cancel this download?</string>
     <string name="downloads_confirm_cancel_body">The part already downloaded is deleted.</string>
@@ -276,7 +285,7 @@
     <string name="detail_download_done">Downloaded</string>
     <string name="streams_download_title">Choose a version to download</string>
     <string name="streams_download_hidden">%1$d sources can\'t be downloaded yet</string>
-    <string name="streams_download_empty">No downloadable source found. Only direct links can be downloaded for now.</string>
+    <string name="streams_download_empty">No downloadable source found.</string>
     <string name="download_added">Added to Downloads</string>
     <string name="download_duplicate">Already in Downloads</string>
     <string name="download_view">View</string>

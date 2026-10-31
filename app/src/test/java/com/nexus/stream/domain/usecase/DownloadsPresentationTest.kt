@@ -5,6 +5,7 @@ import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadLive
+import com.nexus.stream.domain.model.DownloadPhase
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.PauseReason
@@ -315,5 +316,79 @@ class DownloadsPresentationTest {
                 createItem(id = "7", state = DownloadState.COMPLETED),
             )
         assertEquals(4, activeCount(items))
+    }
+
+    @Test
+    fun DP21_status_connectingAndMetadata() {
+        val item = createItem(state = DownloadState.DOWNLOADING).copy(kind = DownloadKind.TORRENT)
+        val liveConnecting = DownloadLive(bytes = 0L, speedBps = 0L, phase = DownloadPhase.CONNECTING)
+        val statusConnecting = rowStatus(item, liveConnecting)
+        assertEquals(R.string.downloads_status_peers_looking, statusConnecting.stringRes)
+
+        val liveMetadata = DownloadLive(bytes = 0L, speedBps = 0L, phase = DownloadPhase.FETCHING_METADATA)
+        val statusMetadata = rowStatus(item, liveMetadata)
+        assertEquals(R.string.downloads_status_metadata, statusMetadata.stringRes)
+    }
+
+    @Test
+    fun DP22_status_checkingFiles_withAndWithoutPercent() {
+        val itemWithPercent =
+            createItem(state = DownloadState.DOWNLOADING).copy(
+                kind = DownloadKind.TORRENT,
+                downloadedBytes = 400L,
+                totalBytes = 1000L,
+            )
+        val liveChecking = DownloadLive(bytes = 400L, speedBps = 0L, phase = DownloadPhase.CHECKING_FILES)
+        val statusPercent = rowStatus(itemWithPercent, liveChecking)
+        assertEquals(R.string.downloads_status_checking_percent, statusPercent.stringRes)
+        assertEquals(listOf(40), statusPercent.args)
+
+        val itemWithoutPercent =
+            createItem(state = DownloadState.DOWNLOADING).copy(
+                kind = DownloadKind.TORRENT,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+            )
+        val statusNoPercent = rowStatus(itemWithoutPercent, liveChecking)
+        assertEquals(R.string.downloads_status_checking, statusNoPercent.stringRes)
+        assertTrue(statusNoPercent.args.isEmpty())
+    }
+
+    @Test
+    fun DP23_status_stalled() {
+        val item = createItem(state = DownloadState.DOWNLOADING).copy(kind = DownloadKind.TORRENT)
+        val liveStalled = DownloadLive(bytes = 100L, speedBps = 0L, phase = DownloadPhase.STALLED)
+        val status = rowStatus(item, liveStalled)
+        assertEquals(R.string.downloads_status_stalled, status.stringRes)
+        assertEquals(RowAction.PAUSE, primaryAction(item))
+    }
+
+    @Test
+    fun DP24_status_torrentTransferring_includesPeers() {
+        val item =
+            createItem(state = DownloadState.DOWNLOADING).copy(
+                kind = DownloadKind.TORRENT,
+                downloadedBytes = 420L,
+                totalBytes = 1000L,
+            )
+        val live =
+            DownloadLive(
+                bytes = 420L,
+                speedBps = 5 * 1024 * 1024L,
+                etaSeconds = 180L,
+                peers = 5,
+                phase = DownloadPhase.TRANSFERRING,
+            )
+        val status = rowStatus(item, live)
+        assertEquals(R.string.downloads_status_torrent, status.stringRes)
+        assertEquals(42, status.args[0])
+        assertEquals("5 MB/s", status.args[1])
+        assertEquals("3 min", status.args[2])
+        assertEquals(5, status.args[3])
+
+        val pickItem = createItem(state = DownloadState.NEEDS_FILE_PICK)
+        val pickStatus = rowStatus(pickItem)
+        assertEquals(R.string.downloads_action_choose_file, pickStatus.stringRes)
+        assertEquals(RowAction.CHOOSE_FILE, primaryAction(pickItem))
     }
 }

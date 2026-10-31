@@ -1548,13 +1548,13 @@ class StreamsViewModelTest {
 
             val u1 = createParsedStream("u1", kind = StreamKind.Direct)
             val u2 = createParsedStream("u2", kind = StreamKind.Direct)
-            val t1 = createParsedStream("t1", kind = StreamKind.Torrent)
-            val t2 = createParsedStream("t2", kind = StreamKind.Torrent)
             val e1 = createParsedStream("e1", kind = StreamKind.ExternalLink)
+            val e2 = createParsedStream("e2", kind = StreamKind.ExternalLink)
+            val e3 = createParsedStream("e3", kind = StreamKind.ExternalLink)
 
             streamFlow.emit(
                 StreamsState(
-                    items = listOf(u1, u2, t1, t2, e1),
+                    items = listOf(u1, u2, e1, e2, e3),
                     answered = 1,
                     total = 1,
                     failures = emptyList(),
@@ -1681,10 +1681,10 @@ class StreamsViewModelTest {
             viewModel.onEvent(StreamsEvent.SetRequest(request))
             runCurrent()
 
-            val t1 = createParsedStream("t1", kind = StreamKind.Torrent)
+            val e1 = createParsedStream("e1", kind = StreamKind.ExternalLink)
             streamFlow.emit(
                 StreamsState(
-                    items = listOf(t1),
+                    items = listOf(e1),
                     answered = 1,
                     total = 1,
                     failures = emptyList(),
@@ -1726,5 +1726,142 @@ class StreamsViewModelTest {
 
             assertNotNull(playbackSessionHolder.current.value)
             assertTrue(fakeDownloadManager.enqueueCalls.isEmpty())
+        }
+
+    @Test
+    fun TS1_downloadMode_torrentRow_enqueuesATorrentSource() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true, season = 2, episode = 5)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val torrentStream =
+                createParsedStream("t1", kind = StreamKind.Torrent).let {
+                    it.copy(
+                        stream =
+                            it.stream.copy(
+                                source =
+                                    StreamSource.Torrent(
+                                        infoHash = "0123456789abcdef0123456789abcdef01234567",
+                                        fileIdx = null,
+                                        trackers = listOf("udp://tracker.opentrackr.org:1337"),
+                                    ),
+                            ),
+                    )
+                }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(torrentStream))
+            runCurrent()
+
+            val enqueued = fakeDownloadManager.enqueueCalls.single()
+            val source = enqueued.source as DownloadSource.Torrent
+            assertEquals("0123456789abcdef0123456789abcdef01234567", source.infoHash)
+            assertEquals(listOf("udp://tracker.opentrackr.org:1337"), source.trackers)
+            assertNull(source.fileIdx)
+            assertEquals(2, enqueued.display.season)
+            assertEquals(5, enqueued.display.episode)
+        }
+
+    @Test
+    fun TS2_downloadMode_torrentWithFileIdx_keepsIt() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val torrentStream =
+                createParsedStream("t1", kind = StreamKind.Torrent).let {
+                    it.copy(
+                        stream =
+                            it.stream.copy(
+                                source =
+                                    StreamSource.Torrent(
+                                        infoHash = "0123456789abcdef0123456789abcdef01234567",
+                                        fileIdx = 4,
+                                        trackers = listOf("udp://tracker.opentrackr.org:1337"),
+                                    ),
+                            ),
+                    )
+                }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(torrentStream))
+            runCurrent()
+
+            val enqueued = fakeDownloadManager.enqueueCalls.single()
+            val source = enqueued.source as DownloadSource.Torrent
+            assertEquals(4, source.fileIdx)
+        }
+
+    @Test
+    fun TS3_downloadMode_externalAndYoutubeStayHidden() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val t = createParsedStream("t", kind = StreamKind.Torrent)
+            val u = createParsedStream("u", kind = StreamKind.Direct)
+            val e = createParsedStream("e", kind = StreamKind.ExternalLink)
+            val y =
+                createParsedStream("y").let {
+                    it.copy(stream = it.stream.copy(source = StreamSource.YouTube("yt123")))
+                }
+
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(t, u, e, y),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertEquals(2, state.filteredStreams.size)
+            assertEquals(2, state.hiddenCount)
+            assertTrue(state.filteredStreams.any { it.stream.source is StreamSource.Torrent })
+            assertTrue(state.filteredStreams.any { it.stream.source is StreamSource.Url })
+        }
+
+    @Test
+    fun TS4_downloadMode_onlyTorrentRows_isNoLongerEmpty() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val t1 = createParsedStream("t1", kind = StreamKind.Torrent)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(t1),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertEquals(1, state.filteredStreams.size)
+            assertFalse(state.isDownloadEmpty)
         }
 }

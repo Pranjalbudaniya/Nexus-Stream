@@ -9,6 +9,7 @@ import com.nexus.stream.domain.model.DownloadEffect
 import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadLive
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.repository.TorrentFileChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -366,5 +367,65 @@ class DownloadsViewModelTest {
 
             viewModel.onEvent(DownloadsEvent.ResumeAll)
             assertEquals(1, downloadManager.resumeAllCalls)
+        }
+
+    @Test
+    fun DW20_needsFilePick_exposesTheChoicesOnTap() =
+        runTest {
+            val item = createTestDownloadItem("t1", state = DownloadState.NEEDS_FILE_PICK)
+            downloadManager.itemsFlow.value = listOf(item)
+            val c1 = TorrentFileChoice(index = 0, name = "Sample.mkv", sizeBytes = 50_000_000L)
+            val c2 = TorrentFileChoice(index = 1, name = "Movie.mkv", sizeBytes = 2_000_000_000L)
+            val c3 = TorrentFileChoice(index = 2, name = "Extra.mkv", sizeBytes = 500_000_000L)
+            downloadManager.fileChoicesMap["t1"] = listOf(c1, c2, c3)
+
+            viewModel.onEvent(DownloadsEvent.ChooseFile("t1"))
+
+            val dialog = viewModel.uiState.value.filePickDialog
+            assertNotNull(dialog)
+            assertEquals("t1", dialog?.downloadId)
+            assertEquals(listOf(c2, c3, c1), dialog?.candidates)
+        }
+
+    @Test
+    fun DW21_selectFile_callsTheManager() =
+        runTest {
+            val item = createTestDownloadItem("t1", state = DownloadState.NEEDS_FILE_PICK)
+            downloadManager.itemsFlow.value = listOf(item)
+            val c1 = TorrentFileChoice(index = 0, name = "Movie.mkv", sizeBytes = 2_000_000_000L)
+            downloadManager.fileChoicesMap["t1"] = listOf(c1)
+
+            viewModel.onEvent(DownloadsEvent.ChooseFile("t1"))
+            assertNotNull(viewModel.uiState.value.filePickDialog)
+
+            viewModel.onEvent(DownloadsEvent.SelectFile(fileIndex = 0))
+
+            assertEquals(listOf("t1" to 0), downloadManager.selectTorrentFileCalls)
+            assertNull(viewModel.uiState.value.filePickDialog)
+        }
+
+    @Test
+    fun DW22_dismissPick_keepsTheItemWaiting() =
+        runTest {
+            val item = createTestDownloadItem("t1", state = DownloadState.NEEDS_FILE_PICK)
+            downloadManager.itemsFlow.value = listOf(item)
+            val c1 = TorrentFileChoice(index = 0, name = "Movie.mkv", sizeBytes = 2_000_000_000L)
+            downloadManager.fileChoicesMap["t1"] = listOf(c1)
+
+            viewModel.onEvent(DownloadsEvent.ChooseFile("t1"))
+            assertNotNull(viewModel.uiState.value.filePickDialog)
+
+            viewModel.onEvent(DownloadsEvent.DismissPick)
+
+            assertTrue(downloadManager.selectTorrentFileCalls.isEmpty())
+            assertNull(viewModel.uiState.value.filePickDialog)
+            assertEquals(
+                DownloadState.NEEDS_FILE_PICK,
+                viewModel.uiState.value.sections
+                    .first()
+                    .items
+                    .first()
+                    .state,
+            )
         }
 }

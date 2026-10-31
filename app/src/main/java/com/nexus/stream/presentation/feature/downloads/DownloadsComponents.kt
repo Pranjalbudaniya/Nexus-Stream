@@ -68,6 +68,8 @@ import java.time.Instant
 private const val POSTER_WIDTH_DP = 56
 private const val POSTER_HEIGHT_DP = 84
 private const val SKELETON_ROWS = 3
+private const val ARGS_COUNT_THREE = 3
+private const val ARG_INDEX_THREE = 3
 
 @Composable
 fun formatStatusText(status: StatusText): String {
@@ -93,11 +95,13 @@ fun formatStatusText(status: StatusText): String {
                 }
             }
         }
-    return when (formattedArgs.size) {
+    val a = formattedArgs
+    return when (a.size) {
         0 -> stringResource(status.stringRes)
-        1 -> stringResource(status.stringRes, formattedArgs[0])
-        2 -> stringResource(status.stringRes, formattedArgs[0], formattedArgs[1])
-        else -> stringResource(status.stringRes, formattedArgs[0], formattedArgs[1], formattedArgs[2])
+        1 -> stringResource(status.stringRes, a[0])
+        2 -> stringResource(status.stringRes, a[0], a[1])
+        ARGS_COUNT_THREE -> stringResource(status.stringRes, a[0], a[1], a[2])
+        else -> stringResource(status.stringRes, a[0], a[1], a[2], a[ARG_INDEX_THREE])
     }
 }
 
@@ -229,6 +233,7 @@ fun DownloadRow(
     onRequestCancel: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onChooseFile: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val spacing = NexusTheme.spacing
@@ -362,6 +367,7 @@ fun DownloadRow(
             onFindNewLink = onFindNewLink,
             onRequestCancel = onRequestCancel,
             onRequestDelete = onRequestDelete,
+            onChooseFile = onChooseFile,
         )
     }
 }
@@ -375,6 +381,7 @@ private fun DownloadRowActions(
     onFindNewLink: (DownloadItem) -> Unit,
     onRequestCancel: (String) -> Unit,
     onRequestDelete: (String) -> Unit,
+    onChooseFile: (String) -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -410,6 +417,12 @@ private fun DownloadRowActions(
             RowAction.REMOVE -> {
                 NexusTextButton(onClick = { onRequestDelete(item.id) }) {
                     Text(stringResource(R.string.downloads_action_remove))
+                }
+            }
+
+            RowAction.CHOOSE_FILE -> {
+                NexusTextButton(onClick = { onChooseFile(item.id) }) {
+                    Text(stringResource(R.string.downloads_action_choose_file))
                 }
             }
 

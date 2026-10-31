@@ -113,13 +113,16 @@ internal object StreamsFilterReducer {
         return result
     }
 
+    private fun isDownloadable(stream: ParsedStream): Boolean =
+        stream.stream.source is StreamSource.Url || stream.stream.source is StreamSource.Torrent
+
     private fun recalculate(
         state: StreamsUiState,
         matching: List<Addon>,
     ): StreamsUiState {
         val isDownload = state.isDownloadMode
-        val hiddenCount = if (isDownload) state.allStreams.count { it.stream.source !is StreamSource.Url } else 0
-        val all = if (isDownload) state.allStreams.filter { it.stream.source is StreamSource.Url } else state.allStreams
+        val hiddenCount = if (isDownload) state.allStreams.count { !isDownloadable(it) } else 0
+        val all = if (isDownload) state.allStreams.filter { isDownloadable(it) } else state.allStreams
         val availableResolutions = StreamOrdering.availableResolutions(all)
         val activeUrls = StreamsFilterComputer.extractActiveUrls(matching, state.availableAddons)
         val presentLanguages = all.flatMap { LanguageCodes.codes(it.languages) }.distinct()

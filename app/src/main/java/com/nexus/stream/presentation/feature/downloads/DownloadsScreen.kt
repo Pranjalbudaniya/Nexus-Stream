@@ -41,6 +41,7 @@ import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadLive
+import com.nexus.stream.domain.model.DownloadPhase
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.usecase.DownloadSection
@@ -263,6 +264,7 @@ fun DownloadsScreenContent(
                                     onFindNewLink = { onEvent(DownloadsEvent.FindNewLink(it)) },
                                     onRequestCancel = { onEvent(DownloadsEvent.RequestCancel(it)) },
                                     onRequestDelete = { onEvent(DownloadsEvent.RequestDelete(it)) },
+                                    onChooseFile = { onEvent(DownloadsEvent.ChooseFile(it)) },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -273,6 +275,7 @@ fun DownloadsScreenContent(
 
             DownloadsDialogs(
                 confirmDialog = uiState.confirmDialog,
+                filePickDialog = uiState.filePickDialog,
                 onEvent = onEvent,
             )
         }
@@ -282,8 +285,17 @@ fun DownloadsScreenContent(
 @Composable
 private fun DownloadsDialogs(
     confirmDialog: ConfirmDialog?,
+    filePickDialog: TorrentFilePickState?,
     onEvent: (DownloadsEvent) -> Unit,
 ) {
+    filePickDialog?.let { dialogState ->
+        TorrentFilePickDialog(
+            candidates = dialogState.candidates,
+            onSelect = { index -> onEvent(DownloadsEvent.SelectFile(index, dialogState.downloadId)) },
+            onDismiss = { onEvent(DownloadsEvent.DismissPick) },
+        )
+    }
+
     when (confirmDialog) {
         is ConfirmDialog.Cancel -> {
             ConfirmCancelDialog(
@@ -316,11 +328,17 @@ private fun sampleItem(
     title: String,
     state: DownloadState,
     failure: DownloadFailure? = null,
+    kind: DownloadKind = DownloadKind.HTTP,
 ): DownloadItem =
     DownloadItem(
         id = id,
-        kind = DownloadKind.HTTP,
-        source = DownloadSource.Http("https://example.com/video.mp4"),
+        kind = kind,
+        source =
+            if (kind == DownloadKind.TORRENT) {
+                DownloadSource.Torrent("0123456789abcdef0123456789abcdef01234567", emptyList())
+            } else {
+                DownloadSource.Http("https://example.com/video.mp4")
+            },
         metaId = "m1",
         videoId = "v1",
         type = "movie",
@@ -342,19 +360,6 @@ internal fun DownloadsScreenEmptyPreview() {
     NexusTheme {
         DownloadsScreenContent(
             uiState = DownloadsUiState(isEmpty = true, isLoading = false),
-            onEvent = {},
-            onNavigateToDiscover = {},
-            snackbarHostState = remember { SnackbarHostState() },
-        )
-    }
-}
-
-@Preview(name = "Downloads - Loading - Light")
-@Composable
-internal fun DownloadsScreenLoadingPreviewLight() {
-    NexusTheme {
-        DownloadsScreenContent(
-            uiState = DownloadsUiState(isLoading = true),
             onEvent = {},
             onNavigateToDiscover = {},
             snackbarHostState = remember { SnackbarHostState() },
@@ -454,25 +459,6 @@ internal fun DownloadsScreenReadyPreviewDark() {
     }
 }
 
-@Preview(name = "Downloads - Banners - Light")
-@Composable
-internal fun DownloadsScreenBannersPreviewLight() {
-    NexusTheme {
-        DownloadsScreenContent(
-            uiState =
-                DownloadsUiState(
-                    sections = emptyList(),
-                    showWifiBanner = true,
-                    showNotificationsBanner = true,
-                    isLoading = false,
-                ),
-            onEvent = {},
-            onNavigateToDiscover = {},
-            snackbarHostState = remember { SnackbarHostState() },
-        )
-    }
-}
-
 @Preview(name = "Downloads - Confirm Dialogs")
 @Composable
 internal fun DownloadsScreenDialogsPreview() {
@@ -482,5 +468,63 @@ internal fun DownloadsScreenDialogsPreview() {
             ConfirmDeleteDialog(onConfirm = {}, onDismiss = {})
             ConfirmDeleteAllDialog(onConfirm = {}, onDismiss = {})
         }
+    }
+}
+
+@Preview(name = "Downloads - Torrent Statuses - Light")
+@Preview(name = "Downloads - Torrent Statuses - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+internal fun DownloadsScreenTorrentStatusesPreview() {
+    val items =
+        listOf(
+            sampleItem("1", "Connecting Torrent", DownloadState.DOWNLOADING, kind = DownloadKind.TORRENT),
+            sampleItem("2", "Metadata Torrent", DownloadState.DOWNLOADING, kind = DownloadKind.TORRENT),
+            sampleItem("3", "Checking Torrent", DownloadState.DOWNLOADING, kind = DownloadKind.TORRENT),
+            sampleItem("4", "Transferring Torrent", DownloadState.DOWNLOADING, kind = DownloadKind.TORRENT),
+            sampleItem("5", "Stalled Torrent", DownloadState.DOWNLOADING, kind = DownloadKind.TORRENT),
+            sampleItem("6", "Season Pack Torrent", DownloadState.NEEDS_FILE_PICK, kind = DownloadKind.TORRENT),
+        )
+    val problems =
+        listOf(
+            sampleItem(
+                id = "7",
+                title = "Dead Torrent",
+                state = DownloadState.FAILED,
+                failure = DownloadFailure.TORRENT_NO_PEERS,
+                kind = DownloadKind.TORRENT,
+            ),
+        )
+    val live =
+        mapOf(
+            "1" to DownloadLive(bytes = 0L, speedBps = 0L, peers = 0, phase = DownloadPhase.CONNECTING),
+            "2" to DownloadLive(bytes = 0L, speedBps = 0L, peers = 0, phase = DownloadPhase.FETCHING_METADATA),
+            "3" to DownloadLive(bytes = 400_000_000L, speedBps = 0L, peers = 0, phase = DownloadPhase.CHECKING_FILES),
+            "4" to
+                DownloadLive(
+                    bytes = 420_000_000L,
+                    speedBps = 3_500_000L,
+                    etaSeconds = 240L,
+                    peers = 12,
+                    phase = DownloadPhase.TRANSFERRING,
+                ),
+            "5" to DownloadLive(bytes = 100_000_000L, speedBps = 0L, peers = 0, phase = DownloadPhase.STALLED),
+        )
+    NexusTheme {
+        DownloadsScreenContent(
+            uiState =
+                DownloadsUiState(
+                    sections =
+                        listOf(
+                            DownloadSection(DownloadSectionKind.IN_PROGRESS, items),
+                            DownloadSection(DownloadSectionKind.PROBLEMS, problems),
+                        ),
+                    live = live,
+                    canPauseAll = true,
+                    isLoading = false,
+                ),
+            onEvent = {},
+            onNavigateToDiscover = {},
+            snackbarHostState = remember { SnackbarHostState() },
+        )
     }
 }

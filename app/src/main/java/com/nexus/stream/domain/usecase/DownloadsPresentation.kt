@@ -3,7 +3,9 @@ package com.nexus.stream.domain.usecase
 import com.nexus.stream.R
 import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
+import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadLive
+import com.nexus.stream.domain.model.DownloadPhase
 import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.PauseReason
 
@@ -30,6 +32,7 @@ enum class RowAction {
     FIND_NEW_LINK,
     REMOVE,
     NONE,
+    CHOOSE_FILE,
 }
 
 sealed interface DetailDownloadState {
@@ -99,26 +102,65 @@ fun formatEta(seconds: Long?): String {
     }
 }
 
+private fun transferringStatus(
+    item: DownloadItem,
+    live: DownloadLive?,
+    percent: Int,
+): StatusText {
+    val total = item.totalBytes
+    val downloaded = item.downloadedBytes
+    val speed = live?.speedBps ?: 0L
+    val eta = live?.etaSeconds ?: etaSeconds(total - downloaded, speed)
+    val speedStr = formatDownloadSpeed(speed)
+    val etaStr = formatEta(eta)
+
+    return if (item.kind == DownloadKind.TORRENT) {
+        val peers = live?.peers ?: 0
+        StatusText(R.string.downloads_status_torrent, listOf(percent, speedStr, etaStr, peers))
+    } else if (total > 0L) {
+        if (speed <= 0L) {
+            StatusText(R.string.downloads_status_starting, listOf(percent))
+        } else {
+            StatusText(R.string.downloads_status_downloading, listOf(percent, speedStr, etaStr))
+        }
+    } else {
+        StatusText(R.string.downloads_status_downloading_unknown, listOf(downloaded, speedStr))
+    }
+}
+
 private fun downloadingStatus(
     item: DownloadItem,
     live: DownloadLive?,
 ): StatusText {
-    val speed = live?.speedBps ?: 0L
+    val phase = live?.phase ?: DownloadPhase.TRANSFERRING
     val total = item.totalBytes
     val downloaded = item.downloadedBytes
-    return if (total > 0L) {
-        val percent = ((downloaded * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX)
-        if (speed <= 0L) {
-            StatusText(R.string.downloads_status_starting, listOf(percent))
-        } else {
-            val eta = live?.etaSeconds ?: etaSeconds(total - downloaded, speed)
-            val speedStr = formatDownloadSpeed(speed)
-            val etaStr = formatEta(eta)
-            StatusText(R.string.downloads_status_downloading, listOf(percent, speedStr, etaStr))
+    val percent = if (total > 0L) ((downloaded * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX) else 0
+
+    return when (phase) {
+        DownloadPhase.CONNECTING -> {
+            StatusText(R.string.downloads_status_peers_looking)
         }
-    } else {
-        val speedStr = formatDownloadSpeed(speed)
-        StatusText(R.string.downloads_status_downloading_unknown, listOf(downloaded, speedStr))
+
+        DownloadPhase.FETCHING_METADATA -> {
+            StatusText(R.string.downloads_status_metadata)
+        }
+
+        DownloadPhase.CHECKING_FILES -> {
+            if (percent > 0) {
+                StatusText(R.string.downloads_status_checking_percent, listOf(percent))
+            } else {
+                StatusText(R.string.downloads_status_checking)
+            }
+        }
+
+        DownloadPhase.STALLED -> {
+            StatusText(R.string.downloads_status_stalled)
+        }
+
+        DownloadPhase.TRANSFERRING -> {
+            transferringStatus(item, live, percent)
+        }
     }
 }
 
@@ -144,23 +186,24 @@ fun rowStatus(
         }
 
         DownloadState.NEEDS_FILE_PICK -> {
-            StatusText(R.string.downloads_status_pick_file)
+            StatusText(R.string.downloads_action_choose_file)
         }
 
         DownloadState.PAUSED -> {
             val total = item.totalBytes
             val downloaded = item.downloadedBytes
             val percent = if (total > 0L) ((downloaded * PERCENT_MAX) / total).toInt().coerceIn(0, PERCENT_MAX) else 0
-            if (item.pauseReason == PauseReason.SYSTEM_TIME_LIMIT) {
-                StatusText(R.string.downloads_status_paused_system, listOf(percent))
-            } else {
-                StatusText(R.string.downloads_status_paused, listOf(percent))
-            }
+            val res =
+                if (item.pauseReason == PauseReason.SYSTEM_TIME_LIMIT) {
+                    R.string.downloads_status_paused_system
+                } else {
+                    R.string.downloads_status_paused
+                }
+            StatusText(res, listOf(percent))
         }
 
         DownloadState.FAILED -> {
-            val failure = item.failure ?: DownloadFailure.UNKNOWN
-            StatusText(failureReasonRes(failure))
+            StatusText(failureReasonRes(item.failure ?: DownloadFailure.UNKNOWN))
         }
 
         DownloadState.COMPLETED -> {
@@ -177,9 +220,12 @@ fun primaryAction(item: DownloadItem): RowAction =
         DownloadState.QUEUED,
         DownloadState.WAITING_FOR_WIFI,
         DownloadState.WAITING_FOR_NETWORK,
-        DownloadState.NEEDS_FILE_PICK,
         -> {
             RowAction.PAUSE
+        }
+
+        DownloadState.NEEDS_FILE_PICK -> {
+            RowAction.CHOOSE_FILE
         }
 
         DownloadState.PAUSED -> {
@@ -273,20 +319,15 @@ private const val RANK_QUEUED_OR_WAITING = 2
 private const val RANK_PAUSED = 3
 private const val RANK_OTHER = 4
 
-private fun inProgressRank(state: DownloadState): Int =
-    when (state) {
-        DownloadState.DOWNLOADING -> RANK_DOWNLOADING
-
-        DownloadState.QUEUED,
-        DownloadState.WAITING_FOR_WIFI,
-        DownloadState.WAITING_FOR_NETWORK,
-        DownloadState.NEEDS_FILE_PICK,
-        -> RANK_QUEUED_OR_WAITING
-
-        DownloadState.PAUSED -> RANK_PAUSED
-
-        else -> RANK_OTHER
-    }
+private val IN_PROGRESS_RANKS =
+    mapOf(
+        DownloadState.DOWNLOADING to RANK_DOWNLOADING,
+        DownloadState.QUEUED to RANK_QUEUED_OR_WAITING,
+        DownloadState.WAITING_FOR_WIFI to RANK_QUEUED_OR_WAITING,
+        DownloadState.WAITING_FOR_NETWORK to RANK_QUEUED_OR_WAITING,
+        DownloadState.NEEDS_FILE_PICK to RANK_QUEUED_OR_WAITING,
+        DownloadState.PAUSED to RANK_PAUSED,
+    )
 
 fun groupDownloads(
     items: List<DownloadItem>,
@@ -320,15 +361,10 @@ fun groupDownloads(
     }
 
     val sortedInProgress =
-        inProgressItems.sortedWith { a, b ->
-            val rankA = inProgressRank(a.state)
-            val rankB = inProgressRank(b.state)
-            if (rankA != rankB) {
-                rankA.compareTo(rankB)
-            } else {
-                a.createdAt.compareTo(b.createdAt)
-            }
-        }
+        inProgressItems.sortedWith(
+            compareBy<DownloadItem> { IN_PROGRESS_RANKS[it.state] ?: RANK_OTHER }
+                .thenBy { it.createdAt },
+        )
 
     val sortedProblems = problemItems.sortedByDescending { it.updatedAt }
     val sortedReady = readyItems.sortedByDescending { it.completedAt ?: it.updatedAt }

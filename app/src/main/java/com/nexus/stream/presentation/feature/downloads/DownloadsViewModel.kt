@@ -17,6 +17,7 @@ import com.nexus.stream.domain.repository.ContentPrefsRepository
 import com.nexus.stream.domain.repository.DownloadFileStore
 import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.StorageInfo
+import com.nexus.stream.domain.repository.TorrentFileChoice
 import com.nexus.stream.domain.usecase.DownloadSection
 import com.nexus.stream.domain.usecase.StatusText
 import com.nexus.stream.domain.usecase.StorageSummary
@@ -51,6 +52,12 @@ sealed interface ConfirmDialog {
     data object DeleteAll : ConfirmDialog
 }
 
+data class TorrentFilePickState(
+    val downloadId: String,
+    val candidates: List<TorrentFileChoice>,
+    val selectedIndex: Int,
+)
+
 data class DownloadsUiState(
     val sections: List<DownloadSection> = emptyList(),
     val live: Map<String, DownloadLive> = emptyMap(),
@@ -58,6 +65,7 @@ data class DownloadsUiState(
     val showWifiBanner: Boolean = false,
     val showNotificationsBanner: Boolean = false,
     val confirmDialog: ConfirmDialog? = null,
+    val filePickDialog: TorrentFilePickState? = null,
     val canPauseAll: Boolean = false,
     val canResumeAll: Boolean = false,
     val canDeleteCompleted: Boolean = false,
@@ -126,6 +134,17 @@ sealed interface DownloadsEvent {
     data object PauseAll : DownloadsEvent
 
     data object ResumeAll : DownloadsEvent
+
+    data class ChooseFile(
+        val id: String,
+    ) : DownloadsEvent
+
+    data class SelectFile(
+        val fileIndex: Int,
+        val id: String? = null,
+    ) : DownloadsEvent
+
+    data object DismissPick : DownloadsEvent
 }
 
 sealed interface DownloadsEffect {
@@ -190,6 +209,7 @@ class DownloadsViewModel(
     val effects: SharedFlow<DownloadsEffect> = _effects.asSharedFlow()
 
     private val confirmDialogFlow = MutableStateFlow<ConfirmDialog?>(null)
+    private val filePickDialogFlow = MutableStateFlow<TorrentFilePickState?>(null)
     private var notificationsBannerDismissed = false
 
     init {
@@ -204,7 +224,8 @@ class DownloadsViewModel(
                 downloadManager.live,
                 contentPrefsRepository.familyMode,
                 confirmDialogFlow,
-            ) { items, live, familyMode, dialog ->
+                filePickDialogFlow,
+            ) { items, live, familyMode, dialog, filePick ->
                 val sections = groupDownloads(items, familyMode)
                 val summary = if (items.isNotEmpty()) storageSummary(items, freeSpaceProvider()) else null
                 val hasWifiWait = items.any { it.state == DownloadState.WAITING_FOR_WIFI }
@@ -228,6 +249,7 @@ class DownloadsViewModel(
                     showWifiBanner = hasWifiWait,
                     showNotificationsBanner = showNotif,
                     confirmDialog = dialog,
+                    filePickDialog = filePick,
                     canPauseAll = hasActive,
                     canResumeAll = !hasActive && hasPaused,
                     canDeleteCompleted = hasCompleted,
@@ -276,12 +298,36 @@ class DownloadsViewModel(
         }
     }
 
+    private fun handleChooseFile(id: String) {
+        val choices = downloadManager.getTorrentFileChoices(id).sortedByDescending { it.sizeBytes }
+        val initialSelection = choices.firstOrNull()?.index ?: 0
+        filePickDialogFlow.value =
+            TorrentFilePickState(
+                downloadId = id,
+                candidates = choices,
+                selectedIndex = initialSelection,
+            )
+    }
+
+    private fun handleSelectFile(event: DownloadsEvent.SelectFile) {
+        val targetId = event.id ?: filePickDialogFlow.value?.downloadId
+        filePickDialogFlow.value = null
+        if (targetId != null) {
+            viewModelScope.launch {
+                downloadManager.selectTorrentFile(targetId, event.fileIndex)
+            }
+        }
+    }
+
     private fun handleDialogEvent(event: DownloadsEvent) {
         when (event) {
             is DownloadsEvent.RequestCancel -> confirmDialogFlow.value = ConfirmDialog.Cancel(event.id)
             is DownloadsEvent.RequestDelete -> confirmDialogFlow.value = ConfirmDialog.Delete(event.id)
             DownloadsEvent.RequestDeleteAll -> confirmDialogFlow.value = ConfirmDialog.DeleteAll
             DownloadsEvent.DismissConfirm -> confirmDialogFlow.value = null
+            is DownloadsEvent.ChooseFile -> handleChooseFile(event.id)
+            is DownloadsEvent.SelectFile -> handleSelectFile(event)
+            DownloadsEvent.DismissPick -> filePickDialogFlow.value = null
             else -> handleConfirmAction(event)
         }
     }

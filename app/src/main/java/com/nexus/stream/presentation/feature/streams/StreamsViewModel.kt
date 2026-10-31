@@ -710,17 +710,30 @@ class StreamsViewModel
 
         private suspend fun handleDownloadStream(stream: ParsedStream) {
             val req = _uiState.value.request ?: return
-            val source = stream.stream.source
-            if (source !is StreamSource.Url) {
-                _effects.emit(StreamsEffect.ShowMessage(R.string.download_rejected))
-                return
-            }
+            val downloadSource: DownloadSource =
+                when (val source = stream.stream.source) {
+                    is StreamSource.Url -> {
+                        val sanitised = sanitizeRequestHeaders(source.requestHeaders)
+                        DownloadSource.Http(source.url, sanitised)
+                    }
 
-            val sanitised = sanitizeRequestHeaders(source.requestHeaders)
-            val httpSource = DownloadSource.Http(source.url, sanitised)
+                    is StreamSource.Torrent -> {
+                        DownloadSource.Torrent(
+                            infoHash = source.infoHash,
+                            trackers = source.trackers,
+                            fileIdx = source.fileIdx,
+                        )
+                    }
+
+                    else -> {
+                        _effects.emit(StreamsEffect.ShowMessage(R.string.download_rejected))
+                        return
+                    }
+                }
+
             val replaceId = req.replaceDownloadId
             if (replaceId != null) {
-                downloadManager.replaceSource(replaceId, httpSource)
+                downloadManager.replaceSource(replaceId, downloadSource)
                 _effects.emit(StreamsEffect.ShowMessage(R.string.download_link_replaced))
                 _effects.emit(StreamsEffect.DismissSheet)
             } else {
@@ -738,7 +751,7 @@ class StreamsViewModel
                     )
                 val downloadRequest =
                     DownloadRequest(
-                        source = httpSource,
+                        source = downloadSource,
                         display = display,
                         sizeHint = stream.stream.videoSize,
                     )
