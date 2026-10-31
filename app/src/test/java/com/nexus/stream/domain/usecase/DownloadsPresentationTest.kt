@@ -8,6 +8,8 @@ import com.nexus.stream.domain.model.DownloadLive
 import com.nexus.stream.domain.model.DownloadPhase
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.GalleryFailure
+import com.nexus.stream.domain.model.GalleryState
 import com.nexus.stream.domain.model.PauseReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -390,5 +392,141 @@ class DownloadsPresentationTest {
         val pickStatus = rowStatus(pickItem)
         assertEquals(R.string.downloads_action_choose_file, pickStatus.stringRes)
         assertEquals(RowAction.CHOOSE_FILE, primaryAction(pickItem))
+    }
+
+    @Test
+    fun DP25_actionIcon_perAction() {
+        assertEquals(ActionIcon.PAUSE, actionIcon(RowAction.PAUSE))
+        assertEquals(ActionIcon.PLAY, actionIcon(RowAction.RESUME))
+        assertEquals(ActionIcon.REFRESH, actionIcon(RowAction.RETRY))
+        assertEquals(ActionIcon.SEARCH, actionIcon(RowAction.FIND_NEW_LINK))
+        assertEquals(ActionIcon.DELETE, actionIcon(RowAction.REMOVE))
+        assertEquals(ActionIcon.LIST, actionIcon(RowAction.CHOOSE_FILE))
+        assertEquals(null, actionIcon(RowAction.NONE))
+    }
+
+    @Test
+    fun DP26_actionIcon_everyActionHasAContentDescription() {
+        val nonNoneActions = RowAction.entries.filter { it != RowAction.NONE }
+        val stringIds = nonNoneActions.map { actionDescription(it) }
+        assertTrue(stringIds.all { it != 0 })
+        assertEquals(nonNoneActions.size, stringIds.toSet().size)
+    }
+
+    @Test
+    fun DP27_storageCard_isOneLine_usedAndFree() {
+        val items =
+            listOf(
+                createItem(state = DownloadState.COMPLETED).copy(totalBytes = 248L * 1024 * 1024),
+            )
+        val free12Gb = 12L * 1024 * 1024 * 1024
+        val model = storageCardModel(items, free12Gb)
+        assertEquals(248L * 1024 * 1024, model.usedBytes)
+        assertEquals(free12Gb, model.freeBytes)
+        assertFalse(model.low)
+    }
+
+    @Test
+    fun DP28_storageCard_headerAction_pauseResumeOrNone() {
+        val downloading = listOf(createItem(state = DownloadState.DOWNLOADING))
+        val paused = listOf(createItem(state = DownloadState.PAUSED))
+        val completed = listOf(createItem(state = DownloadState.COMPLETED))
+
+        assertEquals(
+            StorageHeaderAction.PAUSE_ALL,
+            storageCardModel(downloading, 10L * 1024 * 1024 * 1024).headerAction,
+        )
+        assertEquals(
+            StorageHeaderAction.RESUME_ALL,
+            storageCardModel(paused, 10L * 1024 * 1024 * 1024).headerAction,
+        )
+        assertEquals(
+            StorageHeaderAction.NONE,
+            storageCardModel(completed, 10L * 1024 * 1024 * 1024).headerAction,
+        )
+    }
+
+    @Test
+    fun DP29_storageCard_deleteAll_onlyWithCompletedItems() {
+        val withCompleted = listOf(createItem(state = DownloadState.COMPLETED))
+        val withoutCompleted = listOf(createItem(state = DownloadState.DOWNLOADING))
+
+        assertTrue(storageCardModel(withCompleted, 10L * 1024 * 1024 * 1024).showDeleteAll)
+        assertFalse(storageCardModel(withoutCompleted, 10L * 1024 * 1024 * 1024).showDeleteAll)
+    }
+
+    @Test
+    fun DP30_storageCard_lowStorage_warns() {
+        val items = listOf(createItem(state = DownloadState.COMPLETED))
+        val lowFree = 800L * 1024 * 1024
+        val highFree = 5L * 1024 * 1024 * 1024
+
+        assertTrue(storageCardModel(items, lowFree).low)
+        assertFalse(storageCardModel(items, highFree).low)
+    }
+
+    @Test
+    fun DP31_status_completed_inGallerySuffix() {
+        val itemSaved = createItem(state = DownloadState.COMPLETED).copy(galleryState = GalleryState.SAVED)
+        val statusSaved = rowStatus(itemSaved)
+        assertEquals(R.string.downloads_status_in_gallery, statusSaved.stringRes)
+        val doneStatus = statusSaved.args[0] as StatusText
+        assertEquals(R.string.downloads_status_done, doneStatus.stringRes)
+
+        val itemNone = createItem(state = DownloadState.COMPLETED).copy(galleryState = GalleryState.NONE)
+        val statusNone = rowStatus(itemNone)
+        assertEquals(R.string.downloads_status_done, statusNone.stringRes)
+    }
+
+    @Test
+    fun DP32_status_saving_showsPercent() {
+        val item =
+            createItem(state = DownloadState.COMPLETED).copy(
+                galleryState = GalleryState.SAVING,
+                totalBytes = 1000L,
+            )
+        val live = DownloadLive(bytes = 1000L, speedBps = 0L, copiedBytes = 500L)
+        val status = rowStatus(item, live)
+        assertEquals(R.string.downloads_status_saving_gallery, status.stringRes)
+        assertEquals(50, status.args[0])
+    }
+
+    @Test
+    fun DP33_status_galleryFailed_hasASecondLineWithTheReason() {
+        val failures =
+            listOf(
+                GalleryFailure.NO_SPACE to R.string.downloads_gallery_reason_space,
+                GalleryFailure.WRITE_FAILED to R.string.downloads_gallery_reason_write,
+                GalleryFailure.SOURCE_MISSING to R.string.downloads_gallery_reason_missing,
+                GalleryFailure.UNAVAILABLE to R.string.downloads_gallery_reason_unavailable,
+            )
+        for ((failure, expectedReasonRes) in failures) {
+            val item =
+                createItem(state = DownloadState.COMPLETED).copy(
+                    galleryState = GalleryState.FAILED,
+                    galleryFailure = failure,
+                )
+            val status = rowStatus(item)
+            assertEquals(R.string.downloads_gallery_failed, status.stringRes)
+            assertEquals(expectedReasonRes, status.args[0])
+        }
+    }
+
+    @Test
+    fun DP34_rowMenu_perState() {
+        val completedNone = createItem(state = DownloadState.COMPLETED).copy(galleryState = GalleryState.NONE)
+        assertEquals(listOf(RowMenuItem.SAVE_TO_GALLERY, RowMenuItem.DELETE), rowMenu(completedNone))
+
+        val completedSaved = createItem(state = DownloadState.COMPLETED).copy(galleryState = GalleryState.SAVED)
+        assertEquals(listOf(RowMenuItem.REMOVE_FROM_GALLERY, RowMenuItem.DELETE), rowMenu(completedSaved))
+
+        val completedFailed = createItem(state = DownloadState.COMPLETED).copy(galleryState = GalleryState.FAILED)
+        assertEquals(listOf(RowMenuItem.RETRY_GALLERY, RowMenuItem.DELETE), rowMenu(completedFailed))
+
+        val downloading = createItem(state = DownloadState.DOWNLOADING)
+        assertEquals(listOf(RowMenuItem.CANCEL), rowMenu(downloading))
+
+        val failed = createItem(state = DownloadState.FAILED)
+        assertEquals(listOf(RowMenuItem.REMOVE), rowMenu(failed))
     }
 }

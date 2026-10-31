@@ -270,6 +270,7 @@ class FakeDownloadPrefsRepository : DownloadPrefsRepository {
     override val wifiOnly = MutableStateFlow(true)
     override val maxConcurrent = MutableStateFlow(2)
     override val introSeen = MutableStateFlow(false)
+    override val saveToGallery = MutableStateFlow(false)
 
     override suspend fun setWifiOnly(enabled: Boolean) {
         wifiOnly.value = enabled
@@ -281,6 +282,10 @@ class FakeDownloadPrefsRepository : DownloadPrefsRepository {
 
     override suspend fun markIntroSeen() {
         introSeen.value = true
+    }
+
+    override suspend fun setSaveToGallery(enabled: Boolean) {
+        saveToGallery.value = enabled
     }
 }
 

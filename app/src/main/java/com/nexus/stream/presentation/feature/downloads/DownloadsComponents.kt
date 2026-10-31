@@ -90,6 +90,10 @@ fun formatStatusText(status: StatusText): String {
                         ).toString()
                 }
 
+                is StatusText -> {
+                    formatStatusText(arg)
+                }
+
                 else -> {
                     arg
                 }

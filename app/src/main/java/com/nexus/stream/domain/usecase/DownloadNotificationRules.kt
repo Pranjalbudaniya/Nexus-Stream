@@ -5,6 +5,7 @@ import com.nexus.stream.domain.model.DownloadFailure
 import com.nexus.stream.domain.model.DownloadItem
 import com.nexus.stream.domain.model.DownloadLive
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.GalleryState
 import java.util.Locale
 
 private const val PERCENT_MAX = 100
@@ -197,7 +198,9 @@ fun aggregateNotification(
             DownloadState.WAITING_FOR_NETWORK,
         )
     val activeItems = items.filter { it.state in activeStates }
-    if (activeItems.isEmpty()) return null
+    val savingItems = items.filter { it.state == DownloadState.COMPLETED && it.galleryState == GalleryState.SAVING }
+
+    if (activeItems.isEmpty() && savingItems.isEmpty()) return null
 
     val downloading = activeItems.filter { it.state == DownloadState.DOWNLOADING }
     val waitingWifi = activeItems.filter { it.state == DownloadState.WAITING_FOR_WIFI }
@@ -205,8 +208,23 @@ fun aggregateNotification(
 
     return if (downloading.isNotEmpty()) {
         buildDownloadingNotification(downloading, activeItems.size, live)
-    } else {
+    } else if (activeItems.isNotEmpty()) {
         buildWaitingNotification(activeItems, waitingWifi, waitingNetwork)
+    } else {
+        AggregateNotificationModel(
+            titleRes = R.string.download_notif_saving_gallery,
+            titleArgs = emptyList(),
+            textRes = null,
+            textArgs = emptyList(),
+            percent = null,
+            speedBps = 0L,
+            speedText = null,
+            indeterminate = true,
+            pauseAllAction = false,
+            resumeAllAction = false,
+            publicTitleRes = R.string.download_notif_public,
+            publicText = null,
+        )
     }
 }
 

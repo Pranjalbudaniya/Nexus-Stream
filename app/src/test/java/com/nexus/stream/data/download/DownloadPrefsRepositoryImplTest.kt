@@ -137,4 +137,42 @@ class DownloadPrefsRepositoryImplTest {
             }
             assertFalse(repo.introSeen.first())
         }
+
+    @Test
+    fun PR7_saveToGallery_defaultsToFalse_andPersists() =
+        runTest {
+            val file = File(tmpFolder.root, "download_prefs_gallery.preferences_pb")
+            val scope1 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val ds1: DataStore<Preferences> =
+                PreferenceDataStoreFactory.create(
+                    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                    scope = scope1,
+                    produceFile = { file },
+                )
+            val repo1 = DownloadPrefsRepositoryImpl(ds1)
+            assertFalse(repo1.saveToGallery.first())
+            repo1.setSaveToGallery(true)
+            scope1.cancel()
+
+            val scope2 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val ds2: DataStore<Preferences> =
+                PreferenceDataStoreFactory.create(
+                    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                    scope = scope2,
+                    produceFile = { file },
+                )
+            val repo2 = DownloadPrefsRepositoryImpl(ds2)
+            assertTrue(repo2.saveToGallery.first())
+            scope2.cancel()
+        }
+
+    @Test
+    fun PR8_saveToGallery_corruptedValue_readsFalse() =
+        runTest {
+            val (repo, dataStore) = createRepository(this)
+            dataStore.edit { prefs ->
+                prefs[stringPreferencesKey("save_to_gallery")] = "corrupted"
+            }
+            assertFalse(repo.saveToGallery.first())
+        }
 }

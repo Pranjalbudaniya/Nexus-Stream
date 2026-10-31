@@ -23,6 +23,7 @@ import com.nexus.stream.domain.usecase.StatusText
 import com.nexus.stream.domain.usecase.StorageSummary
 import com.nexus.stream.domain.usecase.activeCount
 import com.nexus.stream.domain.usecase.failureReasonRes
+import com.nexus.stream.domain.usecase.galleryFailureReasonRes
 import com.nexus.stream.domain.usecase.groupDownloads
 import com.nexus.stream.domain.usecase.rowStatus
 import com.nexus.stream.domain.usecase.storageSummary
@@ -272,6 +273,15 @@ class DownloadsViewModel(
 
                     is DownloadEffect.Failed -> {
                         _effects.emit(DownloadsEffect.ShowMessage(failureReasonRes(effect.failure)))
+                    }
+
+                    is DownloadEffect.GalleryFailed -> {
+                        _effects.emit(
+                            DownloadsEffect.ShowMessage(
+                                messageRes = R.string.downloads_gallery_failed,
+                                formatArgs = listOf(galleryFailureReasonRes(effect.failure)),
+                            ),
+                        )
                     }
 
                     DownloadEffect.PausedBySystem -> {

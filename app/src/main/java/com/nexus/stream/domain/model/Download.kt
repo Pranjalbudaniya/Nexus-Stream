@@ -1,5 +1,19 @@
 package com.nexus.stream.domain.model
 
+enum class GalleryState {
+    NONE,
+    SAVING,
+    SAVED,
+    FAILED,
+}
+
+enum class GalleryFailure {
+    NO_SPACE,
+    WRITE_FAILED,
+    SOURCE_MISSING,
+    UNAVAILABLE,
+}
+
 enum class DownloadKind {
     HTTP,
     TORRENT,
@@ -104,6 +118,9 @@ data class DownloadItem(
     val createdAt: Long,
     val updatedAt: Long,
     val completedAt: Long? = null,
+    val galleryState: GalleryState = GalleryState.NONE,
+    val galleryUri: String? = null,
+    val galleryFailure: GalleryFailure? = null,
 ) {
     override fun toString(): String =
         "DownloadItem(id=$id, kind=$kind, state=$state, downloadedBytes=$downloadedBytes, totalBytes=$totalBytes)"
@@ -123,6 +140,7 @@ data class DownloadLive(
     val etaSeconds: Long? = null,
     val peers: Int = 0,
     val phase: DownloadPhase = DownloadPhase.TRANSFERRING,
+    val copiedBytes: Long = 0L,
 )
 
 sealed interface EnqueueResult {
@@ -148,6 +166,11 @@ sealed interface DownloadEffect {
     data class Failed(
         val id: String,
         val failure: DownloadFailure,
+    ) : DownloadEffect
+
+    data class GalleryFailed(
+        val id: String,
+        val failure: GalleryFailure,
     ) : DownloadEffect
 
     data object PausedBySystem : DownloadEffect

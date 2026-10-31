@@ -31,6 +31,7 @@ class DownloadPrefsRepositoryImpl
         private val wifiOnlyKey = booleanPreferencesKey("wifi_only")
         private val maxConcurrentKey = intPreferencesKey("max_concurrent")
         private val introSeenKey = booleanPreferencesKey("download_intro_seen")
+        private val saveToGalleryKey = booleanPreferencesKey("save_to_gallery")
 
         private val safeData: Flow<Preferences> =
             dataStore.data.catch { exception ->
@@ -69,6 +70,15 @@ class DownloadPrefsRepositoryImpl
                 }
             }
 
+        override val saveToGallery: Flow<Boolean> =
+            safeData.map { prefs ->
+                try {
+                    prefs[saveToGalleryKey] ?: false
+                } catch (_: ClassCastException) {
+                    false
+                }
+            }
+
         override suspend fun setWifiOnly(enabled: Boolean) {
             dataStore.edit { prefs ->
                 prefs[wifiOnlyKey] = enabled
@@ -84,6 +94,12 @@ class DownloadPrefsRepositoryImpl
         override suspend fun markIntroSeen() {
             dataStore.edit { prefs ->
                 prefs[introSeenKey] = true
+            }
+        }
+
+        override suspend fun setSaveToGallery(enabled: Boolean) {
+            dataStore.edit { prefs ->
+                prefs[saveToGalleryKey] = enabled
             }
         }
     }

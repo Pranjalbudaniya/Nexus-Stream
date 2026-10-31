@@ -7,6 +7,7 @@ import com.nexus.stream.domain.model.DownloadKind
 import com.nexus.stream.domain.model.DownloadLive
 import com.nexus.stream.domain.model.DownloadSource
 import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.GalleryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -159,5 +160,23 @@ class DownloadNotificationRulesTest {
         val aggregate = aggregateNotification(listOf(createItem(id = "1", title = "Secret Title")))
         assertFalse(aggregate?.publicText?.contains("Secret Title") == true)
         assertFalse(aggregate?.publicText?.contains("example.com") == true)
+    }
+
+    @Test
+    fun NT11_savingOnly_showsSavingToGallery() {
+        val item = createItem(id = "1", state = DownloadState.COMPLETED).copy(galleryState = GalleryState.SAVING)
+        val notif = aggregateNotification(listOf(item))
+        assertNotNull(notif)
+        assertEquals(R.string.download_notif_saving_gallery, notif?.titleRes)
+        assertTrue(notif?.indeterminate == true)
+    }
+
+    @Test
+    fun NT12_savingAndDownloading_downloadingWins() {
+        val downloading = createItem(id = "1", state = DownloadState.DOWNLOADING)
+        val saving = createItem(id = "2", state = DownloadState.COMPLETED).copy(galleryState = GalleryState.SAVING)
+        val notif = aggregateNotification(listOf(downloading, saving))
+        assertNotNull(notif)
+        assertEquals(R.string.download_notif_title_one, notif?.titleRes)
     }
 }

@@ -10,10 +10,13 @@ interface DownloadPrefsRepository {
     val wifiOnly: Flow<Boolean>
     val maxConcurrent: Flow<Int>
     val introSeen: Flow<Boolean>
+    val saveToGallery: Flow<Boolean>
 
     suspend fun setWifiOnly(enabled: Boolean)
 
     suspend fun setMaxConcurrent(count: Int)
 
     suspend fun markIntroSeen()
+
+    suspend fun setSaveToGallery(enabled: Boolean)
 }
