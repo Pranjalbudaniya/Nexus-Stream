@@ -1,11 +1,16 @@
 package com.nexus.stream.presentation.feature.streams
 
 import com.nexus.stream.R
+import com.nexus.stream.data.download.FakeDownloadManager
 import com.nexus.stream.domain.model.Addon
 import com.nexus.stream.domain.model.AddonManifest
 import com.nexus.stream.domain.model.AddonSource
 import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.DebridMark
+import com.nexus.stream.domain.model.DownloadFailure
+import com.nexus.stream.domain.model.DownloadSource
+import com.nexus.stream.domain.model.DownloadState
+import com.nexus.stream.domain.model.EnqueueResult
 import com.nexus.stream.domain.model.ManifestHints
 import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.PlaybackCapabilities
@@ -66,6 +71,7 @@ class StreamsViewModelTest {
     private val playerPrefsRepository = mockk<PlayerPrefsRepository>()
     private val sourceMemoryRepository = mockk<SourceMemoryRepository>(relaxed = true)
     private val playbackSessionHolder = PlaybackSessionHolder()
+    private val fakeDownloadManager = FakeDownloadManager()
 
     private val quickPlayFlow = MutableStateFlow(false)
     private val sortFlow = MutableStateFlow(StreamSort.BEST)
@@ -203,6 +209,7 @@ class StreamsViewModelTest {
             playbackSessionHolder = playbackSessionHolder,
             sourceMemoryRepository = sourceMemoryRepository,
             defaultDispatcher = testDispatcher,
+            downloadManager = fakeDownloadManager,
         )
 
     @Test
@@ -1438,5 +1445,423 @@ class StreamsViewModelTest {
             assertEquals(1, effects.count { it is StreamsEffect.DismissSheet })
             assertEquals("hit", viewModel.uiState.value.lastUsedKey)
             job.cancel()
+        }
+
+    @Test
+    fun SD1_downloadMode_tapEnqueuesInsteadOfPlaying() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val stream = createParsedStream("url1", kind = StreamKind.Direct)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertEquals(1, fakeDownloadManager.enqueueCalls.size)
+            assertTrue(fakeDownloadManager.enqueueCalls[0].source is DownloadSource.Http)
+            assertEquals(request.title, fakeDownloadManager.enqueueCalls[0].display.title)
+            assertNull(playbackSessionHolder.current.value)
+            assertTrue(effects.any { it is StreamsEffect.DownloadResult && it.result is EnqueueResult.Added })
+            job.cancel()
+        }
+
+    @Test
+    fun SD2_downloadMode_withHeaders_enqueuesTheSanitisedHeaders() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val streamSource =
+                StreamSource.Url(
+                    "https://example.com/v.mp4",
+                    mapOf("Cookie" to "session=abc", "Host" to "forbidden.com"),
+                )
+            val stream =
+                createParsedStream("url1").copy(
+                    stream =
+                        Stream(
+                            source = streamSource,
+                            name = "S",
+                            description = null,
+                            subtitles = emptyList(),
+                            bingeGroup = null,
+                            notWebReady = false,
+                            videoSize = null,
+                            filename = null,
+                            videoHash = null,
+                        ),
+                )
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertEquals(1, fakeDownloadManager.enqueueCalls.size)
+            val http = fakeDownloadManager.enqueueCalls[0].source as DownloadSource.Http
+            assertEquals("session=abc", http.headers["Cookie"])
+            assertFalse(http.headers.containsKey("Host"))
+        }
+
+    @Test
+    fun SD3_downloadMode_hidesNonUrlRows_andCountsThem() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val u1 = createParsedStream("u1", kind = StreamKind.Direct)
+            val u2 = createParsedStream("u2", kind = StreamKind.Direct)
+            val e1 = createParsedStream("e1", kind = StreamKind.ExternalLink)
+            val e2 = createParsedStream("e2", kind = StreamKind.ExternalLink)
+            val e3 = createParsedStream("e3", kind = StreamKind.ExternalLink)
+
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(u1, u2, e1, e2, e3),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertEquals(2, state.filteredStreams.size)
+            assertEquals(3, state.hiddenCount)
+        }
+
+    @Test
+    fun SD4_downloadMode_duplicate_reportsAlreadyInDownloads() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+            val duplicateResult = EnqueueResult.Duplicate("d1", DownloadState.COMPLETED)
+            fakeDownloadManager.enqueueResult = duplicateResult
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val stream = createParsedStream("u1", kind = StreamKind.Direct)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertTrue(effects.contains(StreamsEffect.DownloadResult(duplicateResult)))
+            assertTrue(effects.contains(StreamsEffect.DismissSheet))
+            job.cancel()
+        }
+
+    @Test
+    fun SD5_downloadMode_rejected_keepsTheSheetOpen_andShowsAMessage() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+            fakeDownloadManager.enqueueResult = EnqueueResult.Rejected(DownloadFailure.UNKNOWN)
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val stream = createParsedStream("u1", kind = StreamKind.Direct)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val effects = mutableListOf<StreamsEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertTrue(effects.any { it is StreamsEffect.ShowMessage && it.messageRes == R.string.download_rejected })
+            assertFalse(effects.contains(StreamsEffect.DismissSheet))
+            job.cancel()
+        }
+
+    @Test
+    fun SD6_downloadMode_replaceId_callsReplaceSource() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true, replaceDownloadId = "dl-replace-1")
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val stream = createParsedStream("u1", kind = StreamKind.Direct)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertEquals(1, fakeDownloadManager.replaceSourceCalls.size)
+            assertEquals("dl-replace-1", fakeDownloadManager.replaceSourceCalls[0].first)
+            assertTrue(fakeDownloadManager.enqueueCalls.isEmpty())
+        }
+
+    @Test
+    fun SD7_downloadMode_noDownloadableRows_showsTheEmptyMessage() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val e1 = createParsedStream("e1", kind = StreamKind.ExternalLink)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(e1),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.isDownloadEmpty)
+            assertTrue(state.filteredStreams.isEmpty())
+        }
+
+    @Test
+    fun SD8_playMode_isUnchanged() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = false)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val stream = createParsedStream("u1", kind = StreamKind.Direct)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(stream),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            viewModel.onEvent(StreamsEvent.PlayStream(stream))
+            runCurrent()
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertTrue(fakeDownloadManager.enqueueCalls.isEmpty())
+        }
+
+    @Test
+    fun TS1_downloadMode_torrentRow_enqueuesATorrentSource() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true, season = 2, episode = 5)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val torrentStream =
+                createParsedStream("t1", kind = StreamKind.Torrent).let {
+                    it.copy(
+                        stream =
+                            it.stream.copy(
+                                source =
+                                    StreamSource.Torrent(
+                                        infoHash = "0123456789abcdef0123456789abcdef01234567",
+                                        fileIdx = null,
+                                        trackers = listOf("udp://tracker.opentrackr.org:1337"),
+                                    ),
+                            ),
+                    )
+                }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(torrentStream))
+            runCurrent()
+
+            val enqueued = fakeDownloadManager.enqueueCalls.single()
+            val source = enqueued.source as DownloadSource.Torrent
+            assertEquals("0123456789abcdef0123456789abcdef01234567", source.infoHash)
+            assertEquals(listOf("udp://tracker.opentrackr.org:1337"), source.trackers)
+            assertNull(source.fileIdx)
+            assertEquals(2, enqueued.display.season)
+            assertEquals(5, enqueued.display.episode)
+        }
+
+    @Test
+    fun TS2_downloadMode_torrentWithFileIdx_keepsIt() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val torrentStream =
+                createParsedStream("t1", kind = StreamKind.Torrent).let {
+                    it.copy(
+                        stream =
+                            it.stream.copy(
+                                source =
+                                    StreamSource.Torrent(
+                                        infoHash = "0123456789abcdef0123456789abcdef01234567",
+                                        fileIdx = 4,
+                                        trackers = listOf("udp://tracker.opentrackr.org:1337"),
+                                    ),
+                            ),
+                    )
+                }
+
+            viewModel.onEvent(StreamsEvent.PlayStream(torrentStream))
+            runCurrent()
+
+            val enqueued = fakeDownloadManager.enqueueCalls.single()
+            val source = enqueued.source as DownloadSource.Torrent
+            assertEquals(4, source.fileIdx)
+        }
+
+    @Test
+    fun TS3_downloadMode_externalAndYoutubeStayHidden() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val t = createParsedStream("t", kind = StreamKind.Torrent)
+            val u = createParsedStream("u", kind = StreamKind.Direct)
+            val e = createParsedStream("e", kind = StreamKind.ExternalLink)
+            val y =
+                createParsedStream("y").let {
+                    it.copy(stream = it.stream.copy(source = StreamSource.YouTube("yt123")))
+                }
+
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(t, u, e, y),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertEquals(2, state.filteredStreams.size)
+            assertEquals(2, state.hiddenCount)
+            assertTrue(state.filteredStreams.any { it.stream.source is StreamSource.Torrent })
+            assertTrue(state.filteredStreams.any { it.stream.source is StreamSource.Url })
+        }
+
+    @Test
+    fun TS4_downloadMode_onlyTorrentRows_isNoLongerEmpty() =
+        runTest {
+            val request = sampleRequest.copy(downloadMode = true)
+            val streamFlow = MutableSharedFlow<StreamsState>()
+            every { streamRepository.streams(any(), any(), any(), any()) } returns streamFlow
+
+            val viewModel = createViewModel()
+            viewModel.onEvent(StreamsEvent.SetRequest(request))
+            runCurrent()
+
+            val t1 = createParsedStream("t1", kind = StreamKind.Torrent)
+            streamFlow.emit(
+                StreamsState(
+                    items = listOf(t1),
+                    answered = 1,
+                    total = 1,
+                    failures = emptyList(),
+                    done = true,
+                ),
+            )
+            runCurrent()
+
+            val state = viewModel.uiState.value
+            assertEquals(1, state.filteredStreams.size)
+            assertFalse(state.isDownloadEmpty)
         }
 }

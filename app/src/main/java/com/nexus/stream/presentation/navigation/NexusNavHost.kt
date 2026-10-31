@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -45,6 +46,11 @@ fun NexusNavHost(
             tabReselects.events.filter { it == TopLevelDestination.LIBRARY }
         }
 
+    val downloadsReselects =
+        remember(tabReselects) {
+            tabReselects.events.filter { it == TopLevelDestination.DOWNLOADS }
+        }
+
     NavHost(
         navController = navController,
         startDestination = Home,
@@ -69,14 +75,22 @@ fun NexusNavHost(
             )
         }
         composable<Downloads> {
-            DownloadsScreen()
+            DownloadsScreen(
+                onItemClick = { type, id ->
+                    navController.navigate(Detail(type = type, id = id))
+                },
+                onNavigateToDiscover = { navController.navigateToTopLevel(TopLevelDestination.DISCOVER) },
+                onOpenSettings = { navController.navigate(Settings) },
+                reselectEvents = downloadsReselects,
+                playbackSessionHolder = playbackSessionHolder,
+            )
         }
         composable<Library> {
             LibraryScreen(
                 onItemClick = { type, id ->
                     navController.navigate(Detail(type = type, id = id))
                 },
-                onNavigateToDiscover = { navController.navigate(Discover) },
+                onNavigateToDiscover = { navController.navigateToTopLevel(TopLevelDestination.DISCOVER) },
                 reselectEvents = libraryReselects,
             )
         }
@@ -98,6 +112,9 @@ fun NexusNavHost(
             DetailScreen(
                 onNavigateUp = { navController.navigateUp() },
                 onOpenAddons = { navController.navigate(Addons()) },
+                onOpenDownloads = {
+                    navController.navigateToTopLevel(TopLevelDestination.DOWNLOADS)
+                },
             )
         }
         composable<Player> {

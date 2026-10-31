@@ -48,6 +48,7 @@ fun sectionTitleRes(section: SettingsSection): Int =
         SettingsSection.PLAYER -> R.string.settings_section_player
         SettingsSection.SUBTITLES -> R.string.settings_section_subtitles
         SettingsSection.TORRENT -> R.string.settings_section_torrent
+        SettingsSection.DOWNLOADS -> R.string.settings_section_downloads
         SettingsSection.ABOUT -> R.string.settings_section_about
     }
 

@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.DownloadItem
+import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.ListStatus
@@ -14,18 +16,24 @@ import com.nexus.stream.domain.model.PlayIntent
 import com.nexus.stream.domain.model.SeasonGroup
 import com.nexus.stream.domain.model.Video
 import com.nexus.stream.domain.model.toPreview
+import com.nexus.stream.domain.repository.DownloadManager
 import com.nexus.stream.domain.repository.LibraryRepository
 import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.MetaResult
 import com.nexus.stream.domain.repository.MetaSource
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.DetailDownloadState
+import com.nexus.stream.domain.usecase.PlayDownloaded
+import com.nexus.stream.domain.usecase.PlayResult
 import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.defaultSeason
+import com.nexus.stream.domain.usecase.detailButtonState
 import com.nexus.stream.domain.usecase.groupEpisodes
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.domain.usecase.resolvePlayIntent
 import com.nexus.stream.domain.usecase.usesMovieRule
 import com.nexus.stream.domain.usecase.watchActions
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import com.nexus.stream.presentation.navigation.Detail
 import com.nexus.stream.util.youtubeWatchUrlOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -75,16 +84,21 @@ sealed interface DetailUiState {
         val streamsSheetVideoId: String? = null,
         val streamsSheetTitle: String? = null,
         val streamsSheetAutoResume: Boolean = false,
+        val streamsSheetDownloadMode: Boolean = false,
         val showWatchOptionsSheet: Boolean = false,
         val watchActions: List<WatchAction> = emptyList(),
         val pendingConfirmationAction: WatchAction? = null,
         val allSheetKind: AllItemsKind? = null,
+        val downloadStates: Map<String, DetailDownloadState> = emptyMap(),
     ) : DetailUiState {
         val activeVideoId: String?
             get() = (primaryPlay as? PrimaryPlayState.Ready)?.targetVideoId
 
         val isPlayEnabled: Boolean
             get() = (primaryPlay as? PrimaryPlayState.Ready)?.isEnabled == true
+
+        val headerDownloadState: DetailDownloadState
+            get() = activeVideoId?.let { downloadStates[it] } ?: DetailDownloadState.None
     }
 
     data class Error(
@@ -156,15 +170,21 @@ sealed interface DetailEffect {
     data class ShowMessage(
         val message: String,
     ) : DetailEffect
+
+    data object OpenDownloads : DetailEffect
 }
 
 @HiltViewModel
+@Suppress("LongParameterList")
 class DetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val metaRepository: MetaRepository,
     private val libraryRepository: LibraryRepository,
     private val progressRepository: ProgressRepository,
     private val clock: () -> Long,
+    private val downloadManager: DownloadManager,
+    private val playbackSessionHolder: PlaybackSessionHolder,
+    private val playDownloaded: PlayDownloaded = PlayDownloaded(downloadManager),
 ) : ViewModel() {
     val type: String =
         savedStateHandle.get<String>("type")
@@ -183,6 +203,7 @@ class DetailViewModel(
     private var currentListStatus: ListStatus? = null
     private var progressEmitted: Boolean = false
     private var latestProgress: Map<String, EpisodeProgress>? = null
+    private var latestDownloadItems: List<DownloadItem> = emptyList()
 
     @Inject
     constructor(
@@ -190,12 +211,18 @@ class DetailViewModel(
         metaRepository: MetaRepository,
         libraryRepository: LibraryRepository,
         progressRepository: ProgressRepository,
+        downloadManager: DownloadManager,
+        playbackSessionHolder: PlaybackSessionHolder,
+        playDownloaded: PlayDownloaded,
     ) : this(
         savedStateHandle = savedStateHandle,
         metaRepository = metaRepository,
         libraryRepository = libraryRepository,
         progressRepository = progressRepository,
         clock = { System.currentTimeMillis() },
+        downloadManager = downloadManager,
+        playbackSessionHolder = playbackSessionHolder,
+        playDownloaded = playDownloaded,
     )
 
     init {
@@ -219,32 +246,29 @@ class DetailViewModel(
         when (event) {
             DetailEvent.PlayMain -> {
                 content.activeVideoId?.let { targetId ->
-                    openStreamsSheet(content, targetId, content.meta.name, isResumable(content))
+                    handlePlayTarget(content, targetId, content.meta.name, isResumable(content))
                 }
                 true
             }
 
             DetailEvent.ChooseSource -> {
-                if (isResumable(content)) {
-                    content.activeVideoId?.let { targetId ->
-                        openStreamsSheet(content, targetId, content.meta.name, autoResume = false)
+                val targetId = content.activeVideoId
+                if (isResumable(content) && targetId != null) {
+                    _uiState.update {
+                        content.copy(
+                            showStreamsSheet = true,
+                            streamsSheetVideoId = targetId,
+                            streamsSheetTitle = content.meta.name,
+                            streamsSheetAutoResume = false,
+                            streamsSheetDownloadMode = false,
+                        )
                     }
                 }
                 true
             }
 
             is DetailEvent.PlayEpisode -> {
-                val video = content.meta.videos.find { it.id == event.videoId }
-                if (video != null && !video.isReleased(clock())) {
-                    viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Not released yet")) }
-                } else if (video != null) {
-                    openStreamsSheet(
-                        content,
-                        event.videoId,
-                        "${content.meta.name} - ${video.title}",
-                        autoResume = false,
-                    )
-                }
+                handlePlayEpisode(content, event.videoId)
                 true
             }
 
@@ -256,7 +280,10 @@ class DetailViewModel(
             }
 
             is DetailEvent.Download -> {
-                viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Downloads aren't available yet.")) }
+                val targetId = event.videoId ?: content.activeVideoId
+                if (targetId != null) {
+                    handleDownloadTarget(content, targetId)
+                }
                 true
             }
 
@@ -265,19 +292,99 @@ class DetailViewModel(
             }
         }
 
-    private fun openStreamsSheet(
+    private fun handlePlayEpisode(
+        content: DetailUiState.Content,
+        videoId: String,
+    ) {
+        val video = content.meta.videos.find { it.id == videoId } ?: return
+        if (!video.isReleased(clock())) {
+            viewModelScope.launch { _effects.emit(DetailEffect.ShowMessage("Not released yet")) }
+        } else {
+            handlePlayTarget(
+                content = content,
+                targetId = videoId,
+                title = "${content.meta.name} - ${video.title}",
+                autoResume = false,
+            )
+        }
+    }
+
+    private fun handlePlayTarget(
         content: DetailUiState.Content,
         targetId: String,
         title: String,
         autoResume: Boolean,
     ) {
-        _uiState.update {
-            content.copy(
-                showStreamsSheet = true,
-                streamsSheetVideoId = targetId,
-                streamsSheetTitle = title,
-                streamsSheetAutoResume = autoResume,
-            )
+        viewModelScope.launch {
+            val items = if (latestDownloadItems.isNotEmpty()) latestDownloadItems else downloadManager.items.first()
+            val completedItem =
+                items.firstOrNull {
+                    it.metaId == content.meta.id &&
+                        it.videoId == targetId &&
+                        it.state == DownloadState.COMPLETED
+                }
+            if (completedItem != null) {
+                when (val playResult = playDownloaded(completedItem)) {
+                    is PlayResult.Ready -> {
+                        playbackSessionHolder.start(playResult.selection)
+                        return@launch
+                    }
+
+                    PlayResult.FileMissing -> {
+                        downloadManager.verifyCompleted(completedItem.id)
+                        _effects.emit(DetailEffect.ShowMessage("That download's file is missing."))
+                    }
+
+                    PlayResult.NotReady -> {
+                    }
+                }
+            }
+            _uiState.update {
+                content.copy(
+                    showStreamsSheet = true,
+                    streamsSheetVideoId = targetId,
+                    streamsSheetTitle = title,
+                    streamsSheetAutoResume = autoResume,
+                    streamsSheetDownloadMode = false,
+                )
+            }
+        }
+    }
+
+    private fun handleDownloadTarget(
+        content: DetailUiState.Content,
+        targetId: String,
+    ) {
+        val state =
+            content.downloadStates[targetId]
+                ?: detailButtonState(latestDownloadItems, content.meta.id, targetId)
+        when (state) {
+            DetailDownloadState.None,
+            DetailDownloadState.Failed,
+            -> {
+                val title =
+                    if (content.meta.type == "series") {
+                        val v = content.meta.videos.find { it.id == targetId }
+                        if (v != null) "${content.meta.name} - ${v.title}" else content.meta.name
+                    } else {
+                        content.meta.name
+                    }
+                _uiState.update {
+                    content.copy(
+                        showStreamsSheet = true,
+                        streamsSheetVideoId = targetId,
+                        streamsSheetTitle = title,
+                        streamsSheetAutoResume = false,
+                        streamsSheetDownloadMode = true,
+                    )
+                }
+            }
+
+            else -> {
+                viewModelScope.launch {
+                    _effects.emit(DetailEffect.OpenDownloads)
+                }
+            }
         }
     }
 
@@ -291,6 +398,7 @@ class DetailViewModel(
                             streamsSheetVideoId = null,
                             streamsSheetTitle = null,
                             streamsSheetAutoResume = false,
+                            streamsSheetDownloadMode = false,
                         )
                     } else {
                         it
@@ -384,6 +492,20 @@ class DetailViewModel(
         event: DetailEvent,
         content: DetailUiState.Content,
     ) {
+        fun runAction(action: WatchAction) {
+            viewModelScope.launch {
+                val msg =
+                    executeWatchAction(
+                        content = content,
+                        action = action,
+                        libraryRepository = libraryRepository,
+                        progressRepository = progressRepository,
+                        clock = clock,
+                    )
+                _effects.emit(DetailEffect.ShowMessage(msg))
+            }
+        }
+
         when (event) {
             DetailEvent.OpenWatchOptions -> {
                 val actions =
@@ -406,7 +528,14 @@ class DetailViewModel(
             }
 
             is DetailEvent.ApplyWatchAction -> {
-                handleApplyWatchAction(content, event.action)
+                _uiState.update { if (it is DetailUiState.Content) it.copy(showWatchOptionsSheet = false) else it }
+                if (requiresUnwatchConfirmation(event.action)) {
+                    _uiState.update {
+                        if (it is DetailUiState.Content) it.copy(pendingConfirmationAction = event.action) else it
+                    }
+                } else {
+                    runAction(event.action)
+                }
             }
 
             DetailEvent.ConfirmPending -> {
@@ -418,7 +547,7 @@ class DetailViewModel(
                             it
                         }
                     }
-                    executeAction(content, action)
+                    runAction(action)
                 }
             }
 
@@ -427,85 +556,6 @@ class DetailViewModel(
             }
 
             else -> {}
-        }
-    }
-
-    private fun handleApplyWatchAction(
-        content: DetailUiState.Content,
-        action: WatchAction,
-    ) {
-        _uiState.update { if (it is DetailUiState.Content) it.copy(showWatchOptionsSheet = false) else it }
-        val needsConfirmation =
-            when (action) {
-                is WatchAction.SetSeasonWatched -> !action.watched && action.count > 1
-                is WatchAction.SetAllWatched -> !action.watched && action.count > 1
-                else -> false
-            }
-        if (needsConfirmation) {
-            _uiState.update { if (it is DetailUiState.Content) it.copy(pendingConfirmationAction = action) else it }
-        } else {
-            executeAction(content, action)
-        }
-    }
-
-    private fun executeAction(
-        content: DetailUiState.Content,
-        action: WatchAction,
-    ) {
-        viewModelScope.launch {
-            val msg =
-                when (action) {
-                    is WatchAction.ToggleWatchlist -> {
-                        val status = if (action.add) ListStatus.PLAN_TO_WATCH else null
-                        libraryRepository.setStatus(content.meta.toPreview(), status)
-                        if (action.add) "Added to watchlist" else "Removed from watchlist"
-                    }
-
-                    is WatchAction.SetMovieWatched -> {
-                        progressRepository.setWatched(
-                            meta = content.meta.toPreview(),
-                            episode = EpisodeRef(videoId = content.meta.id, type = "movie"),
-                            watched = action.watched,
-                        )
-                        if (action.watched) "Marked as watched" else "Marked as unwatched"
-                    }
-
-                    is WatchAction.SetSeasonWatched -> {
-                        val targets =
-                            content.meta.videos
-                                .filter { it.season == action.season && it.isReleased(clock()) }
-                                .map {
-                                    EpisodeRef(
-                                        videoId = it.id,
-                                        type = content.meta.type,
-                                        season = it.season,
-                                        episode = it.episode,
-                                    )
-                                }
-                        progressRepository.bulkMark(content, targets, action.watched, action.count)
-                    }
-
-                    is WatchAction.SetAllWatched -> {
-                        val targets =
-                            content.meta.videos
-                                .filter { it.isReleased(clock()) }
-                                .map {
-                                    EpisodeRef(
-                                        videoId = it.id,
-                                        type = content.meta.type,
-                                        season = it.season,
-                                        episode = it.episode,
-                                    )
-                                }
-                        progressRepository.bulkMark(content, targets, action.watched, action.count)
-                    }
-
-                    is WatchAction.RemoveFromContinue -> {
-                        progressRepository.clearInProgress(content.meta.id)
-                        "Removed from Continue watching"
-                    }
-                }
-            _effects.emit(DetailEffect.ShowMessage(msg))
         }
     }
 
@@ -550,6 +600,8 @@ class DetailViewModel(
             } else {
                 PrimaryPlayState.NotReady
             }
+        val activeTargetId = (primaryPlay as? PrimaryPlayState.Ready)?.targetVideoId
+        val downloadStates = computeDownloadStates(meta.id, activeTargetId, meta.videos, latestDownloadItems)
 
         _uiState.value =
             DetailUiState.Content(
@@ -564,6 +616,7 @@ class DetailViewModel(
                 trailerUrl = trailerUrl,
                 primaryPlay = primaryPlay,
                 isRefreshing = false,
+                downloadStates = downloadStates,
             )
     }
 
@@ -572,16 +625,18 @@ class DetailViewModel(
             combine(
                 libraryRepository.observeListStatuses(),
                 progressRepository.observeEpisodeProgress(id),
-            ) { statuses, progressMap ->
+                downloadManager.items,
+            ) { statuses, progressMap, items ->
                 val listStatus = statuses[id]
-                val inWatchlist = listStatus != null
-                Triple(inWatchlist, listStatus, progressMap)
-            }.collect { (inWatchlist, listStatus, progressMap) ->
+                Triple(listStatus, progressMap, items)
+            }.collect { (listStatus, progressMap, items) ->
                 progressEmitted = true
                 latestProgress = progressMap
                 currentListStatus = listStatus
+                latestDownloadItems = items
                 _uiState.update { current ->
                     if (current !is DetailUiState.Content) return@update current
+                    val inWatchlist = listStatus != null
                     val selectedSeason =
                         userSelectedSeason
                             ?: calculateDefaultSeason(current.seasons, progressMap)
@@ -601,6 +656,14 @@ class DetailViewModel(
                             current.watchActions
                         }
 
+                    val downloadStates =
+                        computeDownloadStates(
+                            metaId = current.meta.id,
+                            activeVideoId = primaryPlay.targetVideoId,
+                            videos = current.meta.videos,
+                            items = items,
+                        )
+
                     current.copy(
                         inWatchlist = inWatchlist,
                         listStatus = listStatus,
@@ -608,11 +671,28 @@ class DetailViewModel(
                         selectedSeason = selectedSeason,
                         primaryPlay = primaryPlay,
                         watchActions = actions,
+                        downloadStates = downloadStates,
                     )
                 }
             }
         }
     }
+}
+
+private fun computeDownloadStates(
+    metaId: String,
+    activeVideoId: String?,
+    videos: List<Video>,
+    items: List<DownloadItem>,
+): Map<String, DetailDownloadState> {
+    val map = mutableMapOf<String, DetailDownloadState>()
+    activeVideoId?.let { targetId ->
+        map[targetId] = detailButtonState(items, metaId, targetId)
+    }
+    for (video in videos) {
+        map[video.id] = detailButtonState(items, metaId, video.id)
+    }
+    return map
 }
 
 private suspend fun ProgressRepository.bulkMark(
@@ -702,3 +782,69 @@ private fun buildPrimaryPlayState(
 
 private fun isResumable(content: DetailUiState.Content): Boolean =
     content.primaryPlay is PrimaryPlayState.Ready && content.primaryPlay.intent is PlayIntent.Resume
+
+private fun requiresUnwatchConfirmation(action: WatchAction): Boolean =
+    when (action) {
+        is WatchAction.SetSeasonWatched -> !action.watched && action.count > 1
+        is WatchAction.SetAllWatched -> !action.watched && action.count > 1
+        else -> false
+    }
+
+private suspend fun executeWatchAction(
+    content: DetailUiState.Content,
+    action: WatchAction,
+    libraryRepository: LibraryRepository,
+    progressRepository: ProgressRepository,
+    clock: () -> Long,
+): String =
+    when (action) {
+        is WatchAction.ToggleWatchlist -> {
+            val status = if (action.add) ListStatus.PLAN_TO_WATCH else null
+            libraryRepository.setStatus(content.meta.toPreview(), status)
+            if (action.add) "Added to watchlist" else "Removed from watchlist"
+        }
+
+        is WatchAction.SetMovieWatched -> {
+            progressRepository.setWatched(
+                meta = content.meta.toPreview(),
+                episode = EpisodeRef(videoId = content.meta.id, type = "movie"),
+                watched = action.watched,
+            )
+            if (action.watched) "Marked as watched" else "Marked as unwatched"
+        }
+
+        is WatchAction.SetSeasonWatched -> {
+            val targets =
+                content.meta.videos
+                    .filter { it.season == action.season && it.isReleased(clock()) }
+                    .map {
+                        EpisodeRef(
+                            videoId = it.id,
+                            type = content.meta.type,
+                            season = it.season,
+                            episode = it.episode,
+                        )
+                    }
+            progressRepository.bulkMark(content, targets, action.watched, action.count)
+        }
+
+        is WatchAction.SetAllWatched -> {
+            val targets =
+                content.meta.videos
+                    .filter { it.isReleased(clock()) }
+                    .map {
+                        EpisodeRef(
+                            videoId = it.id,
+                            type = content.meta.type,
+                            season = it.season,
+                            episode = it.episode,
+                        )
+                    }
+            progressRepository.bulkMark(content, targets, action.watched, action.count)
+        }
+
+        is WatchAction.RemoveFromContinue -> {
+            progressRepository.clearInProgress(content.meta.id)
+            "Removed from Continue watching"
+        }
+    }

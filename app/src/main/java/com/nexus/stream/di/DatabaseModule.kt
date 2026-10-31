@@ -3,10 +3,13 @@ package com.nexus.stream.di
 import android.content.Context
 import androidx.room.Room
 import com.nexus.stream.data.local.db.MIGRATION_1_2
+import com.nexus.stream.data.local.db.MIGRATION_2_3
+import com.nexus.stream.data.local.db.MIGRATION_3_4
 import com.nexus.stream.data.local.db.NexusDatabase
 import com.nexus.stream.data.local.db.RoomTransactionRunner
 import com.nexus.stream.data.local.db.TransactionRunner
 import com.nexus.stream.data.local.db.dao.AddonDao
+import com.nexus.stream.data.local.db.dao.DownloadDao
 import com.nexus.stream.data.local.db.dao.LibraryDao
 import com.nexus.stream.data.local.db.dao.MetaCacheDao
 import com.nexus.stream.data.local.db.dao.ProgressDao
@@ -33,7 +36,7 @@ object DatabaseModule {
                 context,
                 NexusDatabase::class.java,
                 DATABASE_NAME,
-            ).addMigrations(MIGRATION_1_2)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides
@@ -50,6 +53,9 @@ object DatabaseModule {
 
     @Provides
     fun provideSearchHistoryDao(database: NexusDatabase): SearchHistoryDao = database.searchHistoryDao()
+
+    @Provides
+    fun provideDownloadDao(database: NexusDatabase): DownloadDao = database.downloadDao()
 
     @Provides
     @Singleton

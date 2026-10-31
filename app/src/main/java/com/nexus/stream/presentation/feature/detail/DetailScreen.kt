@@ -57,6 +57,7 @@ import com.nexus.stream.domain.model.AppError
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.PosterShape
 import com.nexus.stream.domain.repository.MetaSource
+import com.nexus.stream.domain.usecase.DetailDownloadState
 import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.presentation.common.ListStatusDialog
@@ -77,6 +78,7 @@ fun DetailScreen(
     onNavigateUp: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenAddons: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,6 +100,10 @@ fun DetailScreen(
 
                 is DetailEffect.ShowMessage -> {
                     snackbarHostState.showSnackbar(effect.message)
+                }
+
+                DetailEffect.OpenDownloads -> {
+                    onOpenDownloads()
                 }
             }
         }
@@ -163,6 +169,8 @@ fun DetailScreenContent(
                             ),
                     ) {
                         item(key = "header") {
+                            val headerDownloadState =
+                                state.activeVideoId?.let { state.downloadStates[it] } ?: DetailDownloadState.None
                             DetailHeader(
                                 meta = state.meta,
                                 inWatchlist = state.inWatchlist,
@@ -170,6 +178,7 @@ fun DetailScreenContent(
                                 isSynopsisExpanded = state.isSynopsisExpanded,
                                 trailerUrl = state.trailerUrl,
                                 primaryPlay = state.primaryPlay,
+                                downloadState = headerDownloadState,
                                 onPlayMain = { onEvent(DetailEvent.PlayMain) },
                                 onChooseSource = { onEvent(DetailEvent.ChooseSource) },
                                 onOpenWatchOptions = { onEvent(DetailEvent.OpenWatchOptions) },
@@ -430,6 +439,7 @@ internal fun SeriesEpisodesSection(
         onPlayEpisode = onPlayEpisode,
         onToggleWatched = onToggleWatched,
         onDownload = onDownload,
+        downloadStates = content.downloadStates,
         modifier = modifier,
     )
 }
@@ -626,5 +636,5 @@ fun streamsSheetRequest(
         videoId = videoId,
         title = state.streamsSheetTitle ?: meta.name,
         autoResume = state.streamsSheetAutoResume,
-    )
+    ).copy(downloadMode = state.streamsSheetDownloadMode)
 }

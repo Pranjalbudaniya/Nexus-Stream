@@ -1,7 +1,10 @@
 package com.nexus.stream.presentation.feature.detail
 
 import androidx.lifecycle.SavedStateHandle
+import com.nexus.stream.data.download.FakeDownloadManager
+import com.nexus.stream.data.download.createTestDownloadItem
 import com.nexus.stream.domain.model.AppError
+import com.nexus.stream.domain.model.DownloadState
 import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.EpisodeRef
 import com.nexus.stream.domain.model.ListStatus
@@ -16,9 +19,11 @@ import com.nexus.stream.domain.repository.MetaRepository
 import com.nexus.stream.domain.repository.MetaResult
 import com.nexus.stream.domain.repository.MetaSource
 import com.nexus.stream.domain.repository.ProgressRepository
+import com.nexus.stream.domain.usecase.DetailDownloadState
 import com.nexus.stream.domain.usecase.TimeLeft
 import com.nexus.stream.domain.usecase.WatchAction
 import com.nexus.stream.domain.usecase.timeLeftParts
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -42,6 +47,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("LargeClass")
@@ -50,6 +56,8 @@ class DetailViewModelTest {
     private val metaRepository: MetaRepository = mockk()
     private val libraryRepository: LibraryRepository = mockk(relaxed = true)
     private val progressRepository: ProgressRepository = mockk(relaxed = true)
+    private val fakeDownloadManager = FakeDownloadManager()
+    private val playbackSessionHolder = PlaybackSessionHolder()
     private val fixedTime = 1_000_000L
 
     private fun testMeta(
@@ -93,6 +101,7 @@ class DetailViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        playbackSessionHolder.clear()
     }
 
     private fun createViewModel(
@@ -107,6 +116,8 @@ class DetailViewModelTest {
             libraryRepository = libraryRepository,
             progressRepository = progressRepository,
             clock = clock,
+            downloadManager = fakeDownloadManager,
+            playbackSessionHolder = playbackSessionHolder,
         )
     }
 
@@ -384,30 +395,6 @@ class DetailViewModelTest {
             assertEquals(1, effects.size)
             assertEquals("Marked as watched", (effects.first() as DetailEffect.ShowMessage).message)
 
-            job.cancel()
-        }
-
-    @Test
-    fun `download action emits not available message and nothing else`() =
-        runTest(testDispatcher) {
-            val meta = testMeta("m1", type = "movie")
-            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
-                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
-
-            val viewModel = createViewModel("movie", "m1")
-            val effects = mutableListOf<DetailEffect>()
-            val job = launch { viewModel.effects.toList(effects) }
-
-            viewModel.onEvent(DetailEvent.Download("v1"))
-
-            assertEquals(1, effects.size)
-            assertEquals(
-                "Downloads aren't available yet.",
-                (effects.first() as DetailEffect.ShowMessage).message,
-            )
-
-            val content = viewModel.uiState.value as DetailUiState.Content
-            assertFalse(content.showStreamsSheet)
             job.cancel()
         }
 
@@ -1732,5 +1719,180 @@ class DetailViewModelTest {
             assertNotNull(request)
             assertEquals("kitsu:1:1", request!!.videoId)
             assertTrue(request.autoResume)
+        }
+
+    @Test
+    fun DX1_downloadEvent_opensTheStreamsSheetInDownloadMode() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("movie", "m1")
+            viewModel.onEvent(DetailEvent.Download("v1"))
+
+            val state = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(state.showStreamsSheet)
+            val request = streamsSheetRequest(state.meta, state)
+            assertNotNull(request)
+            assertTrue(request!!.downloadMode)
+            assertEquals("v1", request.videoId)
+        }
+
+    @Test
+    fun DX2_downloadEvent_onAnActiveOrFinishedItem_opensDownloads() =
+        runTest(testDispatcher) {
+            val v1 = Video("v1", "V1", "2024-01-01", 1, 1, null, null)
+            val meta = testMeta("m1", videos = listOf(v1))
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val downloadingItem =
+                createTestDownloadItem("d1", state = DownloadState.DOWNLOADING).copy(metaId = "m1", videoId = "v1")
+            fakeDownloadManager.itemsFlow.value = listOf(downloadingItem)
+
+            val viewModel = createViewModel("movie", "m1")
+            val effects = mutableListOf<DetailEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(DetailEvent.Download("v1"))
+            assertTrue(effects.contains(DetailEffect.OpenDownloads))
+            assertFalse((viewModel.uiState.value as DetailUiState.Content).showStreamsSheet)
+
+            effects.clear()
+            val completedItem = downloadingItem.copy(state = DownloadState.COMPLETED)
+            fakeDownloadManager.itemsFlow.value = listOf(completedItem)
+
+            viewModel.onEvent(DetailEvent.Download("v1"))
+            assertTrue(effects.contains(DetailEffect.OpenDownloads))
+            assertFalse((viewModel.uiState.value as DetailUiState.Content).showStreamsSheet)
+            job.cancel()
+        }
+
+    @Test
+    fun DX3_buttonStates_followTheManager() =
+        runTest(testDispatcher) {
+            val v1 = Video("v1", "V1", "2024-01-01", 1, 1, null, null)
+            val v2 = Video("v2", "V2", "2024-01-01", 1, 2, null, null)
+            val meta = testMeta("m1", videos = listOf(v1, v2))
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+
+            val viewModel = createViewModel("movie", "m1")
+            val initial = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(DetailDownloadState.None, initial.downloadStates["v1"])
+
+            val qItem = createTestDownloadItem("d1", state = DownloadState.QUEUED).copy(metaId = "m1", videoId = "v1")
+            fakeDownloadManager.itemsFlow.value = listOf(qItem)
+            val queuedState = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(DetailDownloadState.Queued, queuedState.downloadStates["v1"])
+            assertEquals(DetailDownloadState.None, queuedState.downloadStates["v2"])
+
+            val dlItem = qItem.copy(state = DownloadState.DOWNLOADING, downloadedBytes = 420L, totalBytes = 1000L)
+            fakeDownloadManager.itemsFlow.value = listOf(dlItem)
+            val downloadingState = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(DetailDownloadState.Downloading(42), downloadingState.downloadStates["v1"])
+
+            val compItem = dlItem.copy(state = DownloadState.COMPLETED)
+            fakeDownloadManager.itemsFlow.value = listOf(compItem)
+            val compState = viewModel.uiState.value as DetailUiState.Content
+            assertEquals(DetailDownloadState.Completed, compState.downloadStates["v1"])
+        }
+
+    @Test
+    fun DX4_play_prefersACompletedDownload() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            val tempFile = File.createTempFile("pref", ".mp4")
+            tempFile.deleteOnExit()
+            fakeDownloadManager.fileOfResult = { tempFile }
+
+            val completed =
+                createTestDownloadItem("d1", state = DownloadState.COMPLETED).copy(
+                    metaId = "m1",
+                    videoId = "m1",
+                    filePath = tempFile.absolutePath,
+                )
+            fakeDownloadManager.itemsFlow.value = listOf(completed)
+
+            val viewModel = createViewModel("movie", "m1")
+            viewModel.onEvent(DetailEvent.PlayMain)
+
+            assertNotNull(playbackSessionHolder.current.value)
+            assertFalse((viewModel.uiState.value as DetailUiState.Content).showStreamsSheet)
+
+            playbackSessionHolder.clear()
+            fakeDownloadManager.itemsFlow.value = emptyList()
+
+            viewModel.onEvent(DetailEvent.PlayMain)
+            assertNull(playbackSessionHolder.current.value)
+            assertTrue((viewModel.uiState.value as DetailUiState.Content).showStreamsSheet)
+            tempFile.delete()
+        }
+
+    @Test
+    fun DX5_play_missingFile_fallsBackToStreams_andMarksMissing() =
+        runTest(testDispatcher) {
+            val meta = testMeta("m1", type = "movie")
+            coEvery { metaRepository.getMeta("movie", "m1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            fakeDownloadManager.fileOfResult = { null }
+            fakeDownloadManager.verifyCompletedResult = { false }
+
+            val completed =
+                createTestDownloadItem("d1", state = DownloadState.COMPLETED).copy(
+                    metaId = "m1",
+                    videoId = "m1",
+                    filePath = "/nonexistent/file.mp4",
+                )
+            fakeDownloadManager.itemsFlow.value = listOf(completed)
+
+            val viewModel = createViewModel("movie", "m1")
+            val effects = mutableListOf<DetailEffect>()
+            val job = launch { viewModel.effects.toList(effects) }
+
+            viewModel.onEvent(DetailEvent.PlayMain)
+
+            assertTrue(effects.any { it is DetailEffect.ShowMessage && it.message.contains("missing") })
+            assertTrue((viewModel.uiState.value as DetailUiState.Content).showStreamsSheet)
+            assertNull(playbackSessionHolder.current.value)
+            job.cancel()
+        }
+
+    @Test
+    fun DX6_seriesHeaderDownload_usesThePlayTarget() =
+        runTest(testDispatcher) {
+            val ep1 = Video("s1:1:1", "Ep 1", "2024-01-01", 1, 1, null, null)
+            val ep2 = Video("s1:1:2", "Ep 2", "2024-01-01", 1, 2, null, null)
+            val meta = testMeta("s1", type = "series", videos = listOf(ep1, ep2))
+            coEvery { metaRepository.getMeta("series", "s1", false) } returns
+                Outcome.Success(MetaResult(meta, MetaSource.FRESH))
+            coEvery { progressRepository.observeEpisodeProgress("s1") } returns
+                flowOf(
+                    mapOf(
+                        "s1:1:1" to
+                            EpisodeProgress(
+                                videoId = "s1:1:1",
+                                positionMs = 15_000L,
+                                durationMs = 60_000L,
+                                watched = false,
+                                updatedAt = 1000L,
+                            ),
+                    ),
+                )
+
+            val viewModel = createViewModel("series", "s1")
+            val content = viewModel.uiState.value as DetailUiState.Content
+            assertEquals("s1:1:1", content.activeVideoId)
+
+            viewModel.onEvent(DetailEvent.Download())
+            val stateAfter = viewModel.uiState.value as DetailUiState.Content
+            assertTrue(stateAfter.showStreamsSheet)
+            val request = streamsSheetRequest(stateAfter.meta, stateAfter)
+            assertNotNull(request)
+            assertEquals("s1:1:1", request!!.videoId)
+            assertTrue(request.downloadMode)
         }
 }

@@ -16,6 +16,7 @@ enum class SettingsSection {
     PLAYER,
     SUBTITLES,
     TORRENT,
+    DOWNLOADS,
     ABOUT,
 }
 
@@ -116,6 +117,14 @@ fun torrentSummary(
 ): String {
     val netStr = if (wifiOnly) "Wi-Fi only" else "Any network"
     return "$netStr · $cacheLimitGb GB cache"
+}
+
+fun downloadsSummary(
+    wifiOnly: Boolean,
+    maxConcurrent: Int,
+): String {
+    val netStr = if (wifiOnly) "Wi-Fi only" else "Any network"
+    return "$netStr · $maxConcurrent at a time"
 }
 
 fun aboutSummary(

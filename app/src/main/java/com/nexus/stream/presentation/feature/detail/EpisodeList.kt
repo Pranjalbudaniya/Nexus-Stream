@@ -19,9 +19,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -56,6 +59,7 @@ import com.nexus.stream.domain.model.EpisodeProgress
 import com.nexus.stream.domain.model.MetaDetail
 import com.nexus.stream.domain.model.SeasonGroup
 import com.nexus.stream.domain.model.Video
+import com.nexus.stream.domain.usecase.DetailDownloadState
 import com.nexus.stream.domain.usecase.isReleased
 import com.nexus.stream.presentation.common.NexusIconButton
 import com.nexus.stream.presentation.theme.NexusTheme
@@ -80,6 +84,7 @@ fun EpisodeList(
     onDownload: (String) -> Unit,
     modifier: Modifier = Modifier,
     now: Long = System.currentTimeMillis(),
+    downloadStates: Map<String, DetailDownloadState> = emptyMap(),
 ) {
     if (meta.videos.isEmpty() || seasons.isEmpty()) {
         Box(
@@ -125,6 +130,7 @@ fun EpisodeList(
                     video = video,
                     progress = progress,
                     isReleased = video.isReleased(now),
+                    downloadState = downloadStates[video.id] ?: DetailDownloadState.None,
                     onPlay = { onPlayEpisode(video.id) },
                     onToggleWatched = { onToggleWatched(video.id) },
                     onDownload = { onDownload(video.id) },
@@ -172,6 +178,7 @@ private fun EpisodeItem(
     onToggleWatched: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
+    downloadState: DetailDownloadState = DetailDownloadState.None,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val isWatched = progress?.watched == true
@@ -265,11 +272,62 @@ private fun EpisodeItem(
                 enabled = isReleased,
                 modifier = Modifier.size(48.dp),
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_download),
-                    contentDescription = stringResource(R.string.detail_download_desc, video.title),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                when (downloadState) {
+                    DetailDownloadState.None -> {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_download),
+                            contentDescription = stringResource(R.string.detail_download_desc, video.title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    DetailDownloadState.Queued -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+
+                    is DetailDownloadState.Downloading -> {
+                        val fraction = downloadState.percent?.let { it / 100f }
+                        if (fraction != null) {
+                            CircularProgressIndicator(
+                                progress = { fraction },
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                    }
+
+                    DetailDownloadState.Paused -> {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_download),
+                            contentDescription = stringResource(R.string.detail_download_desc, video.title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                        )
+                    }
+
+                    DetailDownloadState.Failed -> {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = stringResource(R.string.detail_download_desc, video.title),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    DetailDownloadState.Completed -> {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = stringResource(R.string.detail_download_desc, video.title),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
 
             Box {

@@ -1,6 +1,7 @@
 package com.nexus.stream.presentation.common
 
 import androidx.lifecycle.SavedStateHandle
+import com.nexus.stream.data.download.FakeDownloadManager
 import com.nexus.stream.data.local.db.TransactionRunner
 import com.nexus.stream.data.local.db.dao.FakeLibraryDao
 import com.nexus.stream.data.local.db.dao.FakeProgressDao
@@ -30,6 +31,7 @@ import com.nexus.stream.presentation.feature.detail.DetailUiState
 import com.nexus.stream.presentation.feature.detail.DetailViewModel
 import com.nexus.stream.presentation.feature.home.HomeEvent
 import com.nexus.stream.presentation.feature.home.HomeViewModel
+import com.nexus.stream.presentation.feature.player.PlaybackSessionHolder
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -206,6 +208,8 @@ class LibrarySyncTest {
             libraryRepository = libraryRepository,
             progressRepository = progressRepository,
             clock = { 1_000_000L },
+            downloadManager = FakeDownloadManager(),
+            playbackSessionHolder = PlaybackSessionHolder(),
         )
 
     private fun createPosterActionsViewModel(): PosterActionsViewModel =
@@ -363,6 +367,8 @@ class LibrarySyncTest {
                     libraryRepository = recreatedRepo,
                     progressRepository = progressRepository,
                     clock = { 1_000_000L },
+                    downloadManager = FakeDownloadManager(),
+                    playbackSessionHolder = PlaybackSessionHolder(),
                 )
             advanceUntilIdle()
 

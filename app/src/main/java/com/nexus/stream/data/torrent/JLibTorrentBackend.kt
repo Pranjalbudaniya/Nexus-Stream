@@ -17,6 +17,7 @@ import com.frostwire.jlibtorrent.alerts.TorrentErrorAlert
 import com.nexus.stream.di.IoDispatcher
 import com.nexus.stream.domain.model.TorrentConfig
 import com.nexus.stream.domain.model.TorrentFailReason
+import com.nexus.stream.domain.usecase.TorrentSessionState
 import com.nexus.stream.domain.usecase.deadlineMsFor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -30,16 +31,19 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("TooManyFunctions")
 class JLibTorrentBackend
     @Inject
     constructor(
         private val cache: TorrentCacheStore,
         @IoDispatcher private val io: CoroutineDispatcher,
     ) : TorrentBackend,
+        TorrentDownloadBackend,
         TorrentFileLocator {
         private val sessionMutex = Mutex()
         private var sessionManager: SessionManager? = null
 
+        private val downloadHashes = ConcurrentHashMap.newKeySet<String>()
         private val deferredMap = ConcurrentHashMap<String, CompletableDeferred<TorrentMetadata>>()
         private val errorHashes = ConcurrentHashMap.newKeySet<String>()
 
@@ -98,7 +102,9 @@ class JLibTorrentBackend
                         offsetBytes = fs.fileOffset(i),
                     ),
                 )
-                cache.registerFile(hash, i, path, size)
+                if (!downloadHashes.contains(hash)) {
+                    cache.registerFile(hash, i, path, size)
+                }
             }
             handle.prioritizeFiles(Priority.array(Priority.IGNORE, numFiles))
 
@@ -264,6 +270,148 @@ class JLibTorrentBackend
         ): File =
             resolveInside(cache.root, infoHash, relativePath)
                 ?: throw TorrentBackendException(TorrentFailReason.STORAGE)
+
+        override suspend fun addForDownload(
+            infoHash: String,
+            magnetUri: String,
+            saveDir: File,
+        ) {
+            val lowerHash = infoHash.lowercase()
+            downloadHashes.add(lowerHash)
+            withContext(io) {
+                val sm = getOrCreateSession()
+                if (!saveDir.exists()) {
+                    saveDir.mkdirs()
+                }
+                runCatchingLibraryCall {
+                    sm.download(magnetUri, saveDir, TorrentFlags.AUTO_MANAGED)
+                }
+            }
+        }
+
+        override suspend fun selectFile(
+            infoHash: String,
+            fileIndex: Int,
+        ) {
+            withContext(io) {
+                runCatchingLibraryCall {
+                    val sm = sessionManager ?: return@runCatchingLibraryCall
+                    val handle =
+                        sm.find(Sha1Hash(infoHash.lowercase()))?.takeIf { it.isValid }
+                            ?: return@runCatchingLibraryCall
+                    val ti = handle.torrentFile() ?: return@runCatchingLibraryCall
+                    val numFiles = ti.numFiles()
+                    val priorities =
+                        Array(numFiles) { i ->
+                            if (i == fileIndex) Priority.NORMAL else Priority.IGNORE
+                        }
+                    handle.prioritizeFiles(priorities)
+                }
+            }
+        }
+
+        override suspend fun downloadSnapshot(
+            infoHash: String,
+            fileIndex: Int,
+        ): DownloadSnapshot =
+            withContext(io) {
+                runCatchingLibraryCall {
+                    val sm =
+                        sessionManager
+                            ?: return@runCatchingLibraryCall DownloadSnapshot(
+                                0L,
+                                0L,
+                                0L,
+                                0,
+                                TorrentSessionState.UNKNOWN,
+                            )
+                    val handle =
+                        sm.find(Sha1Hash(infoHash.lowercase()))?.takeIf { it.isValid }
+                            ?: return@runCatchingLibraryCall DownloadSnapshot(
+                                0L,
+                                0L,
+                                0L,
+                                0,
+                                TorrentSessionState.UNKNOWN,
+                            )
+
+                    val status = handle.status()
+                    val progress = handle.fileProgress()
+                    val fileBytesDone = if (fileIndex in progress.indices) progress[fileIndex] else 0L
+                    val fileBytesTotal = handle.torrentFile()?.files()?.fileSize(fileIndex) ?: 0L
+                    val speedBps = status.downloadPayloadRate().toLong()
+                    val peers = status.numPeers()
+
+                    val sessionState =
+                        when (status.state()) {
+                            com.frostwire.jlibtorrent.TorrentStatus.State.CHECKING_FILES -> {
+                                TorrentSessionState.CHECKING_FILES
+                            }
+
+                            com.frostwire.jlibtorrent.TorrentStatus.State.DOWNLOADING_METADATA -> {
+                                TorrentSessionState.DOWNLOADING_METADATA
+                            }
+
+                            com.frostwire.jlibtorrent.TorrentStatus.State.DOWNLOADING -> {
+                                TorrentSessionState.DOWNLOADING
+                            }
+
+                            com.frostwire.jlibtorrent.TorrentStatus.State.FINISHED -> {
+                                TorrentSessionState.FINISHED
+                            }
+
+                            com.frostwire.jlibtorrent.TorrentStatus.State.SEEDING -> {
+                                TorrentSessionState.SEEDING
+                            }
+
+                            else -> {
+                                TorrentSessionState.UNKNOWN
+                            }
+                        }
+
+                    DownloadSnapshot(
+                        fileBytesDone = fileBytesDone,
+                        fileBytesTotal = fileBytesTotal,
+                        speedBps = speedBps,
+                        peers = peers,
+                        state = sessionState,
+                    )
+                }
+            }
+
+        override suspend fun removeKeepingFiles(infoHash: String) {
+            val lowerHash = infoHash.lowercase()
+            downloadHashes.remove(lowerHash)
+            deferredMap.remove(lowerHash)
+            errorHashes.remove(lowerHash)
+            withContext(io) {
+                val sm = sessionManager ?: return@withContext
+                runCatchingLibraryCall {
+                    val handle = sm.find(Sha1Hash(lowerHash))
+                    if (handle != null && handle.isValid) {
+                        sm.remove(handle)
+                    }
+                }
+            }
+        }
+
+        override suspend fun removeAndDelete(infoHash: String) {
+            val lowerHash = infoHash.lowercase()
+            downloadHashes.remove(lowerHash)
+            deferredMap.remove(lowerHash)
+            errorHashes.remove(lowerHash)
+            withContext(io) {
+                val sm = sessionManager ?: return@withContext
+                runCatchingLibraryCall {
+                    val handle = sm.find(Sha1Hash(lowerHash))
+                    if (handle != null && handle.isValid) {
+                        sm.remove(handle, SessionHandle.DELETE_FILES)
+                    }
+                }
+            }
+        }
+
+        override fun isStreamingActive(infoHash: String): Boolean = cache.isActive(infoHash)
     }
 
 private inline fun <T> runCatchingLibraryCall(

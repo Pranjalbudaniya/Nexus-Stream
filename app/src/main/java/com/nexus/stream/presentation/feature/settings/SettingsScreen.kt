@@ -70,6 +70,7 @@ fun SettingsScreen(
     appearanceViewModel: AppearanceViewModel = hiltViewModel(),
     homeRowsViewModel: HomeRowsSettingsViewModel = hiltViewModel(),
     torrentViewModel: TorrentSettingsViewModel = hiltViewModel(),
+    downloadsViewModel: DownloadsSettingsViewModel = hiltViewModel(),
     aboutViewModel: AboutViewModel = hiltViewModel(),
     updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
@@ -77,6 +78,7 @@ fun SettingsScreen(
     val appearanceState by appearanceViewModel.uiState.collectAsStateWithLifecycle()
     val homeRowsState by homeRowsViewModel.uiState.collectAsStateWithLifecycle()
     val torrentState by torrentViewModel.uiState.collectAsStateWithLifecycle()
+    val downloadsState by downloadsViewModel.uiState.collectAsStateWithLifecycle()
     val aboutState by aboutViewModel.uiState.collectAsStateWithLifecycle()
     val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -181,12 +183,14 @@ fun SettingsScreen(
         appearanceState = appearanceState,
         homeRowsState = homeRowsState,
         torrentState = torrentState,
+        downloadsState = downloadsState,
         aboutState = aboutState,
         updateState = updateState,
         onEvent = viewModel::onEvent,
         onAppearanceEvent = appearanceViewModel::onEvent,
         onHomeRowsEvent = homeRowsViewModel::onEvent,
         onTorrentEvent = torrentViewModel::onEvent,
+        onDownloadsEvent = downloadsViewModel::onEvent,
         onAboutEvent = aboutViewModel::onEvent,
         onUpdateEvent = updateViewModel::onEvent,
         onOpenUrl = onOpenUrl,
@@ -204,12 +208,14 @@ internal fun SettingsContent(
     appearanceState: AppearanceUiState,
     homeRowsState: HomeRowsUiState = HomeRowsUiState(),
     torrentState: TorrentSettingsUiState,
+    downloadsState: DownloadsSettingsUiState = DownloadsSettingsUiState(),
     aboutState: AboutUiState,
     updateState: UpdateUi,
     onEvent: (SettingsEvent) -> Unit,
     onAppearanceEvent: (AppearanceEvent) -> Unit,
     onHomeRowsEvent: (HomeRowsEvent) -> Unit = {},
     onTorrentEvent: (TorrentSettingsEvent) -> Unit,
+    onDownloadsEvent: (DownloadsSettingsEvent) -> Unit = {},
     onAboutEvent: (AboutEvent) -> Unit,
     onUpdateEvent: (UpdateEvent) -> Unit,
     onOpenUrl: (String) -> Unit,
@@ -421,7 +427,32 @@ internal fun SettingsContent(
                 )
             }
 
-            // 7. About
+            // 7. Downloads
+            val isDownloadsExpanded = SettingsSection.DOWNLOADS in expandedSections
+            val downloadsRequester = bringIntoViewRequesters.getValue(SettingsSection.DOWNLOADS)
+            SettingsSectionCard(
+                section = SettingsSection.DOWNLOADS,
+                summary =
+                    sectionSummary(
+                        isDownloadsExpanded,
+                        downloadsSummary(downloadsState.wifiOnly, downloadsState.maxConcurrent),
+                    ),
+                expanded = isDownloadsExpanded,
+                onToggle = { toggleSection(SettingsSection.DOWNLOADS) },
+                modifier =
+                    Modifier
+                        .bringIntoViewRequester(downloadsRequester)
+                        .onGloballyPositioned {
+                            cardCoordinates = cardCoordinates + (SettingsSection.DOWNLOADS to it)
+                        },
+            ) {
+                DownloadsSection(
+                    state = downloadsState,
+                    onEvent = onDownloadsEvent,
+                )
+            }
+
+            // 8. About
             val isAboutExpanded = SettingsSection.ABOUT in expandedSections
             val aboutRequester = bringIntoViewRequesters.getValue(SettingsSection.ABOUT)
             val aboutSummaryText =
@@ -712,6 +743,17 @@ internal fun SettingsScreenTorrentExpandedPreview() {
     NexusTheme {
         TorrentSection(
             state = TorrentSettingsUiState(cacheLimitGb = 5),
+            onEvent = {},
+        )
+    }
+}
+
+@Preview(name = "SettingsScreen - Downloads Expanded")
+@Composable
+internal fun SettingsScreenDownloadsExpandedPreview() {
+    NexusTheme {
+        DownloadsSection(
+            state = DownloadsSettingsUiState(wifiOnly = true, maxConcurrent = 2),
             onEvent = {},
         )
     }

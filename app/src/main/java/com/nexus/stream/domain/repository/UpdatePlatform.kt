@@ -66,6 +66,8 @@ interface NetworkInfo {
 
 interface StorageInfo {
     fun availableBytes(): Long
+
+    fun availableBytes(root: File): Long = root.usableSpace
 }
 
 fun interface Clock {

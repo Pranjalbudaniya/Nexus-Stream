@@ -5,6 +5,7 @@ import com.nexus.stream.domain.model.ParsedStream
 import com.nexus.stream.domain.model.StreamFilters
 import com.nexus.stream.domain.model.StreamKind
 import com.nexus.stream.domain.model.StreamSort
+import com.nexus.stream.domain.model.StreamSource
 import com.nexus.stream.domain.model.TypeFilter
 import com.nexus.stream.domain.repository.StreamsState
 import com.nexus.stream.domain.usecase.LanguageCodes
@@ -112,11 +113,16 @@ internal object StreamsFilterReducer {
         return result
     }
 
+    private fun isDownloadable(stream: ParsedStream): Boolean =
+        stream.stream.source is StreamSource.Url || stream.stream.source is StreamSource.Torrent
+
     private fun recalculate(
         state: StreamsUiState,
         matching: List<Addon>,
     ): StreamsUiState {
-        val all = state.allStreams
+        val isDownload = state.isDownloadMode
+        val hiddenCount = if (isDownload) state.allStreams.count { !isDownloadable(it) } else 0
+        val all = if (isDownload) state.allStreams.filter { isDownloadable(it) } else state.allStreams
         val availableResolutions = StreamOrdering.availableResolutions(all)
         val activeUrls = StreamsFilterComputer.extractActiveUrls(matching, state.availableAddons)
         val presentLanguages = all.flatMap { LanguageCodes.codes(it.languages) }.distinct()
@@ -150,6 +156,7 @@ internal object StreamsFilterReducer {
         val filtered = StreamOrdering.applyFilters(all, currentFilters, state.hideCam)
         val sortedFiltered = StreamOrdering.sort(filtered, state.sort, state.preferredLanguage, state.preferredQuality)
         val showAddon = if (matching.isNotEmpty()) matching.size >= MIN_ACTIVE_FOR_FILTER else state.showAddonFilter
+        val isDownloadEmpty = isDownload && sortedFiltered.isEmpty() && state.allStreams.isNotEmpty()
 
         val bundle =
             FilteredStateBundle(
@@ -163,6 +170,8 @@ internal object StreamsFilterReducer {
                 hasDirect = all.any { it.kind == StreamKind.Direct },
                 hasTorrent = all.any { it.kind == StreamKind.Torrent },
                 hasCached = all.any { it.debrid?.cached == true },
+                hiddenCount = hiddenCount,
+                isDownloadEmpty = isDownloadEmpty,
             )
         return StreamsFilterComputer.assembleState(state, bundle)
     }
