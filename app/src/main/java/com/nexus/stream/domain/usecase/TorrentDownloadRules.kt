@@ -9,7 +9,8 @@ import java.io.File
 const val MIN_CANDIDATE_BYTES: Long = 50L * 1024 * 1024
 const val STALL_AFTER_MS: Long = 5L * 60 * 1000
 const val METADATA_TIMEOUT_MS: Long = 120L * 1000
-const val POLL_INTERVAL_MS: Long = 1000L
+const val TORRENT_DOWNLOAD_POLL_INTERVAL_MS: Long = 1000L
+const val TORRENT_SUBDIR: String = "torrents"
 
 private val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "avi", "mov", "m4v", "webm", "ts", "wmv")
 private val SAMPLE_REGEX = Regex("""(^|[/\\._ -])samples?([/\\._ -]|$)""", RegexOption.IGNORE_CASE)
@@ -129,7 +130,7 @@ fun metadataTimedOut(
 fun torrentSaveDir(
     root: File,
     downloadId: String,
-): File = File(File(root, "torrents"), downloadId)
+): File = File(File(root, TORRENT_SUBDIR), downloadId)
 
 fun completedTorrentPath(
     saveDir: File,

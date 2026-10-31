@@ -16,7 +16,7 @@ import com.nexus.stream.domain.repository.TorrentResume
 import com.nexus.stream.domain.repository.TorrentTask
 import com.nexus.stream.domain.repository.TorrentUpdate
 import com.nexus.stream.domain.usecase.FileChoice
-import com.nexus.stream.domain.usecase.POLL_INTERVAL_MS
+import com.nexus.stream.domain.usecase.TORRENT_DOWNLOAD_POLL_INTERVAL_MS
 import com.nexus.stream.domain.usecase.chooseTorrentFile
 import com.nexus.stream.domain.usecase.completedTorrentPath
 import com.nexus.stream.domain.usecase.hasEnoughStorage
@@ -203,7 +203,7 @@ class TorrentDownloaderImpl(
                 backend.removeKeepingFiles(task.infoHash)
                 return null
             }
-            delayFn(POLL_INTERVAL_MS)
+            delayFn(TORRENT_DOWNLOAD_POLL_INTERVAL_MS)
         }
         return metaDeferred.await()
     }
@@ -269,7 +269,7 @@ class TorrentDownloaderImpl(
                 )
             }
 
-            delayFn(POLL_INTERVAL_MS)
+            delayFn(TORRENT_DOWNLOAD_POLL_INTERVAL_MS)
         }
     }
 

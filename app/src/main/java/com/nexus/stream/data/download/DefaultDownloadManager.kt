@@ -28,6 +28,7 @@ import com.nexus.stream.domain.repository.TorrentResult
 import com.nexus.stream.domain.repository.TorrentTask
 import com.nexus.stream.domain.repository.TorrentUpdate
 import com.nexus.stream.domain.usecase.SpeedMeter
+import com.nexus.stream.domain.usecase.TORRENT_SUBDIR
 import com.nexus.stream.domain.usecase.downloadFileExtension
 import com.nexus.stream.domain.usecase.etaSeconds
 import com.nexus.stream.domain.usecase.findDuplicate
@@ -247,7 +248,7 @@ class DefaultDownloadManager(
         cancelActiveJob(id)
         val item = repository.get(id)
         if (item != null && item.kind == DownloadKind.TORRENT) {
-            val torrentFolder = File(File(platform.fileStore.root, "torrents"), id)
+            val torrentFolder = File(File(platform.fileStore.root, TORRENT_SUBDIR), id)
             torrentFolder.deleteRecursively()
         } else {
             platform.fileStore.deletePart(id)
@@ -261,7 +262,7 @@ class DefaultDownloadManager(
         cancelActiveJob(id)
         val item = repository.get(id)
         if (item != null && item.kind == DownloadKind.TORRENT) {
-            val torrentFolder = File(File(platform.fileStore.root, "torrents"), id)
+            val torrentFolder = File(File(platform.fileStore.root, TORRENT_SUBDIR), id)
             torrentFolder.deleteRecursively()
         } else {
             platform.fileStore.delete(id)
@@ -275,7 +276,7 @@ class DefaultDownloadManager(
         val completed = repository.getAll().filter { it.state == DownloadState.COMPLETED }
         for (item in completed) {
             if (item.kind == DownloadKind.TORRENT) {
-                val torrentFolder = File(File(platform.fileStore.root, "torrents"), item.id)
+                val torrentFolder = File(File(platform.fileStore.root, TORRENT_SUBDIR), item.id)
                 torrentFolder.deleteRecursively()
             } else {
                 platform.fileStore.delete(item.id)
@@ -514,7 +515,7 @@ private fun DefaultDownloadManager.cleanupOrphanFiles(validIds: Set<String>) {
 }
 
 private fun DefaultDownloadManager.cleanupOrphanTorrentFolders(validIds: Set<String>) {
-    val torrentsRoot = File(platform.fileStore.root, "torrents")
+    val torrentsRoot = File(platform.fileStore.root, TORRENT_SUBDIR)
     if (torrentsRoot.isDirectory) {
         val folders = torrentsRoot.listFiles { f -> f.isDirectory } ?: emptyArray()
         for (folder in folders) {
